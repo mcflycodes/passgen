@@ -1,0 +1,162 @@
+{
+  "theme": "system",
+  "style": {
+    "default": "calm",
+    "offered": [
+      {
+        "id": "calm",
+        "label": "Calm"
+      },
+      {
+        "id": "payload",
+        "label": "Payload"
+      },
+      {
+        "id": "slate",
+        "label": "Slate"
+      },
+      {
+        "id": "green",
+        "label": "Green"
+      },
+      {
+        "id": "purple",
+        "label": "Purple"
+      }
+    ]
+  },
+  "text": {
+    "tagline": "Password generator · Runs entirely in your browser",
+    "intro": {
+      "enabled": true,
+      "headline": "Strong by default.",
+      "text": "Open the page, copy a password, done. No account, no tracking, nothing leaves this tab."
+    }
+  },
+  "saveSettings": false,
+  "extraResults": 5,
+  "password": {
+    "length": {
+      "min": 4,
+      "max": 128,
+      "default": 20
+    },
+    "characters": {
+      "lowercase": "abcdefghijklmnopqrstuvwxyz",
+      "uppercase": "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+      "numbers": "0123456789",
+      "simple": "!@#$^*()-_.?",
+      "complex": "\"'`\\/|<>[]{}:;,~&%+="
+    },
+    "enabled": {
+      "lowercase": true,
+      "uppercase": true,
+      "numbers": true,
+      "simple": true,
+      "complex": true
+    },
+    "excludeLookAlikes": false,
+    "lookAlikes": "lIO01|`'",
+    "counts": {
+      "lowercase": {
+        "min": 1,
+        "max": null
+      },
+      "uppercase": {
+        "min": 1,
+        "max": null
+      },
+      "numbers": {
+        "min": 1,
+        "max": null
+      },
+      "symbols": {
+        "min": 1,
+        "max": null
+      }
+    }
+  },
+  "passphrase": {
+    "words": {
+      "min": 2,
+      "max": 12,
+      "default": 5
+    },
+    "wordLength": {
+      "min": 3,
+      "max": 9,
+      "defaultMin": 5,
+      "defaultMax": 9
+    },
+    "separator": {
+      "number": true,
+      "symbol": true,
+      "defaultSymbol": "-",
+      "numberMin": 0,
+      "numberMax": 99,
+      "numberDigits": 2
+    },
+    "capitalize": false
+  },
+  "meter": {
+    "bands": [
+      {
+        "minBits": 0,
+        "label": "Very weak"
+      },
+      {
+        "minBits": 40,
+        "label": "Weak"
+      },
+      {
+        "minBits": 64,
+        "label": "Moderate"
+      },
+      {
+        "minBits": 80,
+        "label": "Strong"
+      },
+      {
+        "minBits": 112,
+        "label": "Very strong"
+      },
+      {
+        "minBits": 128,
+        "label": "Excellent"
+      }
+    ],
+    "attacks": {
+      "fast": {
+        "hash": "NTLM",
+        "gpus": 8,
+        "guessesPerSecond": 2400000000000,
+        "averageKeyspaceFraction": 0.5
+      },
+      "bcrypt": {
+        "cost": 12,
+        "guessesPerSecond": 19238,
+        "gpus": 8
+      },
+      "argon2id": {
+        "parameters": "64 MiB memory, 3 iterations, parallelism 1, 32-byte tag",
+        "tagBytes": 32,
+        "guessesPerSecond": 13624,
+        "gpus": 8
+      },
+      "online": {
+        "lockout": "100 failed attempts per account, then locked; no resets",
+        "attempts": 100
+      }
+    },
+    "quantum": {
+      "current": "Current quantum hardware: practical password cracking has not been demonstrated",
+      "future": {
+        "enabled": false,
+        "iterationSeconds": 15,
+        "processors": 1,
+        "assumptions": "Fault-tolerant SHA-256 oracle model, 15 seconds per full Grover iteration; not an NTLM or slow-hash benchmark"
+      }
+    },
+    "passphraseWarningBits": 80
+  }
+}

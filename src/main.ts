@@ -1,0 +1,31 @@
+// The page's entry point: loads the layout and the offered styles, then
+// wires the controls to the generators. The theme and style attributes are
+// already on <html>: the render-blocking boot script (src/boot/theme.ts) set
+// them before the first paint, from the saved settings when there are any.
+// A password and a passphrase are generated at once, with no click (R5).
+
+import "./styles.css";
+import "virtual:passgen-styles";
+import { config } from "./config/validate.ts";
+import { createMeter } from "./ui/meter.ts";
+import { mountPassphrasePanel } from "./ui/passphrase.ts";
+import { mountPasswordPanel } from "./ui/password.ts";
+import { startPointerEffect } from "./ui/pointer.ts";
+import { createResultsBox } from "./ui/results.ts";
+import { browserStorage, createSettingsStore, initialSettings, mountSaveControl } from "./ui/settings.ts";
+import { mountThemeControls } from "./ui/theme.ts";
+
+// Saved settings (R24 to R26): the store starts from the valid stored settings,
+// else the configured defaults. The Save checkbox is bound last, after the
+// panels have settled the store, so the first write is of a complete state.
+const storage = browserStorage();
+const initial = initialSettings(config, storage);
+const store = createSettingsStore(initial.settings);
+const pointer = startPointerEffect();
+mountThemeControls(store, () => pointer.refresh());
+mountPasswordPanel(store, config, { meter: createMeter("pw"), results: createResultsBox("pw") });
+mountPassphrasePanel(store, config, { meter: createMeter("pp"), results: createResultsBox("pp") });
+mountSaveControl(store, config, storage, initial);
+
+// The end-to-end tests wait for this to prove that same-origin script runs under the CSP.
+document.documentElement.dataset.ready = "true";

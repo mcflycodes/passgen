@@ -1,0 +1,25 @@
+# Generated from security/headers.ts by `pnpm headers:gen`. Do not edit by hand.
+#
+# Caddy. Paste this header block inside the site block that serves the PassGen files,
+# next to `file_server`. Check that a missing path's 404 response carries the headers.
+
+header {
+    # Same-origin code only, no inline script, no network requests (S4).
+    Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; manifest-src 'self'; connect-src 'none'; object-src 'none'; worker-src 'none'; frame-src 'none'; child-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types 'none'"
+    # HTTPS only for two years (T6). Ignored by browsers over plain HTTP.
+    Strict-Transport-Security "max-age=63072000; includeSubDomains"
+    # Files are only run as the type the server declares.
+    X-Content-Type-Options "nosniff"
+    # No framing, for browsers that ignore CSP frame-ancestors (T7).
+    X-Frame-Options "DENY"
+    # Never send this page's URL to anyone.
+    Referrer-Policy "no-referrer"
+    # Switch off every browser feature except writing to the clipboard.
+    Permissions-Policy "accelerometer=(), autoplay=(), camera=(), clipboard-read=(), clipboard-write=(self), display-capture=(), encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), usb=(), xr-spatial-tracking=()"
+    # Other sites' windows get no handle on this page.
+    Cross-Origin-Opener-Policy "same-origin"
+    # Only resources that opt in can load, isolating the page.
+    Cross-Origin-Embedder-Policy "require-corp"
+    # Other sites cannot embed this site's files.
+    Cross-Origin-Resource-Policy "same-origin"
+}

@@ -1,0 +1,64 @@
+/* PassGen style: Calm (default). Rounded corners, a blue accent, card panels with a faint shadow, slightly denser rows.
+   Tokens only (R4a, R4b): every rule sits under :root[data-style="calm"], colours are light-dark()
+   pairs, and the build checks the required tokens and the contrast pairs. See src/styles/README.md. */
+:root[data-style="calm"] {
+  /* Surfaces */
+  --bg: light-dark(#f5f5f6, #121214);
+  --bg-band: light-dark(#f5f5f6, #121214);
+  --panel: light-dark(#ffffff, #19191d);
+  --field: light-dark(#ffffff, #141417);
+  --chip: light-dark(#eceef2, #26262c);
+  /* Lines */
+  --line: light-dark(#e1e2e7, #2a2a31);
+  --line-strong: light-dark(#878b98, #72727e);
+  --grid-line: transparent;
+  --intro-glow: transparent;
+  /* Text */
+  --text: light-dark(#16161a, #ececef);
+  --text-2: light-dark(#34353c, #c9c9d0);
+  --muted: light-dark(#5f6270, #a0a1ab);
+  /* Accent and states */
+  --accent: light-dark(#2457d6, #8db0ff);
+  --on-accent: light-dark(#ffffff, #0b1430);
+  --focus: light-dark(#2457d6, #8db0ff);
+  --bad: light-dark(#b42318, #ff8078);
+  --warn: light-dark(#946200, #e8b84a);
+  --ok: light-dark(#1f7a3d, #6fd48f);
+  /* Meter ramp (optional): red, orange, amber, green, teal, then the blue accent */
+  --meter-1: light-dark(#b42318, #ff8078);
+  --meter-2: light-dark(#cc4b00, #ff9340);
+  --meter-3: light-dark(#946200, #e8b84a);
+  --meter-4: light-dark(#1f7a3d, #6fd48f);
+  --meter-5: light-dark(#0e7490, #5fd0d8);
+  --meter-6: light-dark(#2457d6, #8db0ff);
+  /* Shape */
+  --radius: 10px;
+  --radius-sm: 6px;
+  --thumb-radius: 50%;
+  --shadow:
+    0 1px 2px light-dark(rgba(16, 18, 26, 0.06), transparent),
+    0 8px 24px -16px light-dark(rgba(16, 18, 26, 0.18), transparent);
+  --band-border: 0;
+  --band-gap: 16px;
+  --panel-gap: 20px;
+  /* Type */
+  --sans:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace;
+  --track: -0.02em;
+  --display-weight: 620;
+  --label-track: 0.08em;
+  /* Spacing */
+  --pad: clamp(16px, 2.2vw, 28px);
+  --row-gap: 14px;
+  --control-h: 40px;
+  --header-h: 64px;
+  /* Background (R4c) */
+  --fx-follow: 0;
+  --fx-attach: scroll;
+  --fx-static: radial-gradient(
+    120% 460px at 50% 0%,
+    light-dark(rgba(36, 87, 214, 0.2), rgba(141, 176, 255, 0.16)) 0%,
+    transparent 70%
+  );
+}

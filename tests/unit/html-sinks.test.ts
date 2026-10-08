@@ -1,0 +1,62 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { htmlSinkProblems } from "../../scripts/lib/html-sink-scan.ts";
+
+for (const source of [
+  "el.setHTMLUnsafe(value)",
+  "Document.parseHTMLUnsafe(value)",
+  'el["set" + "HTMLUnsafe"](value)',
+  'Document["parseHTMLUnsafe"](value)',
+  "const { setHTMLUnsafe: set } = el",
+  "const parse = Document.parseHTMLUnsafe",
+  'el.setAttributeNS(null, "onclick", value)',
+  'el.setAttributeNS(null, "ONLOAD", value)',
+  'el.setAttributeNS(null, "href", value)',
+  'el.setAttributeNS(null, "src", value)',
+  'el.setAttributeNS(namespace, "xlink:href", value)',
+  'el["setAttributeNS"](null, "onclick", value)',
+  "el.setAttributeNS(null, name, value)",
+  "const { setAttributeNS: set } = el",
+  'const { ["setAttributeNS"]: set } = el',
+  "el.innerHTML = value",
+  "el.outerHTML = value",
+  'el.insertAdjacentHTML("beforeend", value)',
+  "document.write(value)",
+  "const d = document; d.write(value)",
+  "const { write } = document; write(value)",
+  "window.document.write(value)",
+  "element.ownerDocument.write(value)",
+  "document.writeln(value)",
+  'new DOMParser().parseFromString(value, "text/html")',
+  "range.createContextualFragment(value)",
+  "frame.srcdoc = value",
+  'el.setAttribute("onclick", value)',
+  'el.setAttribute("ONLOAD", value)',
+  'el.setAttribute("href", value)',
+  'el.setAttribute("src", value)',
+  "el.setAttribute(name, value)",
+  'el["inner" + "HTML"] = value',
+  'el["inner\\u0048TML"] = value',
+  "const { innerHTML: html } = el",
+  "const parse = parser.parseFromString",
+  "const { setAttribute: set } = el",
+  'el["setAttribute"]("href", value)',
+  "el.innerHTML =",
+])
+  test(`HTML gate rejects ${source}`, () => assert.ok(htmlSinkProblems(source).length));
+
+for (const source of [
+  'el.setAttributeNS(null, "aria-label", value)',
+  'el.setAttributeNS(null, "data-generated", "")',
+  "// Document.parseHTMLUnsafe(value)\nel.textContent = value",
+  'const description = "Avoid setHTMLUnsafe and parseHTMLUnsafe"',
+  "el.textContent = value",
+  'el.replaceChildren(document.createElement("span"))',
+  'el.setAttribute("aria-label", value)',
+  'el.setAttribute("data-generated", "")',
+  "// el.innerHTML = value\nel.textContent = value",
+  'const description = "Use textContent rather than innerHTML"',
+  "const write = () => {}; write()",
+  "clipboard.writeText(value)",
+])
+  test(`HTML gate accepts ${source}`, () => assert.deepEqual(htmlSinkProblems(source), []));

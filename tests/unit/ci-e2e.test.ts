@@ -1,0 +1,137 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { test } from "node:test";
+import { PROJECTS } from "../../playwright.config.ts";
+
+const workflow = readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
+const job = workflow.match(/^ {2}e2e:\n[\s\S]*?(?=^ {2}[\w-]+:|$(?![\s\S]))/m)?.[0];
+assert.ok(job, "CI must have an e2e job");
+type MatrixEntry = { project: string; shard: number };
+
+function readMatrix(configuration: string): MatrixEntry[] {
+  assert.doesNotMatch(configuration, /^ {8}exclude:/m, "CI must not exclude project/shard combinations");
+  assert.doesNotMatch(configuration, /^ {8}include:/m, "CI matrix must use only the project and shard axes");
+  const projects = configuration.match(/^ {8}project: (\[.*\])$/m)?.[1];
+  const shards = configuration.match(/^ {8}shard: (\[.*\])$/m)?.[1];
+  assert.ok(projects && shards, "Keep the e2e matrix axes in JSON syntax");
+  const projectAxis: string[] = JSON.parse(projects);
+  const shardAxis: number[] = JSON.parse(shards);
+  return projectAxis.flatMap((project) =>
+    shardAxis.map((shard) => ({
+      project,
+      shard,
+    })),
+  );
+}
+
+const matrix = readMatrix(job);
+const packageJson = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+const playwrightVersion: string = packageJson.devDependencies["@playwright/test"];
+
+function checkContainer(configuration: string, version: string) {
+  const container = configuration.match(/^ {4}container:\n((?:^ {6}.+\n)+)/m)?.[1];
+  assert.ok(container, "CI e2e must use a container");
+  const image = container.match(
+    /^ {6}image: mcr\.microsoft\.com\/playwright:v(\d+\.\d+\.\d+)-noble@sha256:[a-f0-9]{64}(?: +#.*)?$/m,
+  );
+  assert.ok(image, "CI e2e must pin the official Playwright container by SHA-256 digest");
+  assert.equal(image[1], version, "CI Playwright container version must match @playwright/test");
+}
+
+function checkCoverage(entries: MatrixEntry[]) {
+  assert.deepEqual(
+    entries.map((entry) => `${entry.project}/${entry.shard}`).sort(),
+    PROJECTS.flatMap((project) => [1, 2].map((shard) => `${project.name}/${shard}`)).sort(),
+    "CI e2e matrix must cover every Playwright project with every shard exactly once",
+  );
+}
+
+function checkSteps(configuration: string) {
+  const steps = configuration.split(/^ {6}- /m);
+  const e2eSteps = steps.filter((step) => /^ {8}run: pnpm test:e2e\b/m.test(step));
+  assert.equal(e2eSteps.length, 1, "CI must run the e2e tests exactly once per matrix job");
+  const e2eStep = e2eSteps[0];
+  assert.ok(e2eStep);
+  assert.match(
+    e2eStep,
+    /^ {8}env:\n {10}PASSGEN_E2E_PROJECTS: \$\{\{ matrix\.project \}\}\n {10}PLAYWRIGHT_SHARD: \$\{\{ matrix\.shard \}\}$/m,
+  );
+  assert.match(e2eStep, /^ {8}run: pnpm test:e2e --shard="\$PLAYWRIGHT_SHARD\/2"$/m);
+  const gateSteps = steps.filter((step) => /^ {8}run: pnpm test:gate$/m.test(step));
+  assert.equal(gateSteps.length, 1, "CI must have exactly one combined-gate step");
+  const gateStep = gateSteps[0];
+  assert.ok(gateStep);
+  assert.match(gateStep, /^ {8}if: matrix\.project == 'chromium' && matrix\.shard == 1$/m);
+  assert.match(
+    configuration,
+    /^ {10}name: playwright-report-\$\{\{ matrix\.project \}\}-\$\{\{ matrix\.shard \}\}-\$\{\{ github\.sha \}\}$/m,
+  );
+}
+
+test("CI e2e matrix covers every Playwright project and shard", () => {
+  checkCoverage(matrix);
+  assert.match(job, /^ {6}fail-fast: false$/m);
+  checkSteps(job);
+});
+
+test("CI e2e guard rejects a missing or duplicate shard", () => {
+  for (const axis of ["[1]", "[1, 1]"]) {
+    assert.throws(
+      () => checkCoverage(readMatrix(job.replace("shard: [1, 2]", `shard: ${axis}`))),
+      /must cover every Playwright project with every shard exactly once/,
+    );
+  }
+});
+
+test("CI e2e guard rejects running the combined gate on both shards", () => {
+  assert.throws(() => checkSteps(job.replace(" && matrix.shard == 1", "")), /matrix/);
+});
+
+test("CI e2e guard rejects broken project or shard environment wiring", () => {
+  for (const dimension of ["project", "shard"]) {
+    assert.throws(() => checkSteps(job.replace(`: \${{ matrix.${dimension} }}`, ": 1")), /PASSGEN_E2E_PROJECTS/);
+  }
+  assert.throws(() => checkSteps(job.replace("$PLAYWRIGHT_SHARD/2", "1/2")), /--shard/);
+});
+
+test("CI e2e guard rejects artifact names shared by both shards", () => {
+  assert.throws(
+    () => checkSteps(job.replace(`-\${{ matrix.shard }}-\${{ github.sha }}`, `-\${{ github.sha }}`)),
+    /playwright-report/,
+  );
+});
+
+test("CI e2e uses a digest-pinned container matching the Playwright dependency", () => {
+  checkContainer(job, playwrightVersion);
+  assert.match(job, /^ {6}options: --init --ipc=host --user 1001$/m);
+  assert.match(job, /^ {4}timeout-minutes: 20$/m);
+  assert.doesNotMatch(job, /playwright install|--with-deps/);
+  assert.match(job, /^ {10}node-version-file: \.nvmrc$/m);
+});
+
+test("CI e2e container guard rejects a Playwright upgrade without an image update", () => {
+  const upgradedVersion = playwrightVersion.replace(/\d+$/, (patch) => String(Number(patch) + 1));
+  assert.throws(() => checkContainer(job, upgradedVersion), /container version must match @playwright\/test/);
+});
+
+test("CI e2e container guard rejects a missing container or digest", () => {
+  assert.throws(() => checkContainer("", playwrightVersion), /must use a container/);
+  assert.throws(
+    () => checkContainer(job.replace(/@sha256:[a-f0-9]{64}/, ""), playwrightVersion),
+    /must pin the official Playwright container by SHA-256 digest/,
+  );
+});
+
+test("CI e2e coverage guard rejects a missing project", () => {
+  assert.throws(
+    () => checkCoverage(matrix.slice(2)),
+    /must cover every Playwright project with every shard exactly once/,
+  );
+});
+
+test("CI e2e coverage guard rejects an unknown project", () => {
+  assert.throws(
+    () => checkCoverage([...matrix, { project: "unknown", shard: 1 }]),
+    /must cover every Playwright project with every shard exactly once/,
+  );
+});

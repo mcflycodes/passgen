@@ -1,0 +1,18 @@
+# pnpm project settings. pnpm 11 reads them from this file, not from .npmrc.
+packages: []
+
+# Dependency pinning (decision 0001).
+# `pnpm add` writes exact versions, never ^ or ~ ranges.
+saveExact: true
+# Refuse to run on a Node or pnpm version other than the one in package.json "engines".
+engineStrict: true
+
+# Supply-chain settings (decision 0001, threat model T4).
+# A version must have been on the registry for at least 7 days (in minutes) before pnpm resolves it.
+minimumReleaseAge: 10080
+# No package, including this one, runs install lifecycle scripts (preinstall, install, postinstall).
+ignoreScripts: true
+# Belt and braces: even if ignoreScripts were lifted, no dependency is allowed to build.
+onlyBuiltDependencies: []
+# Fail any `pnpm run` when node_modules does not match the lockfile.
+verifyDepsBeforeRun: error

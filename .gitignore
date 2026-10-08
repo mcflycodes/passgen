@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build output and the SHA-256 manifest written from it
+dist/
+dist-manifest/
+
+# Test output
+test-results/
+playwright-report/
+blob-report/
+*.tsbuildinfo
+
+# Agent scratch space and local files
+scratchpad/
+*.log
+.DS_Store
+.env
+.env.*

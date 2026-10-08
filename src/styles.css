@@ -1,0 +1,925 @@
+/* PassGen layout and components (requirements R1 to R4c, N2).
+   This file sets no colour, radius, type or spacing value of its own. Every
+   such value is a design token declared by a style in src/styles/<id>/style.css
+   and selected before the first paint by data-style on <html> (src/boot/theme.ts).
+   Themes: System follows prefers-color-scheme; Light and Dark override it
+   through data-theme. Styles write colours as light-dark() pairs, so one
+   declaration covers both themes and color-scheme picks the side. */
+
+:root {
+  color-scheme: light;
+  --hairline: 1px solid var(--line);
+}
+/* System (R4): the used colour scheme follows the operating system's setting
+   live, resolved here explicitly so every engine picks the same side of each
+   light-dark() pair. Light and Dark override it. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* ---------- Base ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  /* Keep focused and scrolled-to controls clear of the sticky header. */
+  scroll-padding-top: calc(var(--header-h) + 16px);
+}
+body {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.5;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+button,
+input,
+select,
+output {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  color: var(--text-2);
+}
+h1,
+h2,
+h3,
+p,
+ul {
+  margin: 0;
+}
+ul {
+  padding: 0;
+  list-style: none;
+}
+fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+legend {
+  padding: 0;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.nowrap {
+  white-space: nowrap;
+}
+[hidden],
+.more[hidden],
+.notice[hidden],
+.tagline[hidden] {
+  display: none;
+}
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ---------- Decorative background (R4c) ----------
+   Drawn from tokens only, as the root element's background, under everything.
+   src/ui/pointer.ts writes --px, --py, --pxs, --pys, --pxt, --pyt, --pxn and
+   --pyn on the root; a style places its pointer layer with them, for example
+   "at var(--pxs) var(--pys)". They are registered as non-inherited, so a write
+   recomputes one element's style and repaints the background: no layout and
+   nothing else touched. With the script off (reduced motion, no fine pointer,
+   hidden tab) the rest values apply. Panels, result boxes and controls keep
+   solid surfaces, so no text sits on the background except the intro, whose
+   contrast the build checks against the style's declared worst case. */
+@property --fx-pointer {
+  syntax: "*";
+  inherits: false;
+}
+@property --px {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 50%;
+}
+@property --py {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 30%;
+}
+@property --pxs {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 50%;
+}
+@property --pys {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 30%;
+}
+@property --pxt {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 50%;
+}
+@property --pyt {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 30%;
+}
+@property --pxn {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0.5;
+}
+@property --pyn {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0.3;
+}
+:root {
+  --px: calc(var(--fx-rest-x, 0.5) * 100%);
+  --pxs: calc(var(--fx-rest-x, 0.5) * 100%);
+  --pxt: calc(var(--fx-rest-x, 0.5) * 100%);
+  --py: calc(var(--fx-rest-y, 0.3) * 100%);
+  --pys: calc(var(--fx-rest-y, 0.3) * 100%);
+  --pyt: calc(var(--fx-rest-y, 0.3) * 100%);
+  --pxn: var(--fx-rest-x, 0.5);
+  --pyn: var(--fx-rest-y, 0.3);
+  background-color: var(--bg);
+  background-image: var(--fx-pointer, none), var(--fx-static, none);
+  background-size: auto, var(--fx-size, auto);
+  background-repeat: no-repeat, repeat;
+  background-attachment: fixed, var(--fx-attach, fixed);
+}
+
+/* ---------- Type ---------- */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.eyebrow .num {
+  color: var(--text);
+  margin-right: 10px;
+}
+.headline {
+  font-size: clamp(40px, 5vw, 68px);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--track);
+  line-height: 0.98;
+  margin: 14px 0 16px;
+}
+.gen-head h2 {
+  font-size: clamp(26px, 2.4vw, 34px);
+  font-weight: var(--display-weight);
+  letter-spacing: calc(var(--track) * 0.8);
+  line-height: 1.05;
+  margin-top: 8px;
+}
+.lede {
+  color: var(--text-2);
+  font-size: clamp(17px, 1.4vw, 20px);
+  line-height: 1.4;
+  max-width: 46ch;
+}
+.hint {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+.fineprint {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+/* ---------- Header ---------- */
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 clamp(20px, 4vw, 72px);
+  border-bottom: var(--hairline);
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.brand-group {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+.brand {
+  color: var(--text);
+  font-size: 26px;
+  font-weight: 750;
+  letter-spacing: -0.06em;
+  white-space: nowrap;
+}
+/* Header tagline (R4d): a quiet secondary label beside the name, shown at
+   1280px and wider where the single-row header has room for it. Styles may
+   restyle it with the optional --tagline-* tokens. */
+.tagline {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-family: var(--tagline-font, var(--sans));
+  font-size: var(--tagline-size, 13px);
+  letter-spacing: var(--tagline-track, 0);
+  text-transform: var(--tagline-case, none);
+}
+.top-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 2vw, 28px);
+}
+.style-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.style-label {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.theme-control {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.theme-control label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: 34px;
+  padding: 0 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+  border-left: 1px solid var(--line-strong);
+}
+.theme-control label:first-of-type {
+  border-left: 0;
+}
+.theme-control input:checked + label {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.theme-control input:focus-visible + label {
+  outline: 2px solid var(--focus);
+  outline-offset: -3px;
+}
+.theme-control label:hover {
+  color: var(--text);
+}
+
+/* ---------- Intro band (R4d) ---------- */
+.intro {
+  padding: clamp(28px, 4vw, 56px) clamp(20px, 4vw, 72px) clamp(24px, 3vw, 40px);
+  border-bottom: var(--band-border);
+  background-color: var(--bg-band);
+  background-image:
+    linear-gradient(115deg, transparent 20%, var(--intro-glow) 48%, transparent 72%),
+    repeating-linear-gradient(90deg, transparent 0 calc(8.3333% - 1px), var(--grid-line) calc(8.3333% - 1px) 8.3333%);
+}
+
+/* ---------- Generator grid (R1 to R3) ---------- */
+main {
+  padding-bottom: 24px;
+}
+.generators {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--panel-gap);
+  margin: var(--band-gap) clamp(20px, 4vw, 72px) 0;
+}
+/* Intro off (R4d): the build leaves the section out, so the generators are
+   the first thing under the header, spaced by the optional --gap-no-intro
+   token (Payload keeps its hairline overlap); the background keeps drawing. */
+.generators:first-child {
+  margin-top: var(--gap-no-intro, clamp(24px, 3vw, 40px));
+}
+.gen {
+  padding: var(--pad);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+  background: var(--panel);
+  border: var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+/* With no gap between cards, overlap the shared edge so one hairline shows, not two. */
+.gen + .gen {
+  margin-left: min(0px, calc(var(--panel-gap) - 1px));
+}
+.gen-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ---------- Result ---------- */
+.result {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--result-radius, var(--radius-sm));
+  background: var(--field);
+}
+.value {
+  display: block;
+  padding: 18px 18px 14px;
+  font-family: var(--mono);
+  font-size: clamp(18px, 1.5vw, 22px);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  min-height: 3.2em;
+  color: var(--text);
+}
+.result-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 12px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--control-h);
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+.result-actions .btn-primary {
+  flex: 1 1 140px;
+}
+.btn:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+.btn-primary:hover {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.btn:disabled,
+.chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn:disabled:hover {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+.btn-primary:disabled:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: none;
+}
+.btn.is-copied,
+.chip.is-copied {
+  background: var(--ok);
+  color: var(--on-accent);
+  border-color: var(--ok);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--chip);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+.chip:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.notice {
+  color: var(--bad);
+  font-size: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--bad);
+  border-radius: var(--radius-sm);
+  margin-top: -10px;
+}
+
+/* ---------- Meter (markup for item 12; see src/ui/meter.ts) ---------- */
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.meter-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.meter-band {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.meter-bits {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+.meter-bar {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  height: 6px;
+}
+.meter-bar .seg {
+  background: var(--line);
+  border-radius: var(--radius-sm);
+}
+/* Level L lights segments 1..L+1. Each lit segment keeps its own ramp colour
+   (--meter-1 .. --meter-6, red through the style's accent), so the bar is a
+   fixed six-step ramp and the fill length carries the level. Styles that do
+   not define the meter tokens fall back to --bad / --warn / --ok. */
+.meter:is([data-level="0"], [data-level="1"], [data-level="2"], [data-level="3"], [data-level="4"], [data-level="5"])
+.seg:nth-child(1) {
+  background: var(--meter-1, var(--bad));
+}
+.meter:is([data-level="1"], [data-level="2"], [data-level="3"], [data-level="4"], [data-level="5"]) .seg:nth-child(2) {
+  background: var(--meter-2, var(--bad));
+}
+.meter:is([data-level="2"], [data-level="3"], [data-level="4"], [data-level="5"]) .seg:nth-child(3) {
+  background: var(--meter-3, var(--warn));
+}
+.meter:is([data-level="3"], [data-level="4"], [data-level="5"]) .seg:nth-child(4) {
+  background: var(--meter-4, var(--ok));
+}
+.meter:is([data-level="4"], [data-level="5"]) .seg:nth-child(5) {
+  background: var(--meter-5, var(--ok));
+}
+.meter[data-level="5"] .seg:nth-child(6) {
+  background: var(--meter-6, var(--ok));
+}
+.meter[data-level="0"] .meter-band,
+.meter[data-level="1"] .meter-band {
+  color: var(--bad);
+}
+.meter[data-level="2"] .meter-band {
+  color: var(--warn);
+}
+.meter-headline {
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.meter-headline:empty {
+  display: none;
+}
+
+/* ---------- Controls ---------- */
+.controls {
+  border-top: var(--hairline);
+}
+.control-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 2.2fr);
+  gap: 8px 20px;
+  padding: var(--row-gap) 0;
+  border-bottom: var(--hairline);
+}
+.control-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 500;
+  font-size: 15px;
+}
+.control-input {
+  min-width: 0;
+}
+.range-pair {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+/* The slider track is one hairline in --line-strong with the accent thumb on
+   it. The filled part up to the thumb is drawn in the accent: Firefox exposes
+   it as a pseudo-element; the other engines get it from --fill, the one
+   custom property src/ui/dom.ts sets on the input. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1 1 auto;
+  height: 24px;
+  margin: 0;
+  background: transparent;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 2px;
+  background: linear-gradient(to right, var(--accent) var(--fill, 0%), var(--line-strong) var(--fill, 0%));
+}
+input[type="range"]::-moz-range-track {
+  height: 2px;
+  background: var(--line-strong);
+}
+input[type="range"]::-moz-range-progress {
+  height: 2px;
+  background: var(--accent);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -8px;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  border-radius: var(--thumb-radius);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  border-radius: var(--thumb-radius);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+input[type="range"]:focus-visible {
+  outline: none;
+}
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+input[type="range"]:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+input[type="number"],
+select {
+  height: var(--control-h);
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+}
+input[type="number"] {
+  width: 5.2em;
+  text-align: right;
+}
+input[type="number"][aria-invalid="true"] {
+  border-color: var(--bad);
+  box-shadow: 0 0 0 1px var(--bad);
+}
+input[type="number"]:disabled,
+select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+select {
+  font-family: var(--sans);
+  padding-right: 8px;
+  min-width: 9em;
+  max-width: 100%;
+}
+.style-control select {
+  height: 34px;
+  min-width: 7em;
+}
+.minmax {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.select-field {
+  margin-top: 2px;
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.check {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 12px;
+  align-items: start;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1.4;
+}
+/* The real checkbox sits invisibly over the drawn box, so a click or tap lands on it directly. */
+.check input {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+.check .box {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  position: relative;
+}
+.check .box::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--on-accent);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  opacity: 0;
+}
+.check:hover .box {
+  border-color: var(--text);
+}
+.check input:checked + .box {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.check input:checked + .box::after {
+  opacity: 1;
+}
+.check input:focus-visible + .box {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.check-text code {
+  display: block;
+  margin-top: 1px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.check-text .hint {
+  display: block;
+}
+
+/* Character types (R7, R11a): a checkbox row with the type's Min and Max fields beside it. */
+.types {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.type-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+}
+.type-row .check {
+  flex: 1 1 200px;
+}
+.counts {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.counts input[type="number"] {
+  width: 4.4em;
+  height: calc(var(--control-h) - 6px);
+}
+/* ---------- More results ---------- */
+.more {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.more-list {
+  border-top: var(--hairline);
+}
+.more-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: var(--hairline);
+}
+.more-list .value {
+  padding: 0;
+  min-height: 0;
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* ---------- Saved settings (R24) ---------- */
+.save-settings {
+  margin: 28px clamp(20px, 4vw, 72px) 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.save-settings .check {
+  max-width: 640px;
+}
+.save-settings .check input:disabled {
+  cursor: default;
+}
+.save-settings .check input:disabled + .box {
+  opacity: 0.5;
+}
+.save-settings .check input:disabled ~ .check-text {
+  color: var(--muted);
+}
+
+/* ---------- Footer ---------- */
+/* The footer sits on the page itself, with the decorative layers behind it,
+   so it uses the secondary text colour: the build checks --text-2 against
+   every colour those layers can place there. */
+.foot {
+  margin: 0 clamp(20px, 4vw, 72px);
+  padding: 28px 0 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+/* ---------- Narrow widths (R3) ---------- */
+@media (max-width: 1279px) {
+  .tagline {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .generators {
+    grid-template-columns: 1fr;
+  }
+  .gen + .gen {
+    margin-left: 0;
+    margin-top: min(0px, calc(var(--panel-gap) - 1px));
+  }
+}
+@media (max-width: 640px) {
+  .top {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--header-h);
+    padding-top: 10px;
+    padding-bottom: 10px;
+    row-gap: 10px;
+  }
+  .top-controls {
+    margin-left: 0;
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+  .theme-control label {
+    min-width: 0;
+    padding: 0 10px;
+    height: 36px;
+  }
+  .style-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .control-row {
+    grid-template-columns: 1fr;
+  }
+  .result-actions .btn {
+    flex: 1 1 120px;
+  }
+  .brand {
+    font-size: 22px;
+  }
+  .headline {
+    margin-bottom: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none;
+  }
+}
+
+.meter-more summary {
+  cursor: pointer;
+  padding-block: 0.5rem;
+  font-size: 0.875rem;
+}
+.meter-more p,
+.meter-quantum,
+.meter-warning {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin-block: 0.5rem;
+  overflow-wrap: anywhere;
+}
+.meter-quantum {
+  color: var(--muted);
+}
+.meter-warning {
+  color: var(--text);
+  border-inline-start: 3px solid var(--warn);
+  padding-inline-start: 0.75rem;
+}
+
+/* Inline clipboard fallback remains selectable and keyboard accessible. */
+.more-list li {
+  flex-wrap: wrap;
+}
+.copy-feedback {
+  flex-basis: 100%;
+  font-size: 14px;
+}

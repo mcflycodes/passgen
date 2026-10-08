@@ -1,0 +1,130 @@
+// The passphrase panel (R12 to R15, R21, R22): wires the controls to the
+// passphrase generator in src/core/passphrase.ts and turns each core error
+// into a message beside the result with generation disabled (R13, S1). All
+// state lives in the settings store; this module reads and writes
+// `settings.passphrase`.
+
+import type { Config } from "../config/validate.ts";
+import {
+  EmptyWordlistError,
+  generatePassphrase,
+  type PassphraseOptions,
+  PassphraseOptionsError,
+} from "../core/passphrase.ts";
+import { RandomUnavailableError } from "../core/random.ts";
+import { bindCopy } from "./copy.ts";
+import { bindRangePair, byId, integerValue } from "./dom.ts";
+import type { Meter } from "./meter.ts";
+import type { ResultsBox } from "./results.ts";
+import type { SettingsStore } from "./settings.ts";
+
+export interface PassphrasePanelDeps {
+  readonly meter: Meter;
+  readonly results: ResultsBox;
+}
+
+/** The message for a request the core refuses; never includes generated output (S6). */
+export function passphraseErrorMessage(error: unknown): string {
+  if (error instanceof EmptyWordlistError) return "No words have a length in this range. Widen the word length.";
+  if (error instanceof PassphraseOptionsError) return "These passphrase settings are outside the allowed limits.";
+  if (error instanceof RandomUnavailableError)
+    return "This browser provides no secure random numbers, so nothing was generated.";
+  return "The passphrase could not be generated with these settings.";
+}
+
+export function mountPassphrasePanel(store: SettingsStore, config: Config, deps: PassphrasePanelDeps): void {
+  const output = byId("pp-value", HTMLOutputElement);
+  const copy = byId("pp-copy", HTMLButtonElement);
+  const regenerate = byId("pp-regen", HTMLButtonElement);
+  const notice = byId("pp-notice", HTMLElement);
+  const range = byId("pp-words", HTMLInputElement);
+  const number = byId("pp-words-number", HTMLInputElement);
+  const minLength = byId("pp-min-length", HTMLInputElement);
+  const maxLength = byId("pp-max-length", HTMLInputElement);
+  const useNumber = byId("pp-number", HTMLInputElement);
+  const useSymbol = byId("pp-symbol", HTMLInputElement);
+  const symbol = byId("pp-symbol-char", HTMLSelectElement);
+  const capitalize = byId("pp-capitalize", HTMLInputElement);
+  const bounds = config.passphrase.wordLength;
+
+  const options = (): PassphraseOptions => store.current.passphrase;
+  const set = (passphrase: PassphraseOptions) => store.update({ passphrase });
+
+  const reflect = (o: PassphraseOptions) => {
+    useNumber.checked = o.number;
+    useSymbol.checked = o.symbol;
+    capitalize.checked = o.capitalize;
+    symbol.value = o.separatorSymbol;
+    symbol.disabled = !o.symbol;
+    minLength.value = String(o.minWordLength);
+    maxLength.value = String(o.maxWordLength);
+  };
+
+  const render = () => {
+    const o = options();
+    reflect(o);
+    try {
+      output.textContent = generatePassphrase(o);
+      copy.disabled = false;
+      regenerate.disabled = false;
+      notice.hidden = true;
+      notice.textContent = "";
+      deps.meter.update({ kind: "passphrase", options: o });
+      deps.results.render((count) => Array.from({ length: count }, () => generatePassphrase(o)));
+    } catch (error) {
+      output.textContent = "";
+      copy.disabled = true;
+      regenerate.disabled = true;
+      notice.textContent = passphraseErrorMessage(error);
+      notice.hidden = false;
+      deps.meter.update(null, error);
+      deps.results.render(() => []);
+    }
+  };
+
+  const wordsPair = bindRangePair(range, number, (words) => {
+    set({ ...options(), words });
+    render();
+  });
+
+  // Word length (R13): each field is clamped to the list's range; when they
+  // cross, the field being edited wins and the other follows it.
+  const clamp = (value: number) => Math.min(bounds.max, Math.max(bounds.min, value));
+  const readLengths = (edited: "min" | "max") => {
+    const o = options();
+    const minValue = integerValue(minLength);
+    const maxValue = integerValue(maxLength);
+    let min = clamp(minValue ?? o.minWordLength);
+    let max = clamp(maxValue ?? o.maxWordLength);
+    if (min > max) {
+      if (edited === "min") max = min;
+      else min = max;
+    }
+    set({ ...o, minWordLength: min, maxWordLength: max });
+    render();
+  };
+  minLength.addEventListener("change", () => readLengths("min"));
+  maxLength.addEventListener("change", () => readLengths("max"));
+
+  useNumber.addEventListener("change", () => {
+    set({ ...options(), number: useNumber.checked });
+    render();
+  });
+  useSymbol.addEventListener("change", () => {
+    set({ ...options(), symbol: useSymbol.checked });
+    render();
+  });
+  symbol.addEventListener("change", () => {
+    set({ ...options(), separatorSymbol: symbol.value });
+    render();
+  });
+  capitalize.addEventListener("change", () => {
+    set({ ...options(), capitalize: capitalize.checked });
+    render();
+  });
+  regenerate.addEventListener("click", render);
+  bindCopy(copy, () => output.textContent ?? "", output);
+
+  wordsPair.set(options().words);
+  render();
+}

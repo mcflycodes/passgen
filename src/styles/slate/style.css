@@ -1,0 +1,72 @@
+/* PassGen style: Slate. Deep slate-blue surfaces, a cyan accent with a soft glow, 12px cards with translucent borders, bold tight display type.
+   Tokens only (R4a, R4b): every rule sits under :root[data-style="slate"], colours are light-dark()
+   pairs, and the build checks the required tokens and the contrast pairs. See src/styles/README.md. */
+:root[data-style="slate"] {
+  /* Surfaces */
+  --bg: light-dark(#f1f5f9, #0f172a);
+  --bg-band: transparent;
+  --panel: light-dark(#ffffff, #172238);
+  --field: light-dark(#ffffff, #0f172a);
+  --chip: light-dark(#e2e8f0, #334155);
+  /* Lines */
+  --line: light-dark(#d5dde8, #2b3a52);
+  --line-strong: light-dark(#6b7a90, #7a8aa3);
+  --grid-line: transparent;
+  --intro-glow: transparent;
+  /* Text */
+  --text: light-dark(#0f172a, #f8fafc);
+  --text-2: light-dark(#334155, #cbd5e1);
+  --muted: light-dark(#4b5b72, #94a3b8);
+  /* Accent and states */
+  --accent: light-dark(#0e7490, #22d3ee);
+  --on-accent: light-dark(#ffffff, #082a33);
+  --focus: light-dark(#0e7490, #22d3ee);
+  --bad: light-dark(#be123c, #fb7185);
+  --warn: light-dark(#a16207, #fbbf24);
+  --ok: var(--accent);
+  /* Meter ramp (optional): rose, orange, amber, green, teal, then the cyan accent */
+  --meter-1: light-dark(#be123c, #fb7185);
+  --meter-2: light-dark(#c2410c, #fb923c);
+  --meter-3: light-dark(#a16207, #fbbf24);
+  --meter-4: light-dark(#15803d, #4ade80);
+  --meter-5: light-dark(#0d9488, #5eead4);
+  --meter-6: light-dark(#0e7490, #22d3ee);
+  /* Shape */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --thumb-radius: 50%;
+  --shadow:
+    0 1px 2px light-dark(rgba(15, 23, 42, 0.06), transparent),
+    0 12px 32px -18px light-dark(rgba(15, 23, 42, 0.3), rgba(2, 6, 23, 0.8));
+  --band-border: 0;
+  --band-gap: 20px;
+  --panel-gap: 20px;
+  /* Type */
+  --sans:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace;
+  --track: -0.055em;
+  --display-weight: 800;
+  --label-track: 0.06em;
+  /* Spacing */
+  --pad: clamp(16px, 2.2vw, 28px);
+  --row-gap: 14px;
+  --control-h: 42px;
+  --header-h: 64px;
+  /* Background (R4c) */
+  --fx-follow: 1;
+  --fx-rest-x: 0.5;
+  --fx-rest-y: 0.25;
+  --fx-pointer: radial-gradient(
+    600px circle at var(--pxs) var(--pys),
+    light-dark(rgba(6, 182, 212, 0.2), rgba(34, 211, 238, 0.17)) 0%,
+    light-dark(rgba(37, 99, 235, 0.08), rgba(96, 165, 250, 0.07)) 45%,
+    transparent 70%
+  );
+  --fx-static: radial-gradient(
+    circle at 1px 1px,
+    light-dark(rgba(15, 23, 42, 0.11), rgba(148, 163, 184, 0.13)) 1px,
+    transparent 1.6px
+  );
+  --fx-size: 26px 26px;
+}

@@ -1,0 +1,55 @@
+# Owner rule: no attribution to any tool, model, assistant or vendor in commits,
+# pull requests, code, docs or the site. Separate from ci.yml so that editing a
+# pull request's title or body reruns only this check.
+name: Attribution
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: attribution-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  attribution:
+    name: No attribution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          # The pull request's own commits, not the merge commit GitHub creates.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install from the lockfile, install scripts blocked
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Pull request
+        if: github.event_name == 'pull_request'
+        env:
+          ATTRIBUTION_RANGE: ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: pnpm attribution:check
+      - name: Push
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            ATTRIBUTION_RANGE="$AFTER" pnpm attribution:check
+          else
+            ATTRIBUTION_RANGE="$BEFORE..$AFTER" pnpm attribution:check
+          fi

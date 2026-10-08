@@ -1,0 +1,46 @@
+{
+  "name": "passgen",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A client-side-only password and passphrase generator that runs on any static host.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@11.15.1+sha512.gTULB+U8lTigLx8jA7QpD6LXvgTlbiqXDEzEtBfcdh3hlu2r1J1Vx9yVgNuBAHxEFD5OPX5GKzAA0jwlUSLQZQ==",
+  "engines": {
+    "node": "22.23.2",
+    "pnpm": "11.15.1"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "node scripts/serve.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
+    "lint": "biome ci .",
+    "format": "biome check --write .",
+    "test:unit": "node --test \"tests/unit/**/*.test.ts\"",
+    "test:e2e": "playwright test",
+    "headers:gen": "node scripts/gen-headers.ts",
+    "headers:check": "node scripts/gen-headers.ts --check",
+    "verify:dist": "node scripts/verify-dist.ts",
+    "manifest": "node scripts/manifest.ts",
+    "deps:check": "node scripts/check-deps.ts",
+    "licenses:check": "node scripts/check-licenses.ts",
+    "audit": "pnpm audit --audit-level low",
+    "attribution:check": "node scripts/check-attribution.ts",
+    "check": "pnpm deps:check && pnpm attribution:check && pnpm html-sinks:check && pnpm wordlist:check && pnpm typecheck && pnpm lint && pnpm test:unit && pnpm headers:check && pnpm styles:check && pnpm build && pnpm verify:dist && pnpm manifest && pnpm test:e2e && pnpm test:gate && pnpm licenses:check && pnpm run audit",
+    "test:gate": "node --test \"tests/gate/**/*.test.ts\"",
+    "wordlist:gen": "node scripts/gen-wordlist.ts",
+    "wordlist:check": "node scripts/gen-wordlist.ts --check",
+    "styles:check": "node scripts/check-styles.ts",
+    "html-sinks:check": "node scripts/check-html-sinks.ts"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@biomejs/biome": "2.5.14",
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.20.4",
+    "lightningcss": "1.33.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.1"
+  }
+}

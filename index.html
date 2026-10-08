@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en" translate="no">
+  <head>
+    <meta charset="utf-8">
+    <!-- passgen:csp -->
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="referrer" content="no-referrer">
+    <title>PassGen</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <!-- passgen:boot -->
+    <script type="module" src="./src/main.ts"></script>
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand-group">
+        <h1 class="brand">PassGen</h1>
+        <!-- passgen:tagline -->
+        <p class="tagline" data-cfg-text="text.tagline"></p>
+        <!-- /passgen:tagline -->
+      </div>
+      <div class="top-controls">
+        <!-- passgen:style-control -->
+        <div class="style-control">
+          <label class="style-label" for="style">Style</label>
+          <select id="style" name="style"><!-- passgen:style-options --></select>
+        </div>
+        <!-- /passgen:style-control -->
+        <fieldset class="theme-control" id="theme-control">
+          <legend class="sr-only">Theme</legend>
+          <input class="sr-only" type="radio" name="theme" id="theme-system" value="system" data-cfg-checked-eq="theme">
+          <label for="theme-system">System</label>
+          <input class="sr-only" type="radio" name="theme" id="theme-light" value="light" data-cfg-checked-eq="theme">
+          <label for="theme-light">Light</label>
+          <input class="sr-only" type="radio" name="theme" id="theme-dark" value="dark" data-cfg-checked-eq="theme">
+          <label for="theme-dark">Dark</label>
+        </fieldset>
+      </div>
+    </header>
+
+    <main>
+      <!-- passgen:intro -->
+      <section class="intro" aria-labelledby="intro-headline">
+        <!-- biome-ignore lint/a11y/useHeadingContent: the build fills the heading from the configuration (R4d) -->
+        <h2 class="headline" id="intro-headline" data-cfg-text="text.intro.headline"></h2>
+        <p class="lede" data-cfg-text="text.intro.text"></p>
+      </section>
+      <!-- /passgen:intro -->
+
+      <div class="generators">
+        <section class="gen" id="password" aria-labelledby="password-title">
+          <header class="gen-head">
+            <p class="eyebrow"><span class="num">01</span> Password</p>
+            <h2 id="password-title">Password</h2>
+          </header>
+
+          <div class="result">
+            <output class="value" id="pw-value" for="pw-length pw-lowercase pw-uppercase pw-numbers pw-simple pw-complex pw-lookalikes" data-generated role="note" aria-live="off" aria-label="Generated password"></output>
+            <div class="result-actions">
+              <button type="button" class="btn btn-primary" id="pw-copy" aria-label="Copy main password">Copy</button>
+              <button type="button" class="btn" id="pw-regen">Regenerate</button>
+            </div>
+          </div>
+          <p class="notice" id="pw-notice" role="status" hidden></p>
+
+          <section class="meter" id="pw-meter" aria-labelledby="pw-meter-title" data-level="">
+            <h3 class="sr-only" id="pw-meter-title">Password strength</h3>
+            <div class="meter-head">
+              <span class="meter-band" id="pw-band"></span>
+              <span class="meter-bits" id="pw-bits"></span>
+            </div>
+            <div class="meter-bar" aria-hidden="true">
+              <span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span>
+            </div>
+            <p class="meter-headline" id="pw-headline"></p>
+            <p class="meter-warning" id="pw-meter-warning" hidden></p>
+            <details class="meter-more">
+              <summary>Other attack scenarios</summary>
+              <div id="pw-scenarios"></div>
+            </details>
+            <p class="meter-quantum" id="pw-quantum"></p>
+            <p class="meter-quantum" id="pw-future" hidden></p>
+            <p class="sr-only" id="pw-meter-status" role="status" aria-live="polite" aria-atomic="true"></p>
+          </section>
+
+          <div class="controls">
+            <div class="control-row">
+              <div class="control-label">
+                <label for="pw-length">Length</label>
+                <span class="hint"><span data-cfg-text="password.length.min"></span> to <span data-cfg-text="password.length.max"></span></span>
+              </div>
+              <div class="control-input range-pair">
+                <input type="range" id="pw-length" data-cfg-min="password.length.min" data-cfg-max="password.length.max" data-cfg-value="password.length.default">
+                <input type="number" id="pw-length-number" inputmode="numeric" data-cfg-min="password.length.min" data-cfg-max="password.length.max" data-cfg-value="password.length.default" aria-label="Length, exact value">
+              </div>
+            </div>
+
+            <fieldset class="control-row" aria-labelledby="pw-types-label">
+              <div class="control-label" id="pw-types-label">Character types <span class="hint">Min and Max count of each type</span></div>
+              <div class="control-input types">
+                <div class="type-row">
+                  <label class="check"><input type="checkbox" id="pw-lowercase" data-cfg-checked="password.enabled.lowercase"><span class="box"></span><span class="check-text">Lowercase letters <code id="pw-lowercase-chars"></code></span></label>
+                  <div class="counts">
+                    <label class="inline-field"><span aria-hidden="true">Min</span><input type="number" id="pw-lowercase-min" inputmode="numeric" min="0" aria-label="Lowercase letters, minimum count"></label>
+                    <label class="inline-field"><span aria-hidden="true">Max</span><input type="number" id="pw-lowercase-max" inputmode="numeric" min="0" aria-label="Lowercase letters, maximum count"></label>
+                  </div>
+                </div>
+                <div class="type-row">
+                  <label class="check"><input type="checkbox" id="pw-uppercase" data-cfg-checked="password.enabled.uppercase"><span class="box"></span><span class="check-text">Capital letters <code id="pw-uppercase-chars"></code></span></label>
+                  <div class="counts">
+                    <label class="inline-field"><span aria-hidden="true">Min</span><input type="number" id="pw-uppercase-min" inputmode="numeric" min="0" aria-label="Capital letters, minimum count"></label>
+                    <label class="inline-field"><span aria-hidden="true">Max</span><input type="number" id="pw-uppercase-max" inputmode="numeric" min="0" aria-label="Capital letters, maximum count"></label>
+                  </div>
+                </div>
+                <div class="type-row">
+                  <label class="check"><input type="checkbox" id="pw-numbers" data-cfg-checked="password.enabled.numbers"><span class="box"></span><span class="check-text">Numbers <code id="pw-numbers-chars"></code></span></label>
+                  <div class="counts">
+                    <label class="inline-field"><span aria-hidden="true">Min</span><input type="number" id="pw-numbers-min" inputmode="numeric" min="0" aria-label="Numbers, minimum count"></label>
+                    <label class="inline-field"><span aria-hidden="true">Max</span><input type="number" id="pw-numbers-max" inputmode="numeric" min="0" aria-label="Numbers, maximum count"></label>
+                  </div>
+                </div>
+                <div class="type-row">
+                  <label class="check"><input type="checkbox" id="pw-simple" data-cfg-checked="password.enabled.simple"><span class="box"></span><span class="check-text">Simple symbols <code id="pw-simple-chars"></code></span></label>
+                  <div class="counts">
+                    <label class="inline-field"><span aria-hidden="true">Min</span><input type="number" id="pw-symbols-min" inputmode="numeric" min="0" aria-label="Symbols, minimum count"></label>
+                    <label class="inline-field"><span aria-hidden="true">Max</span><input type="number" id="pw-symbols-max" inputmode="numeric" min="0" aria-label="Symbols, maximum count"></label>
+                  </div>
+                </div>
+                <div class="type-row">
+                  <label class="check"><input type="checkbox" id="pw-complex" data-cfg-checked="password.enabled.complex"><span class="box"></span><span class="check-text">Complex symbols <code id="pw-complex-chars"></code><span class="hint">Counted with Simple symbols as one type</span></span></label>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset class="control-row" aria-labelledby="pw-readability-label">
+              <div class="control-label" id="pw-readability-label">Readability</div>
+              <div class="control-input checks">
+                <label class="check"><input type="checkbox" id="pw-lookalikes" data-cfg-checked="password.excludeLookAlikes"><span class="box"></span><span class="check-text">No look-alike characters <code id="pw-lookalikes-chars"></code></span></label>
+              </div>
+            </fieldset>
+          </div>
+
+          <section class="more" id="pw-more" aria-labelledby="pw-more-title password-title" hidden>
+            <p class="eyebrow" id="pw-more-title">More results</p>
+            <ul class="more-list" id="pw-more-list"></ul>
+          </section>
+        </section>
+
+        <section class="gen" id="passphrase" aria-labelledby="passphrase-title">
+          <header class="gen-head">
+            <p class="eyebrow"><span class="num">02</span> Passphrase</p>
+            <h2 id="passphrase-title">Passphrase</h2>
+          </header>
+
+          <div class="result">
+            <output class="value" id="pp-value" for="pp-words pp-min-length pp-max-length pp-number pp-symbol pp-symbol-char pp-capitalize" data-generated role="note" aria-live="off" aria-label="Generated passphrase"></output>
+            <div class="result-actions">
+              <button type="button" class="btn btn-primary" id="pp-copy" aria-label="Copy main passphrase">Copy</button>
+              <button type="button" class="btn" id="pp-regen">Regenerate</button>
+            </div>
+          </div>
+          <p class="notice" id="pp-notice" role="status" hidden></p>
+
+          <section class="meter" id="pp-meter" aria-labelledby="pp-meter-title" data-level="">
+            <h3 class="sr-only" id="pp-meter-title">Passphrase strength</h3>
+            <div class="meter-head">
+              <span class="meter-band" id="pp-band"></span>
+              <span class="meter-bits" id="pp-bits"></span>
+            </div>
+            <div class="meter-bar" aria-hidden="true">
+              <span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span>
+            </div>
+            <p class="meter-headline" id="pp-headline"></p>
+            <p class="meter-warning" id="pp-meter-warning" hidden></p>
+            <details class="meter-more">
+              <summary>Other attack scenarios</summary>
+              <div id="pp-scenarios"></div>
+            </details>
+            <p class="meter-quantum" id="pp-quantum"></p>
+            <p class="meter-quantum" id="pp-future" hidden></p>
+            <p class="sr-only" id="pp-meter-status" role="status" aria-live="polite" aria-atomic="true"></p>
+          </section>
+
+          <div class="controls">
+            <div class="control-row">
+              <div class="control-label">
+                <label for="pp-words">Words</label>
+                <span class="hint"><span data-cfg-text="passphrase.words.min"></span> to <span data-cfg-text="passphrase.words.max"></span></span>
+              </div>
+              <div class="control-input range-pair">
+                <input type="range" id="pp-words" data-cfg-min="passphrase.words.min" data-cfg-max="passphrase.words.max" data-cfg-value="passphrase.words.default">
+                <input type="number" id="pp-words-number" inputmode="numeric" data-cfg-min="passphrase.words.min" data-cfg-max="passphrase.words.max" data-cfg-value="passphrase.words.default" aria-label="Words, exact value">
+              </div>
+            </div>
+
+            <fieldset class="control-row" aria-labelledby="pp-length-label">
+              <div class="control-label" id="pp-length-label">Word length <span class="hint"><span data-cfg-text="passphrase.wordLength.min"></span> to <span data-cfg-text="passphrase.wordLength.max"></span> letters</span></div>
+              <div class="control-input minmax">
+                <label class="inline-field"><span aria-hidden="true">Min</span><input type="number" id="pp-min-length" inputmode="numeric" data-cfg-min="passphrase.wordLength.min" data-cfg-max="passphrase.wordLength.max" data-cfg-value="passphrase.wordLength.defaultMin" aria-label="Shortest word length"></label>
+                <label class="inline-field"><span aria-hidden="true">Max</span><input type="number" id="pp-max-length" inputmode="numeric" data-cfg-min="passphrase.wordLength.min" data-cfg-max="passphrase.wordLength.max" data-cfg-value="passphrase.wordLength.defaultMax" aria-label="Longest word length"></label>
+              </div>
+            </fieldset>
+
+            <fieldset class="control-row" aria-labelledby="pp-separator-label">
+              <div class="control-label" id="pp-separator-label">Separator</div>
+              <div class="control-input checks">
+                <label class="check"><input type="checkbox" id="pp-number" data-cfg-checked="passphrase.separator.number"><span class="box"></span><span class="check-text">Number <span class="hint">a random two-digit number between words</span></span></label>
+                <label class="check"><input type="checkbox" id="pp-symbol" data-cfg-checked="passphrase.separator.symbol"><span class="box"></span><span class="check-text">Symbol</span></label>
+                <label class="inline-field select-field"><span>Symbol</span>
+                  <select id="pp-symbol-char" data-cfg-options="password.characters.simple" data-cfg-selected="passphrase.separator.defaultSymbol"></select>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="control-row" aria-labelledby="pp-case-label">
+              <div class="control-label" id="pp-case-label">Case</div>
+              <div class="control-input checks">
+                <label class="check"><input type="checkbox" id="pp-capitalize" data-cfg-checked="passphrase.capitalize"><span class="box"></span><span class="check-text">Capitalize <span class="hint">each word's first letter, at random</span></span></label>
+              </div>
+            </fieldset>
+          </div>
+
+          <section class="more" id="pp-more" aria-labelledby="pp-more-title passphrase-title" hidden>
+            <p class="eyebrow" id="pp-more-title">More results</p>
+            <ul class="more-list" id="pp-more-list"></ul>
+          </section>
+        </section>
+      </div>
+
+      <section class="save-settings" aria-labelledby="save-settings-title">
+        <h2 class="sr-only" id="save-settings-title">Saved settings</h2>
+        <label class="check"><input type="checkbox" id="save-settings" aria-describedby="save-settings-hint" data-cfg-checked="saveSettings"><span class="box"></span><span class="check-text">Save current settings as default <span class="hint" id="save-settings-hint">Kept in this browser only. Nothing generated is ever stored.</span></span></label>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <p>Everything happens in this tab: no account, no tracking, no network requests after the page loads.</p>
+      <p>Passphrase words come from the <span class="nowrap">EFF Large Wordlist</span> by Joseph Bonneau, used under CC BY 3.0.</p>
+    </footer>
+  </body>
+</html>
