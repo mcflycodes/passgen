@@ -174,11 +174,27 @@ successfully before reloading.
    sudo unzip "passgen-$VERSION.zip" -d "/srv/passgen-staging-$VERSION"
    ```
 
-9. **Optional, recommended:** Verify the staged files before publishing.
+9. **Required:** Verify the staged files, check for symlinks, then refresh timestamps.
+   Continue only if every checksum says `OK`.
 
    ```sh
    (cd "/srv/passgen-staging-$VERSION" && sha256sum -c -) < SHA256SUMS
    ```
+
+   Continue only if every checksum says `OK`; otherwise, stop.
+
+   ```sh
+   sudo find -P "/srv/passgen-staging-$VERSION" -type l -print
+   ```
+
+   If this prints anything, stop: the release contains a symbolic link. Do not continue.
+
+   ```sh
+   sudo find -P "/srv/passgen-staging-$VERSION" \( -type f -o -type d \) -exec touch -h -c {} +
+   ```
+
+   Refreshing timestamps prevents the ZIP’s 1980 dates from making browsers
+   and CDNs keep an older page.
 
 10. Give the server read access; only the owner can write.
 
@@ -330,11 +346,27 @@ staging paths must be outside every public root and must not already exist.
     sudo unzip "passgen-$VERSION.zip" -d "/srv/passgen-staging-$VERSION"
     ```
 
-16. **Manual:** Verify staged files before switching.
+16. **Manual, required:** Verify staged files, check for symlinks, then refresh
+    timestamps before switching. Continue only if every checksum says `OK`.
 
     ```sh
     (cd "/srv/passgen-staging-$VERSION" && sha256sum -c -) < SHA256SUMS
     ```
+
+    Continue only if every checksum says `OK`; otherwise, stop.
+
+    ```sh
+    sudo find -P "/srv/passgen-staging-$VERSION" -type l -print
+    ```
+
+    If this prints anything, stop: the release contains a symbolic link. Do not continue.
+
+    ```sh
+    sudo find -P "/srv/passgen-staging-$VERSION" \( -type f -o -type d \) -exec touch -h -c {} +
+    ```
+
+    Refreshing timestamps prevents the ZIP’s 1980 dates from making browsers
+    and CDNs keep an older page.
 
 17. **Manual:** Give the server read access to staging.
 
@@ -416,9 +448,23 @@ use destination paths that do not already exist.
    sudo mv -T /srv/passgen "/srv/passgen-failed-$VERSION"
    ```
 
-5. **Manual:** Move the saved web root back into place.
+5. **Manual:** Verify the saved web root with the previous release’s trusted
+   manifest, check for symlinks, then refresh timestamps and restore it.
 
    ```sh
+   (cd "/srv/passgen-backup-$PREVIOUS" && sha256sum -c -) < "../passgen-setup-$PREVIOUS/SHA256SUMS"
+   ```
+
+   Continue only if every checksum says `OK`; otherwise, stop.
+
+   ```sh
+   sudo find -P "/srv/passgen-backup-$PREVIOUS" -type l -print
+   ```
+
+   If this prints anything, stop: the release contains a symbolic link. Do not continue.
+
+   ```sh
+   sudo find -P "/srv/passgen-backup-$PREVIOUS" \( -type f -o -type d \) -exec touch -h -c {} +
    sudo mv -T "/srv/passgen-backup-$PREVIOUS" /srv/passgen
    ```
 
@@ -429,7 +475,23 @@ use destination paths that do not already exist.
 
    ```sh
    sudo cp -a /path/to/installer-backup/docroot /srv/passgen
+   (cd /srv/passgen && sha256sum -c -) < "../passgen-setup-$PREVIOUS/SHA256SUMS"
    ```
+
+   Continue only if every checksum says `OK`; otherwise, stop.
+
+   ```sh
+   sudo find -P /srv/passgen -type l -print
+   ```
+
+   If this prints anything, stop: the release contains a symbolic link. Do not continue.
+
+   ```sh
+   sudo find -P /srv/passgen \( -type f -o -type d \) -exec touch -h -c {} +
+   ```
+
+   Refresh restored timestamps so browsers and CDNs revalidate the restored
+   page; wait until the next second if rolling back immediately after an install.
 
 6. Restore each server config/header file changed during the update from its
    saved copy. Replace the paths with the pair used when you backed it up.

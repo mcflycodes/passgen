@@ -5,6 +5,12 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- Installs, updates and rollbacks now refresh file timestamps so browsers and
+  CDNs do not keep an older page that references deleted assets. Manual
+  deployment instructions include the same step.
+
 ## [1.1.0] - 2026-10-09
 
 ### Added

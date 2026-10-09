@@ -196,3 +196,80 @@ for (const [label, content, expected] of [
     assert.throws(() => checkDocReferences("README.md", content), expected);
   });
 }
+
+const TIMESTAMP_DOCS = ["README.md", "docs/self-hosting.md", "docs/install-release.md", "agent-setup/prompt.md"];
+
+function checkTimestampCommands(file: string, content: string): void {
+  const commands = [...content.matchAll(/\bfind\b[^\n`]*-exec\s+touch\b[^\n`]*/g)];
+  assert.ok(commands.length > 0, `${file}: missing timestamp instructions`);
+  for (const [command] of commands) {
+    assert.match(command, /^find -P /, `${file}: timestamp traversal must not follow symlinks`);
+    assert.match(
+      command,
+      /\\\( -type f -o -type d \\\)/,
+      `${file}: timestamp command must select only regular files and directories`,
+    );
+    assert.match(command, /-exec touch -h -c \{\} \+/, `${file}: unsafe timestamp touch command`);
+  }
+}
+
+for (const file of TIMESTAMP_DOCS) {
+  test(`${file} timestamp commands cannot follow symlinks or create targets`, async () => {
+    checkTimestampCommands(file, await readFile(join(ROOT, file), "utf8"));
+  });
+}
+
+const safeTimestampCommand = 'find -P "payload" \\( -type f -o -type d \\) -exec touch -h -c {} +';
+for (const [label, command] of [
+  ["bare touch", safeTimestampCommand.replace("touch -h -c", "touch")],
+  ["touch without no-dereference", safeTimestampCommand.replace("touch -h -c", "touch -c")],
+  ["touch without no-create", safeTimestampCommand.replace("touch -h -c", "touch -h")],
+  ["symlink traversal", safeTimestampCommand.replace("find -P", "find -L")],
+  ["unfiltered entries", safeTimestampCommand.replace("\\( -type f -o -type d \\) ", "")],
+] as const) {
+  test(`timestamp documentation check rejects ${label}`, () => {
+    checkTimestampCommands("fixture", safeTimestampCommand);
+    assert.throws(() => checkTimestampCommands("fixture", command));
+  });
+}
+
+function shellBlocks(content: string): string[] {
+  return [...content.matchAll(/```sh\n([\s\S]*?)```/g)].map((match) => match[1] ?? "");
+}
+
+function checkInteractiveShellBlocks(file: string, content: string): void {
+  for (const block of shellBlocks(content)) {
+    assert.doesNotMatch(block, /\bexit\b/, `${file}: copy-paste commands must not exit the user's shell`);
+  }
+}
+
+for (const file of TIMESTAMP_DOCS) {
+  test(`${file} deployment commands never exit the user's shell`, async () => {
+    checkInteractiveShellBlocks(file, await readFile(join(ROOT, file), "utf8"));
+  });
+}
+
+for (const command of ["exit 1", "sha256sum -c SHA256SUMS || exit 1", "(exit 1)"]) {
+  test(`interactive shell documentation check rejects ${command}`, () => {
+    assert.throws(() => checkInteractiveShellBlocks("fixture", `\`\`\`sh\n${command}\n\`\`\``));
+  });
+}
+
+test("manual timestamp steps require checksum verification, then symlink inspection, then touch", async () => {
+  assert.match(readme, /9\. \*\*Required:\*\* Verify the staged files, check for symlinks/);
+  assert.match(readme, /16\. \*\*Manual, required:\*\* Verify staged files, check for symlinks/);
+  for (const file of TIMESTAMP_DOCS.filter((file) => file !== "agent-setup/prompt.md")) {
+    const content = await readFile(join(ROOT, file), "utf8");
+    const blocks = shellBlocks(content);
+    let touches = 0;
+    for (const [index, block] of blocks.entries()) {
+      if (!block.includes("-exec touch")) continue;
+      touches++;
+      assert.match(blocks[index - 2] ?? "", /sha256sum -c/, `${file}: verify checksums first`);
+      assert.match(blocks[index - 1] ?? "", /find -P[^\n]+-type l -print/, `${file}: inspect symlinks next`);
+    }
+    assert.equal(touches, file === "README.md" ? 4 : 1);
+    assert.match(content, /Continue only if every checksum says `OK`; otherwise, stop\./);
+    assert.match(content, /If this prints anything, stop: the release contains a symbolic link\. Do not continue\./);
+  }
+});

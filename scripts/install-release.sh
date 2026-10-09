@@ -127,6 +127,7 @@ backup=''
 backup_tree=''
 backup_record=''
 docroot_id='' # device:inode of the docroot, recorded once its path is checked
+install_time=''
 phase=start   # start -> staged -> installing -> finished
 
 # ---------------------------------------------------------------- output
@@ -252,7 +253,7 @@ downloader=''
 check_tools() {
   local -a missing=()
   local tool
-  for tool in sha256sum unzip rsync find sort uniq cut sed grep diff cmp mktemp realpath stat chmod date cp rm mkdir; do
+  for tool in sha256sum unzip rsync find sort uniq cut sed grep diff cmp mktemp realpath stat chmod date touch cp rm mkdir; do
     command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
   done
   ((${#missing[@]} == 0)) || die 3 "missing required tools: ${missing[*]} (install coreutils, findutils, diffutils, unzip and rsync)"
@@ -881,6 +882,19 @@ apply_release() {
   pinned rsync "${install_flags[@]}" --exclude=/index.html -- "$stage/" ./
   pinned rsync "${install_flags[@]}" --include=/index.html --exclude='*' -- "$stage/" ./
   pinned rsync "${install_flags[@]}" --delete -- "$stage/" ./
+  pinned verify_tree . "$manifest" "installed files" || die 6 "the docroot does not match the release before setting times"
+  install_time=$(date +%s)
+  pinned refresh_times "$install_time"
+}
+
+# Runs only on a verified tree in the pinned docroot. Refuse special entries
+# and hard links; find does not traverse symlinks and touch never follows them
+# or creates a missing file. Untrusted writers are excluded by preflight.
+refresh_times() {
+  local timestamp=$1 odd
+  odd=$(find . \( \( ! -type f ! -type d \) -o \( -type f -links +1 \) \) -print) || return 1
+  [[ -z $odd ]] || return 1
+  find . -depth \( -type f -o -type d \) -exec touch -h -c -m -d "@$timestamp" -- {} +
 }
 
 # Every directory has --dir-mode, every file --file-mode, and everything belongs
@@ -960,6 +974,7 @@ dry_run_plan() {
     find "$stage" -type f -printf '    +%P\n' | LC_ALL=C sort
   fi
   log "$p would set directories to $dir_mode and files to $file_mode in $docroot${owner:+, owned by $owner}"
+  log "$p would set every installed file and directory modification time to the install time"
   log "$p would re-hash $docroot against SHA256SUMS and check modes${owner:+ and owner}"
   [[ -z $url ]] || log "$p would fetch every file from $url and check the ${#SECURITY_HEADER_NAMES[@]} security headers on index.html"
   log "$p would keep the newest $KEEP_BACKUPS backups in $backup_root"
@@ -971,10 +986,22 @@ dry_run_plan() {
 # or did not verify, 2 when the backup no longer matches its record (it was not
 # restored) and 3 when the docroot was replaced (nothing was written through it).
 rollback() {
-  local rc=0
+  local rc=0 restore_time
   record_tree "$backup_tree" >"$work/backup.now" 2>/dev/null || return 2
   cmp -s "$backup_record" "$work/backup.now" || return 2
   in_docroot rsync "${copy_flags[@]}" --delete -- "$backup_tree/" ./ || rc=$?
+  ((rc != MOVED)) || return 3
+  ((rc == 0)) || return 1
+  in_docroot record_tree . >"$work/restored.record" || rc=$?
+  ((rc != MOVED)) || return 3
+  ((rc == 0)) || return 1
+  cmp -s "$backup_record" "$work/restored.record" || return 1
+  restore_time=$(date +%s) || return 1
+  # HTTP dates have second precision: even an immediate rollback must be newer.
+  if [[ -n $install_time ]] && ((restore_time <= install_time)); then
+    restore_time=$((install_time + 1))
+  fi
+  in_docroot refresh_times "$restore_time" || rc=$?
   ((rc != MOVED)) || return 3
   ((rc == 0)) || return 1
   in_docroot record_tree . >"$work/restored.record" || rc=$?
