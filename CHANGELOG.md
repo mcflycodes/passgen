@@ -11,8 +11,8 @@ Versions follow Semantic Versioning.
 
 - The installer now stamps installed files with the install time and gives
   restored files a newer timestamp on rollback, helping browsers and CDNs
-  revalidate changed pages. Manual deployment instructions now verify checksums,
-  check for symlinks, then safely refresh timestamps before publishing.
+  revalidate changed pages. Manual deployment instructions now check for
+  symbolic links and then safely refresh timestamps before publishing.
 
 ## [1.1.0] - 2026-10-09
 
