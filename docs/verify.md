@@ -100,6 +100,52 @@ sha256sum downloaded-index.html
 Compare the digest to the trusted `index.html` entry; remove the download after
 checking. Do not compare an error page, redirect target or raw compressed bytes.
 
+## Real server example checks
+
+The `server-configs` CI job builds once without cache, renders the shipped
+Apache, nginx and Caddy examples by substituting their documented placeholders,
+and validates and probes digest-pinned official containers sequentially. It
+checks GET and HEAD on every manifest file, exact header counts and values,
+caching, method refusal, hidden/map paths, directories and 404s, then runs
+`verify-live` with the same trusted manifest and local release directory.
+Caddy's automatic HTTP redirect is checked too. Apache and nginx deliberately
+leave the redirect listener to the operator; CI reports that unsupported probe.
+
+The harness gives Apache inherited directory listing and conflicting response
+headers, and nginx `autoindex on` and conflicting http-level `add_header`
+defaults. nginx replaces an inherited header list when a child declares its own.
+Before probing PassGen, a separate control vhost must return a directory listing,
+`X-Frame-Options: SAMEORIGIN` and `Referrer-Policy: unsafe-url`. CI logs first
+confirm the hostile control is active, then confirm the example overrides it.
+Caddy has no inherited browse setting: `file_server browse` belongs to a site's
+handler route. Adding it to PassGen would alter or shadow the shipped example,
+so CI reports that inherited-baseline test as unsupported for Caddy.
+
+Dependabot does not update the server image digests stored in workflow
+environment variables. To refresh them, look up the current index digest on
+Docker Hub for each official image and tag the workflow names (Apache 2.4,
+nginx stable and Caddy 2), replace the pinned digest in
+`.github/workflows/ci.yml`, and open a reviewed PR. Require the workflow guard
+and all three real-server checks to pass before merging.
+
+Run the additional curl probes against any deployment (the manifest must include
+the built favicon and fingerprinted assets):
+
+```sh
+node scripts/probe-server.ts --url https://example.com/ \
+  --manifest dist-manifest/SHA256SUMS --redirect
+```
+
+Omit `--redirect` when testing only HTTPS. For a private CA, add
+`--ca-file /path/to/ca.pem`; `--address 127.0.0.1` selects curl's `--resolve`
+target without changing the TLS hostname. The existing live verifier uses Node's
+standard CA environment variable, with certificate validation still enabled:
+
+```sh
+NODE_EXTRA_CA_CERTS=/path/to/ca.pem node scripts/verify-live.ts \
+  --url https://example.com/ --manifest dist-manifest/SHA256SUMS --release-dir dist
+```
+
 ## Mismatches
 
 Stop promoting or using an unverified release until the difference is explained.

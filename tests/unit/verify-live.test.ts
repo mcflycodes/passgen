@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createHash, X509Certificate } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -189,6 +190,68 @@ test("live verifier CLI passes a clean production build", async () => {
   } finally {
     if (server)
       await new Promise<void>((resolve, reject) => server?.close((error) => (error ? reject(error) : resolve())));
+    await rm(scratch, { recursive: true, force: true });
+  }
+});
+
+test("live verifier CLI trusts a private CA only when NODE_EXTRA_CA_CERTS supplies it", async () => {
+  const run = promisify(execFile);
+  const scratch = await mkdtemp(join(tmpdir(), "passgen-live-tls-"));
+  const cert = join(scratch, "cert.pem");
+  const key = join(scratch, "key.pem");
+  const root = join(scratch, "dist");
+  let server: ReturnType<typeof createHttpsServer> | undefined;
+  try {
+    await mkdir(root);
+    const body = "<!doctype html><title>PassGen</title>";
+    await writeFile(join(root, "index.html"), body);
+    const manifest = join(scratch, "SHA256SUMS");
+    await writeFile(manifest, `${createHash("sha256").update(body).digest("hex")}  index.html\n`);
+    const ca = join(scratch, "ca.pem");
+    await run("bash", [join(import.meta.dirname, "../../scripts/lib/test-certificates.sh"), scratch, "IP:127.0.0.1"]);
+    assert.equal(new X509Certificate(await readFile(cert)).ca, false);
+    assert.equal(new X509Certificate(await readFile(ca)).ca, true);
+    await run("openssl", ["verify", "-CAfile", ca, cert]);
+    const staticServer = createStaticServer({ root });
+    server = createHttpsServer({ cert: await readFile(cert), key: await readFile(key) }, (req, res) =>
+      staticServer.emit("request", req, res),
+    );
+    await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const args = [
+      join(import.meta.dirname, "../../scripts/verify-live.ts"),
+      "--url",
+      `https://127.0.0.1:${address.port}/`,
+      "--manifest",
+      manifest,
+      "--release-dir",
+      root,
+    ];
+    await assert.rejects(
+      run(process.execPath, args, { env: { ...process.env, NODE_EXTRA_CA_CERTS: "" } }),
+      /fetch failed/,
+    );
+    const { stdout } = await run(process.execPath, args, { env: { ...process.env, NODE_EXTRA_CA_CERTS: ca } });
+    assert.match(stdout, /PASS: 1 file hashes/);
+    const { stdout: curlBody } = await run("curl", [
+      "--silent",
+      "--show-error",
+      "--fail",
+      "--noproxy",
+      "*",
+      "--max-time",
+      "15",
+      "--cacert",
+      ca,
+      `https://127.0.0.1:${address.port}/`,
+    ]);
+    assert.equal(curlBody, body);
+  } finally {
+    if (server) {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) => server?.close((error) => (error ? reject(error) : resolve())));
+    }
     await rm(scratch, { recursive: true, force: true });
   }
 });

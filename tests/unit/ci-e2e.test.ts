@@ -272,3 +272,72 @@ test("push concurrency guard rejects ref-wide grouping and unconditional cancell
     );
   }
 });
+
+function checkServerWorkflow(configuration: string) {
+  assert.equal(
+    configuration.match(/^on:\n([\s\S]*?)(?=^\S)/m)?.[1],
+    "  pull_request:\n  push:\n    branches: [main]\n\n",
+  );
+  assert.equal(configuration.match(/^permissions:\n([\s\S]*?)(?=^\S)/m)?.[1], "  contents: read\n\n");
+  checkPushConcurrency(configuration, "ci");
+  const server = configuration.match(/^ {2}server-configs:\n[\s\S]*?(?=^ {2}[\w-]+:|$(?![\s\S]))/m)?.[0];
+  assert.ok(server, "CI must test server configs");
+  assert.match(server, /^ {4}runs-on: ubuntu-24\.04$/m);
+  assert.doesNotMatch(server, /permissions:|cache:|actions\/cache|secrets\.|container:|self-hosted/);
+  for (const [variable, image] of [
+    ["HTTPD", "httpd:2.4"],
+    ["NGINX", "nginx:stable"],
+    ["CADDY", "caddy:2"],
+  ]) {
+    assert.match(server, new RegExp(`^ {10}${variable}_IMAGE: ${image}@sha256:[a-f0-9]{64}$`, "m"));
+  }
+  for (const run of server.matchAll(/run:.*(?:\n {10}.*)*/g)) assert.doesNotMatch(run[0], /\$\{\{/);
+  for (const action of server.matchAll(/uses: (\S+)/g)) assert.match(action[1] ?? "", /@[a-f0-9]{40}$/);
+  assert.match(server, /persist-credentials: false/);
+  assert.equal((server.match(/pnpm build/g) ?? []).length, 1);
+  for (const command of ["pnpm headers:check", "pnpm manifest", "bash scripts/test-server-configs.sh"])
+    assert.ok(server.includes(command));
+}
+
+test("server config CI pins official images, actions, read-only permissions and safe triggers", () => {
+  checkServerWorkflow(workflow);
+});
+
+test("server config guard rejects each missing image digest", () => {
+  for (const image of ["httpd:2.4", "nginx:stable", "caddy:2"]) {
+    const broken = workflow.replace(new RegExp(`${image}@sha256:[a-f0-9]{64}`), image);
+    assert.notEqual(broken, workflow);
+    assert.throws(() => checkServerWorkflow(broken));
+  }
+});
+
+test("server config guard rejects elevated permissions and unsafe triggers", () => {
+  for (const broken of [
+    workflow.replace("permissions:\n  contents: read", "permissions:\n  contents: write"),
+    workflow.replace("  contents: read\n", "  contents: read\n  id-token: write\n"),
+    workflow.replace("  contents: read\n", "  contents: read\n  packages: write\n"),
+    workflow.replace("  server-configs:\n", "  server-configs:\n    permissions: write-all\n"),
+    workflow.replace("  pull_request:", "  pull_request_target:"),
+    workflow.replace("branches: [main]", "branches: ['*']"),
+    workflow.replace("  push:\n", "  workflow_dispatch:\n  push:\n"),
+  ]) {
+    assert.notEqual(broken, workflow);
+    assert.throws(() => checkServerWorkflow(broken));
+  }
+});
+
+test("server config guard rejects expressions in single-line and multiline run commands", () => {
+  for (const broken of [
+    workflow.replace(
+      "      - run: pnpm install",
+      `      - run: echo \${{ github.event.pull_request.title }}; pnpm install`,
+    ),
+    workflow.replace(
+      '          TMPDIR="$RUNNER_TEMP/passgen-configs"',
+      `          echo \${{ github.event.pull_request.title }}\n          TMPDIR="$RUNNER_TEMP/passgen-configs"`,
+    ),
+  ]) {
+    assert.notEqual(broken, workflow);
+    assert.throws(() => checkServerWorkflow(broken));
+  }
+});
