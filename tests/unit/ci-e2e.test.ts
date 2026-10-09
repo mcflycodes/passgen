@@ -240,6 +240,35 @@ test("release workflow guard rejects write permission in build, dependency code 
   }
 });
 
-test("CI cancels superseded PR runs while preserving every main push run", () => {
-  assert.equal(workflow.match(/^ {2}cancel-in-progress: (.+)$/m)?.[1], `\${{ github.event_name == 'pull_request' }}`);
+function checkPushConcurrency(configuration: string, prefix: string) {
+  assert.equal(
+    configuration.match(/^ {2}group: (.+)$/m)?.[1],
+    `${prefix}-\${{ github.workflow }}-\${{ github.event_name == 'pull_request' && github.ref || github.sha }}`,
+    "Push runs must use their commit SHA; PR runs must share their ref's group",
+  );
+  assert.equal(
+    configuration.match(/^ {2}cancel-in-progress: (.+)$/m)?.[1],
+    `\${{ github.event_name == 'pull_request' }}`,
+  );
+}
+
+const concurrencyWorkflows = [
+  { name: "CI", prefix: "ci", configuration: workflow },
+  { name: "Attribution", prefix: "attribution", configuration: read(".github/workflows/attribution.yml") },
+];
+for (const { name, prefix, configuration } of concurrencyWorkflows) {
+  test(`${name} groups push runs by SHA and supersedes PR runs by ref`, () => {
+    checkPushConcurrency(configuration, prefix);
+  });
+}
+
+test("push concurrency guard rejects ref-wide grouping and unconditional cancellation", () => {
+  for (const { prefix, configuration } of concurrencyWorkflows) {
+    assert.throws(() =>
+      checkPushConcurrency(configuration.replace(/^( {2}group:).+$/m, `$1 ${prefix}-\${{ github.ref }}`), prefix),
+    );
+    assert.throws(() =>
+      checkPushConcurrency(configuration.replace(/^ {2}cancel-in-progress:.+$/m, "  cancel-in-progress: true"), prefix),
+    );
+  }
 });
