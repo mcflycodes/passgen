@@ -111,9 +111,13 @@ user-confirmed values in the plan. Do not proceed without the needed answers.
    Without shell access, or on an unsupported OS, use the manual/static-host
    path: unpack into empty staging, verify hashes, reject symlinks and unsafe
    entries, and publish only verified regular payload files using the supported
-   host workflow. After unzip and verification, run
-   `find /path/to/staging -exec touch {} +` before publishing on each install
-   or update, so the ZIP’s 1980 timestamps do not make caches keep an older page.
+   host workflow. Staging checksum verification is required; stop if any hash
+   fails. Then run `find -P "/path/to/staging" -type l -print`. If this prints
+   anything, stop: the release contains a symbolic link. Do not continue.
+   After these checks, run
+   `find -P "/path/to/staging" \( -type f -o -type d \) -exec touch -h -c {} +`
+   before publishing on each install or update, so the ZIP’s 1980 timestamps do
+   not make caches keep an older page.
    Replace the previous release completely; do not overlay files.
    Never run scripts or install packages on another machine by assumption.
 
@@ -181,8 +185,9 @@ user-confirmed values in the plan. Do not proceed without the needed answers.
     reload, then verifying with the previous release's manifest. The installer
     refreshes timestamps on install and restore, and attempts rollback for
     failures after backup; read its output and exit code.
-    For manual rollback, refresh the verified restored tree with the same `find`
-    command before publishing so caches revalidate the restored page; wait until
+    For manual rollback, require checksum verification with the previous release’s
+    trusted manifest, check for symlinks, then refresh the restored tree with
+    the same `find` command before publishing so caches revalidate the restored page; wait until
     the next second if the install just finished.
     If it reports a changed backup/root, refused rollback or unverified restore,
     stop and ask rather than overwriting through an unexpected path. Do not claim

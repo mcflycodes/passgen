@@ -203,10 +203,28 @@ are not touched.
 
 ### Manual timestamps
 
-For a manual install or update, run `find /path/to/staging -exec touch {} +`
-after unzipping and verifying the payload, before moving it into place. For a
-manual rollback, run the same command on the verified restored tree before
-publishing it, waiting until the next second if the install just finished.
+For a manual install or update, require every staged checksum to pass, then
+check for symlinks before refreshing timestamps or moving the payload into place:
+
+```sh
+(cd "/path/to/staging" && sha256sum -c /path/to/trusted/SHA256SUMS)
+```
+
+Continue only if every checksum says `OK`; otherwise, stop.
+
+```sh
+find -P "/path/to/staging" -type l -print
+```
+
+If this prints anything, stop: the release contains a symbolic link. Do not continue.
+
+```sh
+find -P "/path/to/staging" \( -type f -o -type d \) -exec touch -h -c {} +
+```
+
+Use the real staging and trusted manifest paths. For a manual rollback, use the
+same checksum and symlink checks with the previous release’s trusted manifest,
+then refresh that verified restored tree before publishing it, waiting until the next second if the install just finished.
 Refreshing timestamps makes browsers and CDNs revalidate the changed page.
 
 ## Trusted directories

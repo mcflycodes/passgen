@@ -76,8 +76,19 @@ unpacking it into a fresh staging directory, then verify every extracted file:
 sha256sum -c passgen-X.Y.Z.zip.sha256
 mkdir payload
 unzip passgen-X.Y.Z.zip -d payload
-find payload -exec touch {} +
 (cd payload && sha256sum -c ../SHA256SUMS)
+```
+
+Continue only if every checksum says `OK`; otherwise, stop.
+
+```sh
+find -P payload -type l -print
+```
+
+If this prints anything, stop: the release contains a symbolic link. Do not continue.
+
+```sh
+find -P payload \( -type f -o -type d \) -exec touch -h -c {} +
 ```
 
 Refreshing timestamps prevents the reproducible ZIP’s 1980 dates from making
@@ -94,9 +105,11 @@ server read-only access, and switch the web root to it atomically where your
 host supports that. Do not overlay an existing release. Retain the previous
 verified directory so switching back rolls back the deployment. On every update,
 refresh staging timestamps with the same `find` command before switching. For
-rollback, run `find /path/to/previous-release -exec touch {} +` before switching
-back so caches revalidate the restored page; wait until the next second if
-rolling back immediately after an install.
+rollback, first verify the previous directory against its trusted manifest,
+then check for symlinks using the same checks above before running
+`find -P "/path/to/previous-release" \( -type f -o -type d \) -exec touch -h -c {} +`
+before switching back so caches revalidate the restored page; wait until the
+next second if rolling back immediately after an install.
 
 Check out source from the same reviewed tag to run its verifier with the pinned
 Node version (`.nvmrc`); installing dependencies is unnecessary for this script.

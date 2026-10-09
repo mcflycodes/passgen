@@ -1138,7 +1138,7 @@ describe("install-release: rollback (exit 6, or 7 when it is refused)", () => {
         await utimes(join(docroot, path), FROZEN_EPOCH, FROZEN_EPOCH);
       }
       const before = await snapshot(docroot);
-      const started = Math.floor(Date.now() / 1000) * 1000;
+      const env = await shim("date", [`exec ${q(realDate)} -d @${FROZEN_EPOCH} "$@"`]);
       let failedInstallTime = 0;
       const server = serve(docroot);
       server.prependListener("request", () => {
@@ -1146,27 +1146,19 @@ describe("install-release: rollback (exit 6, or 7 when it is refused)", () => {
       });
       const url = await listen(server);
       try {
-        const result = await install([
-          "--version",
-          VERSION,
-          "--docroot",
-          docroot,
-          "--from-dir",
-          releaseDir,
-          "--url",
-          url,
-          "--local-http",
-        ]);
+        const result = await install(
+          ["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir, "--url", url, "--local-http"],
+          env,
+        );
         assert.equal(result.code, 6, result.output);
         assert.match(result.output, expected);
         assert.match(result.output, /rollback complete/);
         assert.deepEqual(await snapshot(docroot), before);
         const restoredTimes = await mtimes(docroot);
         assert.equal(new Set(restoredTimes).size, 1, "all restored entries share one timestamp");
-        assert.ok(failedInstallTime >= started, "the failed install had a current timestamp");
+        assert.equal(failedInstallTime, FROZEN_EPOCH * 1000, "the failed install uses the frozen clock");
         for (const time of restoredTimes) {
-          assert.ok(time >= started && time <= Date.now() + 1000, "restored mtime must be current");
-          assert.ok(time >= failedInstallTime + 1000, "rollback must advance the HTTP Last-Modified second");
+          assert.equal(time, failedInstallTime + 1000, "rollback must advance the HTTP Last-Modified second");
         }
         const backupNames = await entries(backups);
         assert.equal(backupNames.length, 1, "the backup is kept after a rollback");
