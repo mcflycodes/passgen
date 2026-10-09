@@ -49,7 +49,8 @@ export function passwordEntropy(
 /**
  * Independent word picks with replacement: W^w. Each of the w-1 number
  * separators has 10^d possibilities (including leading zeroes). The known
- * fixed symbol adds none. Random first-letter case adds 2^w when enabled.
+ * fixed symbol adds none; random modes add n^(w-1) or the falling
+ * factorial n!/(n-w+1)!. A number reuses its gap's symbol on both sides. Random first-letter case adds 2^w when enabled.
  * Uses settings alone; no result or randomness is read.
  */
 export function passphraseEntropy(options: PassphraseOptions = defaultPassphraseOptions): Entropy {
@@ -60,7 +61,14 @@ export function passphraseEntropy(options: PassphraseOptions = defaultPassphrase
     ? 10n ** BigInt(config.passphrase.separator.numberDigits * (options.words - 1))
     : 1n;
   const caseSpace = options.capitalize ? 2n ** BigInt(options.words) : 1n;
-  const count = wordSpace * numberSpace * caseSpace;
+  let symbolSpace = 1n;
+  if (options.symbol && ["random", "random-unique"].includes(options.separatorSymbol)) {
+    for (let i = 0; i < options.words - 1; i += 1)
+      symbolSpace *= BigInt(
+        config.password.characters.simple.length - (options.separatorSymbol === "random-unique" ? i : 0),
+      );
+  }
+  const count = wordSpace * numberSpace * caseSpace * symbolSpace;
   return { count, bits: log2BigInt(count) };
 }
 

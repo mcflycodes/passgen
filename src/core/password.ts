@@ -44,6 +44,8 @@
 // Multiplying the three probabilities gives, for any valid password p with
 // count vector c: W(c)/N * (c_1! ... c_T!)/L! * 1/(s_1^c_1 ... s_T^c_T) = 1/N.
 // Every valid password is exactly equally likely, whatever the limits.
+// With the first-symbol restriction, generationSpace partitions by the
+// first type and reuses these exact composition tables for the suffix.
 //
 // Three tempting alternatives are never used, because each is biased:
 // putting one character of each type at fixed positions, picking the forced
@@ -95,6 +97,7 @@ export interface PasswordOptions {
   readonly simple: boolean;
   readonly complex: boolean;
   readonly excludeLookAlikes: boolean;
+  readonly dontStartWithSymbol: boolean;
   /** Counts of unselected types are carried along but not checked or used. */
   readonly counts: PasswordCounts;
 }
@@ -120,6 +123,10 @@ export interface PasswordPlan {
   readonly pool: readonly string[];
   /** The selected types in configuration order, each with at least one character. Never empty. */
   readonly types: readonly PasswordType[];
+  /** Effective first-position constraint, after checking feasibility. */
+  readonly dontStartWithSymbol?: boolean;
+  /** Requested constraint skipped because the normalized limits force all symbols. */
+  readonly startSymbolRuleSkipped?: boolean;
 }
 
 /** Base class of every error this module throws. Nothing was generated. */
@@ -226,6 +233,7 @@ export function defaultOptions(config: PasswordConfig): PasswordOptions {
     simple: config.enabled.simple,
     complex: config.enabled.complex,
     excludeLookAlikes: config.excludeLookAlikes,
+    dontStartWithSymbol: config.dontStartWithSymbol,
     counts: defaultCounts(config, config.length.default),
   };
 }
@@ -343,7 +351,20 @@ export function planPassword(options: PasswordOptions, config: PasswordConfig): 
     const limit = limits[index] as { min: number; max: number };
     return { name: type.name, characters: type.characters, min: limit.min, max: limit.max };
   });
-  return { length, pool, types };
+  // After normalization, a non-symbol can lead iff reserving one of that
+  // type fits both its Max and the total minimums. Otherwise keep the full
+  // valid space (including symbols-only and symbols Min = length).
+  const canStart = types.some(
+    (type) => type.name !== "symbols" && type.max > 0 && minimums + (type.min === 0 ? 1 : 0) <= length,
+  );
+  const requested = options.dontStartWithSymbol === true;
+  return {
+    length,
+    pool,
+    types,
+    dontStartWithSymbol: requested && canStart,
+    startSymbolRuleSkipped: requested && !canStart,
+  };
 }
 
 /**
@@ -484,13 +505,74 @@ function countTable(plan: PasswordPlan): CountTable {
 /**
  * The exact number of valid passwords for a plan: every string of the
  * plan's length over its pool whose count of each type is within that
- * type's limits. For item 9, the entropy is log2 of this number. Pure:
+ * type's limits and whose first character meets the plan's effective rule.
+ * For item 9, the entropy is log2 of this number. Pure:
  * nothing random happens here, and the same plan always gives the same
  * count.
  */
 export function countPasswords(plan: PasswordPlan): bigint {
-  const table = countTable(plan);
-  return (table.layers[table.types.length] as bigint[])[plan.length] as bigint;
+  return generationSpace(plan).total;
+}
+
+/**
+ * Partition the constrained space by first-character type. For type t, remove
+ * one position and reduce its Min/Max by one: weight = s_t * N_suffix(t).
+ * Draw a branch with this exact weight, then its character and suffix uniformly.
+ * Each full password has probability (s_t*N_suffix/N)/s_t/N_suffix = 1/N.
+ * No forced-character shuffle or output rejection is needed. The unconstrained
+ * path uses the original composition table. Batch generation shares all tables.
+ */
+interface GenerationBranch {
+  readonly plan: PasswordPlan;
+  readonly table: CountTable;
+  readonly first?: PasswordType | undefined;
+  readonly weight: bigint;
+}
+interface GenerationSpace {
+  readonly branches: readonly GenerationBranch[];
+  readonly total: bigint;
+}
+function generationSpace(plan: PasswordPlan): GenerationSpace {
+  const candidates: Array<{ plan: PasswordPlan; first?: PasswordType }> = [];
+  if (!plan.dontStartWithSymbol) candidates.push({ plan });
+  else {
+    for (let index = 0; index < plan.types.length; index += 1) {
+      const first = plan.types[index] as PasswordType;
+      if (first.name === "symbols" || first.max < 1) continue;
+      const types = plan.types.map((type, i) => ({
+        ...type,
+        min: i === index ? Math.max(0, type.min - 1) : type.min,
+        max: Math.min(plan.length - 1, type.max - (i === index ? 1 : 0)),
+      }));
+      candidates.push({ first, plan: { length: plan.length - 1, pool: plan.pool, types } });
+    }
+  }
+  let total = 0n;
+  const branches = candidates.map(({ plan: suffix, first }) => {
+    const table = countTable(suffix);
+    const suffixCount = (table.layers[table.types.length] as bigint[])[suffix.length] as bigint;
+    const weight = suffixCount * BigInt(first?.characters.length ?? 1);
+    total += weight;
+    return { plan: suffix, table, first, weight };
+  });
+  return { branches, total };
+}
+function generateFromSpace(space: GenerationSpace, source: RandomSource): string {
+  if (space.total < 1n) throw new PasswordError("no passwords satisfy the plan");
+  // Preserve the original draw path when the rule is off or skipped.
+  if (space.branches.length === 1 && !space.branches[0]?.first) {
+    const branch = space.branches[0] as GenerationBranch;
+    return generateFromTable(branch.plan, branch.table, source);
+  }
+  let target = randomBigInt(space.total, source);
+  for (const branch of space.branches) {
+    if (target < branch.weight)
+      return (
+        pick((branch.first as PasswordType).characters, source) + generateFromTable(branch.plan, branch.table, source)
+      );
+    target -= branch.weight;
+  }
+  throw new PasswordError("the count table is inconsistent");
 }
 
 /**
@@ -572,15 +654,15 @@ export function generatePassword(
   source: RandomSource = webCrypto,
 ): string {
   const plan = planPassword(options, config);
-  return generateFromTable(plan, countTable(plan), source);
+  return generateFromSpace(generationSpace(plan), source);
 }
 
 /**
  * `count` independent passwords for the same request, for the main result and
  * the extra results of R20 (the interface passes `config.extraResults`, which
  * lives outside the password section). Each password is generated exactly as
- * `generatePassword` would, from fresh draws; only the count table, which is
- * plain arithmetic on the plan, is shared. If any one of them fails, the
+ * `generatePassword` would, from fresh draws; only the count tables, which are
+ * plain arithmetic on the plan, are shared. If any one of them fails, the
  * whole call throws and nothing is returned.
  *
  * @throws {PasswordError} if `count` is not a non-negative integer, before any randomness is drawn.
@@ -595,8 +677,8 @@ export function generatePasswords(
     throw new PasswordError("count must be a non-negative integer");
   }
   const plan = planPassword(options, config);
-  const table = countTable(plan);
+  const space = generationSpace(plan);
   const passwords: string[] = [];
-  for (let i = 0; i < count; i += 1) passwords.push(generateFromTable(plan, table, source));
+  for (let i = 0; i < count; i += 1) passwords.push(generateFromSpace(space, source));
   return passwords;
 }

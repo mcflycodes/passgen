@@ -120,6 +120,7 @@ function toSettings(stored: StoredSettings, config: Config): Settings | null {
     simple: stored.password.simple,
     complex: stored.password.complex,
     excludeLookAlikes: stored.password.excludeLookAlikes,
+    dontStartWithSymbol: stored.password.dontStartWithSymbol,
     counts: {
       lowercase: { ...stored.password.counts.lowercase },
       uppercase: { ...stored.password.counts.uppercase },

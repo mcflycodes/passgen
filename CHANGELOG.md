@@ -5,6 +5,14 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Passphrase separators can now use a random simple symbol for each word gap,
+  with an option to keep every gap's symbol different. Number separators keep
+  the same symbol on both sides. The strength estimate includes these choices.
+- Passwords now avoid starting with a symbol by default. Turn this off if needed.
+  If your other settings require only symbols, this option is skipped with a
+  note. Passwords remain equally likely within your settings, and the strength
+  estimate includes the first-character rule.
+
 ## [1.0.0]
 
 ### Added

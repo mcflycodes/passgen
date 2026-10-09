@@ -44,7 +44,14 @@ test("bundle exemption covers only exact authenticated AST string literals", () 
 });
 
 test("generated passphrases admit every separator mode and capitalization", () => {
-  for (const text of [`abacus-${word}`, `Abacus-05-${word}`, `abacus05${word}`, `abacus${word}`])
+  for (const text of [
+    `abacus-${word}`,
+    `Abacus-05-${word}`,
+    `abacus05${word}`,
+    `abacus${word}`,
+    `abacus-${word}_abacus`,
+    `abacus-05-${word}!07!abacus`,
+  ])
     assert.deepEqual(scanText("output", generatedPassphraseInput(text)), []);
 });
 
@@ -55,6 +62,8 @@ test("marked output does not admit tool credits or malformed passphrases", () =>
     `abacus-5-${word}`,
     `abacus-000-${word}`,
     `abacus!05?${word}`,
+    `abacus-${word}!07!abacus`,
+    `abacus-05-${word}!07?abacus`,
     `notaword-${word}`,
   ])
     assert.ok(scanText("output", generatedPassphraseInput(text)).length > 0);

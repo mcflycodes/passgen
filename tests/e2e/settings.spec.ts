@@ -161,6 +161,7 @@ test.describe("saved settings", () => {
     await page.locator("#pw-numbers").uncheck();
     await page.locator("#pw-complex").uncheck();
     await page.locator("#pw-lookalikes").check();
+    await page.locator("#pw-no-start-symbol").uncheck();
     await setNumber(page.locator("#pw-lowercase-min"), 3);
     await setNumber(page.locator("#pw-uppercase-max"), 5);
     await setNumber(page.locator("#pw-symbols-min"), 2);
@@ -187,6 +188,7 @@ test.describe("saved settings", () => {
           simple: true,
           complex: false,
           excludeLookAlikes: true,
+          dontStartWithSymbol: false,
           counts: {
             lowercase: { min: 3, max: 32 },
             uppercase: { min: 1, max: 5 },
@@ -218,6 +220,7 @@ test.describe("saved settings", () => {
     await expect(page.locator("#pw-complex")).not.toBeChecked();
     await expect(page.locator("#pw-simple")).toBeChecked();
     await expect(page.locator("#pw-lookalikes")).toBeChecked();
+    await expect(page.locator("#pw-no-start-symbol")).not.toBeChecked();
     await expect(page.locator("#pw-lowercase-min")).toHaveValue("3");
     await expect(page.locator("#pw-uppercase-max")).toHaveValue("5");
     await expect(page.locator("#pw-symbols-min")).toHaveValue("2");

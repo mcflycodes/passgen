@@ -73,6 +73,7 @@ export function mountPasswordPanel(store: SettingsStore, config: Config, deps: P
     simple: byId("pw-simple", HTMLInputElement),
     complex: byId("pw-complex", HTMLInputElement),
     excludeLookAlikes: byId("pw-lookalikes", HTMLInputElement),
+    dontStartWithSymbol: byId("pw-no-start-symbol", HTMLInputElement),
   } as const;
   const counts = Object.fromEntries(
     PASSWORD_TYPE_NAMES.map((name) => [
@@ -100,7 +101,15 @@ export function mountPasswordPanel(store: SettingsStore, config: Config, deps: P
    * whole number is left as typed, with generation stopped.
    */
   const reflect = (o: PasswordOptions) => {
-    for (const name of ["lowercase", "uppercase", "numbers", "simple", "complex", "excludeLookAlikes"] as const)
+    for (const name of [
+      "lowercase",
+      "uppercase",
+      "numbers",
+      "simple",
+      "complex",
+      "excludeLookAlikes",
+      "dontStartWithSymbol",
+    ] as const)
       checks[name].checked = o[name];
     for (const name of PASSWORD_TYPE_NAMES) {
       const fields = counts[name];
@@ -171,8 +180,10 @@ export function mountPasswordPanel(store: SettingsStore, config: Config, deps: P
       output.textContent = generatePassword(o, config.password);
       copy.disabled = false;
       regenerate.disabled = false;
-      notice.hidden = true;
-      notice.textContent = "";
+      notice.hidden = !plan.startSymbolRuleSkipped;
+      notice.textContent = plan.startSymbolRuleSkipped
+        ? "Don't start with a symbol is skipped: these settings require only symbols."
+        : "";
       deps.meter.update({ kind: "password", plan });
       deps.results.render((count) => generatePasswords(o, config.password, count));
     } catch (error) {
@@ -199,7 +210,7 @@ export function mountPasswordPanel(store: SettingsStore, config: Config, deps: P
     render();
   });
 
-  for (const name of ["lowercase", "uppercase", "numbers", "excludeLookAlikes"] as const) {
+  for (const name of ["lowercase", "uppercase", "numbers", "excludeLookAlikes", "dontStartWithSymbol"] as const) {
     checks[name].addEventListener("change", () => {
       set({ ...options(), [name]: checks[name].checked });
       render();
