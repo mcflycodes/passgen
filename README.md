@@ -172,7 +172,11 @@ successfully before reloading.
 
    ```sh
    sudo unzip "passgen-$VERSION.zip" -d "/srv/passgen-staging-$VERSION"
+   sudo find "/srv/passgen-staging-$VERSION" -exec touch {} +
    ```
+
+   Refreshing timestamps prevents the reproducible ZIP’s 1980 dates from making
+   browsers and CDNs keep an older page.
 
 9. **Optional, recommended:** Verify the staged files before publishing.
 
@@ -328,7 +332,11 @@ staging paths must be outside every public root and must not already exist.
 
     ```sh
     sudo unzip "passgen-$VERSION.zip" -d "/srv/passgen-staging-$VERSION"
+    sudo find "/srv/passgen-staging-$VERSION" -exec touch {} +
     ```
+
+    Refreshing timestamps prevents browsers and CDNs from keeping the previous
+    page after an update.
 
 16. **Manual:** Verify staged files before switching.
 
@@ -419,6 +427,7 @@ use destination paths that do not already exist.
 5. **Manual:** Move the saved web root back into place.
 
    ```sh
+   sudo find "/srv/passgen-backup-$PREVIOUS" -exec touch {} +
    sudo mv -T "/srv/passgen-backup-$PREVIOUS" /srv/passgen
    ```
 
@@ -429,7 +438,11 @@ use destination paths that do not already exist.
 
    ```sh
    sudo cp -a /path/to/installer-backup/docroot /srv/passgen
+   sudo find /srv/passgen -exec touch {} +
    ```
+
+   Refresh restored timestamps so browsers and CDNs revalidate the restored
+   page; wait until the next second if rolling back immediately after an install.
 
 6. Restore each server config/header file changed during the update from its
    saved copy. Replace the paths with the pair used when you backed it up.

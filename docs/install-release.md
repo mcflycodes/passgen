@@ -152,7 +152,10 @@ what would change.
    stale files deleted last. Every file is written anew under a temporary name
    and renamed into place, even when its content is unchanged, and gets
    `--file-mode` (directories `--dir-mode`, including the docroot itself) and
-   `--owner` as it is written. The script never changes the mode or owner of a
+   `--owner` as it is written. After verifying the copied tree, it sets every
+   file and directory modification time to one captured install timestamp.
+   This prevents the reproducible ZIP’s 1980 dates from making browsers and
+   CDNs keep an older page. The script never changes the mode or owner of a
    file that is already there.
 9. **Re-hashes the docroot** against `SHA256SUMS`, checks the file set is exact
    and checks every mode, and the owner when `--owner` is given. With `--url`,
@@ -171,7 +174,9 @@ If step 8 or 9 fails, the script restores the backup and exits 6. It first
 checks the backup against the record from step 7 and refuses to restore a
 backup that has changed since (exit 7). It restores with `rsync --delete`,
 writing every file anew, then checks the docroot against the record. The
-backup is kept.
+backup is kept. Restored files and directories receive one restore timestamp,
+at least one second later than the failed install timestamp, so caches
+revalidate the restored page even during an immediate rollback.
 
 ### A docroot that changes underneath the script
 
@@ -195,6 +200,14 @@ holds the downloaded and unpacked release and is removed on exit. `$TMPDIR`
 must be trusted and lie outside the docroot (by name and by identity) and the
 backup directory. The docroot, the backup directory and the staging directory
 are not touched.
+
+### Manual timestamps
+
+For a manual install or update, run `find /path/to/staging -exec touch {} +`
+after unzipping and verifying the payload, before moving it into place. For a
+manual rollback, run the same command on the verified restored tree before
+publishing it, waiting until the next second if the install just finished.
+Refreshing timestamps makes browsers and CDNs revalidate the changed page.
 
 ## Trusted directories
 

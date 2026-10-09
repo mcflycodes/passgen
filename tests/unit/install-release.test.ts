@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import {
   chmod,
   cp,
@@ -22,6 +22,7 @@ import {
   rm,
   stat,
   symlink,
+  utimes,
   writeFile,
 } from "node:fs/promises";
 import type { Server } from "node:http";
@@ -255,6 +256,12 @@ async function ctimes(dir: string): Promise<string[]> {
     lines.push(`${name} ${(await lstat(join(dir, name), { bigint: true })).ctimeNs}`);
   }
   return lines.sort();
+}
+
+/** Modification times for every file and directory, including the root. */
+async function mtimes(dir: string): Promise<number[]> {
+  const paths = ["", ...(await readdir(dir, { recursive: true }))];
+  return Promise.all(paths.map(async (path) => (await lstat(join(dir, path))).mtimeMs));
 }
 
 /** The snapshot the fixture release must produce once installed. */
@@ -532,6 +539,7 @@ describe("install-release: happy paths", () => {
   test("installs over an older deployment, applies modes and owner, keeps a private backup, removes staging", async () => {
     const { parent, docroot, backups } = await makeSite();
     const before = await snapshot(docroot);
+    const started = Math.floor(Date.now() / 1000) * 1000;
     const group = (await run("id", ["-gn"])).stdout.trim();
     const result = await install([
       "--version",
@@ -549,6 +557,11 @@ describe("install-release: happy paths", () => {
     ]);
     assert.equal(result.code, 0, result.output);
     assert.deepEqual(await snapshot(docroot), expectedSnapshot("640", "750"));
+    const installedTimes = await mtimes(docroot);
+    assert.equal(new Set(installedTimes).size, 1, "all installed files and directories share one timestamp");
+    for (const time of installedTimes) {
+      assert.ok(time >= started && time <= Date.now(), `installed mtime ${time} must be current`);
+    }
     assert.equal((await stat(backups)).mode & 0o7777, 0o700, "the backup directory is private");
     const backupNames = await entries(backups);
     assert.equal(backupNames.length, 1);
@@ -603,6 +616,7 @@ describe("install-release: happy paths", () => {
       docroot: await snapshot(docroot),
       backups: await snapshot(backups),
       changes: await ctimes(parent),
+      times: await mtimes(parent),
     };
     const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir, "--dry-run"], {
       TMPDIR: tmp,
@@ -617,6 +631,7 @@ describe("install-release: happy paths", () => {
         docroot: await snapshot(docroot),
         backups: await snapshot(backups),
         changes: await ctimes(parent),
+        times: await mtimes(parent),
       },
       before,
       "nothing in the docroot, the backups or the staging directory changed",
@@ -1119,8 +1134,16 @@ describe("install-release: rollback (exit 6, or 7 when it is refused)", () => {
   for (const [label, serve, expected] of rollbacks) {
     test(`restores the exact previous tree when ${label}`, async () => {
       const { parent, docroot, backups } = await makeSite();
+      for (const path of ["", ...(await readdir(docroot, { recursive: true }))]) {
+        await utimes(join(docroot, path), FROZEN_EPOCH, FROZEN_EPOCH);
+      }
       const before = await snapshot(docroot);
+      const started = Math.floor(Date.now() / 1000) * 1000;
+      let failedInstallTime = 0;
       const server = serve(docroot);
+      server.prependListener("request", () => {
+        failedInstallTime = statSync(join(docroot, "index.html")).mtimeMs;
+      });
       const url = await listen(server);
       try {
         const result = await install([
@@ -1138,6 +1161,13 @@ describe("install-release: rollback (exit 6, or 7 when it is refused)", () => {
         assert.match(result.output, expected);
         assert.match(result.output, /rollback complete/);
         assert.deepEqual(await snapshot(docroot), before);
+        const restoredTimes = await mtimes(docroot);
+        assert.equal(new Set(restoredTimes).size, 1, "all restored entries share one timestamp");
+        assert.ok(failedInstallTime >= started, "the failed install had a current timestamp");
+        for (const time of restoredTimes) {
+          assert.ok(time >= started && time <= Date.now() + 1000, "restored mtime must be current");
+          assert.ok(time >= failedInstallTime + 1000, "rollback must advance the HTTP Last-Modified second");
+        }
         const backupNames = await entries(backups);
         assert.equal(backupNames.length, 1, "the backup is kept after a rollback");
         assert.deepEqual(await entries(parent), [".htdocs-backups", "htdocs"]);

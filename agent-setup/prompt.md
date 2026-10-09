@@ -111,7 +111,10 @@ user-confirmed values in the plan. Do not proceed without the needed answers.
    Without shell access, or on an unsupported OS, use the manual/static-host
    path: unpack into empty staging, verify hashes, reject symlinks and unsafe
    entries, and publish only verified regular payload files using the supported
-   host workflow. Replace the previous release completely; do not overlay files.
+   host workflow. After unzip and verification, run
+   `find /path/to/staging -exec touch {} +` before publishing on each install
+   or update, so the ZIP’s 1980 timestamps do not make caches keep an older page.
+   Replace the previous release completely; do not overlay files.
    Never run scripts or install packages on another machine by assumption.
 
 7. **Apply the shipped server security configuration.** Use the matching Apache,
@@ -176,7 +179,11 @@ user-confirmed values in the plan. Do not proceed without the needed answers.
 10. **On failure, roll back and report.** Use the rollback the user approved,
     restoring the previous payload and modified config, validating before any
     reload, then verifying with the previous release's manifest. The installer
-    attempts rollback for failures after backup; read its output and exit code.
+    refreshes timestamps on install and restore, and attempts rollback for
+    failures after backup; read its output and exit code.
+    For manual rollback, refresh the verified restored tree with the same `find`
+    command before publishing so caches revalidate the restored page; wait until
+    the next second if the install just finished.
     If it reports a changed backup/root, refused rollback or unverified restore,
     stop and ask rather than overwriting through an unexpected path. Do not claim
     success unless checks passed; report failed checks, what was restored, and
