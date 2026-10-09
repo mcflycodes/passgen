@@ -1,14 +1,18 @@
 // Runs scripts/install-release.sh against fixture releases built with the real
 // manifest tool: a tiny dist, zipped with a minimal store-only zip writer so the
 // tests can also craft hostile entries (zip-slip paths, symbolic links, devices).
-// Needs bash, unzip, rsync and sha256sum, as the installer does.
+// Hostile timing (a docroot swapped mid-install, a tampered backup, a failing
+// rm) comes from shims put first on PATH. Needs bash, unzip, rsync and
+// sha256sum, as the installer does; the mount-point cases also need unshare.
 
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import {
   chmod,
   cp,
+  link,
   lstat,
   mkdir,
   mkdtemp,
@@ -34,6 +38,10 @@ const ROOT = join(import.meta.dirname, "..", "..");
 const SCRIPT = join(ROOT, "scripts", "install-release.sh");
 const VERSION = "v1.2.3";
 const ZIP = "passgen-1.2.3.zip";
+/** 2026-01-01T00:00:00Z, for a `date` shim that stops the clock. */
+const FROZEN_EPOCH = 1767225600;
+const FROZEN_SECOND = "20260101T000000Z";
+const BACKUP_NAME = /^\d{8}T\d{6}Z-\d{6}$/;
 
 /** The fixture build: paths relative to the web root and their contents. */
 const DIST: ReadonlyArray<readonly [string, string]> = [
@@ -42,6 +50,7 @@ const DIST: ReadonlyArray<readonly [string, string]> = [
   ["assets/style-4d5e6f.css", "body { margin: 0 }\n"],
   ["img/logo.svg", "<svg xmlns='http://www.w3.org/2000/svg'/>\n"],
 ];
+const LOGO = DIST.find(([path]) => path === "img/logo.svg")?.[1] as string;
 
 interface ZipEntry {
   readonly name: string;
@@ -107,11 +116,18 @@ function writeZip(entries: readonly ZipEntry[]): Buffer {
 
 const sha256 = (data: Buffer | string) => createHash("sha256").update(data).digest("hex");
 
+/** Single-quotes a value for a bash shim. */
+const q = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+
 let scratch: string;
 let bash: string;
+let realRsync: string;
+let realRm: string;
+let realDate: string;
 let releaseDir: string;
 let manifestText: string;
 let releaseCount = 0;
+let ids: string;
 
 /** Writes a release folder (zip, .sha256, SHA256SUMS) and returns its path. */
 async function makeRelease(
@@ -140,9 +156,24 @@ function distEntries(files: ReadonlyArray<readonly [string, string]> = DIST): Zi
   ];
 }
 
+/** A SHA256SUMS for `files`, in the manifest tool's format. */
+function manifestFor(files: ReadonlyArray<readonly [string, string]>): string {
+  return [...files]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([path, text]) => `${sha256(text)}  ${path}\n`)
+    .join("");
+}
+
 before(async () => {
+  // The installer refuses directories other users can write to; keep the fixtures' modes predictable.
+  process.umask(0o022);
   scratch = await mkdtemp(join(resolve(tmpdir()), "passgen-install-"));
-  bash = (await run("bash", ["-c", "command -v bash"])).stdout.trim();
+  const which = async (name: string) => (await run("bash", ["-c", `command -v ${name}`])).stdout.trim();
+  bash = await which("bash");
+  realRsync = await which("rsync");
+  realRm = await which("rm");
+  realDate = await which("date");
+  ids = `${process.getuid?.()}:${process.getgid?.()}`;
   // The fixture dist and its manifest, written by the real manifest tool.
   const dist = join(scratch, "dist");
   for (const [path, text] of DIST) {
@@ -153,6 +184,7 @@ before(async () => {
   await run(process.execPath, [join(ROOT, "scripts", "manifest.ts"), "--dir", dist, "--out", out]);
   manifestText = await readFile(join(out, "SHA256SUMS"), "utf8");
   assert.equal(manifestText.split("\n").filter(Boolean).length, DIST.length);
+  assert.equal(manifestText, manifestFor(DIST));
   releaseDir = await makeRelease(distEntries(), manifestText);
 });
 
@@ -160,9 +192,9 @@ after(async () => {
   await rm(scratch, { recursive: true, force: true });
 });
 
-async function install(args: string[], env: Record<string, string> = {}) {
+async function runScript(command: string, args: string[], env: Record<string, string> = {}) {
   try {
-    const { stdout, stderr } = await run(bash, [SCRIPT, ...args], { env: { ...process.env, ...env } });
+    const { stdout, stderr } = await run(command, args, { env: { ...process.env, ...env } });
     return { code: 0, output: stdout + stderr };
   } catch (err) {
     const e = err as { code: number; stdout: string; stderr: string };
@@ -170,34 +202,55 @@ async function install(args: string[], env: Record<string, string> = {}) {
   }
 }
 
-/** Every entry under `dir`: path, type, mode, and the content hash for files. */
+const install = (args: string[], env: Record<string, string> = {}) => runScript(bash, [SCRIPT, ...args], env);
+
+let binCount = 0;
+
+/** A PATH whose first directory holds one executable bash shim named `name`. */
+async function shim(name: string, lines: readonly string[]): Promise<Record<string, string>> {
+  const bin = join(scratch, `bin-${binCount++}`);
+  await mkdir(bin);
+  await writeFile(join(bin, name), ["#!/usr/bin/env bash", ...lines, ""].join("\n"), { mode: 0o755 });
+  return { PATH: `${bin}:${process.env.PATH ?? ""}` };
+}
+
+/** Every entry under `dir`: path, type, mode, uid:gid, and the content hash for files. */
 async function snapshot(dir: string): Promise<string[]> {
   const lines: string[] = [];
   async function walk(prefix: string) {
     for (const entry of await readdir(join(dir, prefix), { withFileTypes: true })) {
       const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
       const info = await lstat(join(dir, rel));
-      const mode = (info.mode & 0o7777).toString(8);
+      const meta = `${(info.mode & 0o7777).toString(8)} ${info.uid}:${info.gid}`;
       if (info.isSymbolicLink()) {
         lines.push(`${rel} -> ${await readlink(join(dir, rel))}`);
       } else if (info.isDirectory()) {
-        lines.push(`${rel}/ ${mode}`);
+        lines.push(`${rel}/ ${meta}`);
         await walk(rel);
       } else {
-        lines.push(`${rel} ${mode} ${sha256(await readFile(join(dir, rel)))}`);
+        lines.push(`${rel} ${meta} ${sha256(await readFile(join(dir, rel)))}`);
       }
     }
   }
   await walk("");
   const root = await stat(dir);
-  lines.push(`. ${(root.mode & 0o7777).toString(8)}`);
+  lines.push(`. ${(root.mode & 0o7777).toString(8)} ${root.uid}:${root.gid}`);
+  return lines.sort();
+}
+
+/** `dir` and everything under it with its change time, which any write or metadata change moves. */
+async function ctimes(dir: string): Promise<string[]> {
+  const lines = [`. ${(await stat(dir, { bigint: true })).ctimeNs}`];
+  for (const name of await readdir(dir, { recursive: true })) {
+    lines.push(`${name} ${(await lstat(join(dir, name), { bigint: true })).ctimeNs}`);
+  }
   return lines.sort();
 }
 
 /** The snapshot the fixture release must produce once installed. */
-function expectedSnapshot(fileMode = "644", dirMode = "755"): string[] {
-  const lines = [`. ${dirMode}`, `assets/ ${dirMode}`, `img/ ${dirMode}`];
-  for (const [path, text] of DIST) lines.push(`${path} ${fileMode} ${sha256(text)}`);
+function expectedSnapshot(fileMode = "644", dirMode = "755", owner = ids): string[] {
+  const lines = [`. ${dirMode} ${owner}`, `assets/ ${dirMode} ${owner}`, `img/ ${dirMode} ${owner}`];
+  for (const [path, text] of DIST) lines.push(`${path} ${fileMode} ${owner} ${sha256(text)}`);
   return lines.sort();
 }
 
@@ -225,11 +278,52 @@ async function entries(dir: string): Promise<string[]> {
   }
 }
 
+/** The backup directory the installer reports in its last line. */
+function reportedBackup(output: string): string {
+  const path = output.match(/; backup in (.+)$/m)?.[1];
+  assert.ok(path, `no backup reported in:\n${output}`);
+  return path;
+}
+
+/** Makes backup directories named `names` in `backups`, each holding one file. */
+async function makeBackups(backups: string, names: readonly string[]) {
+  await mkdir(backups, { recursive: true, mode: 0o700 });
+  for (const name of names) {
+    await mkdir(join(backups, name));
+    await writeFile(join(backups, name, "index.html"), name);
+  }
+}
+
 async function listen(server: Server): Promise<string> {
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
   const address = server.address();
   assert.ok(address && typeof address === "object");
   return `http://127.0.0.1:${address.port}/`;
+}
+
+/** Whether this machine can make an unprivileged user and mount namespace. */
+async function canUnshareMounts(): Promise<boolean> {
+  try {
+    await run("unshare", ["-rm", "true"]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Runs the installer in a new mount namespace with a tmpfs mounted on `mountPoint`. */
+function installWithTmpfs(mountPoint: string, args: string[]) {
+  return runScript("unshare", [
+    "-rm",
+    bash,
+    "-c",
+    'mount -t tmpfs -o mode=0755 passgen-test "$1" && shift && exec "$@"',
+    "mount-tmpfs",
+    mountPoint,
+    bash,
+    SCRIPT,
+    ...args,
+  ]);
 }
 
 describe("install-release: fixtures and arguments", () => {
@@ -289,8 +383,9 @@ describe("install-release: fixtures and arguments", () => {
   });
 
   test("usage errors exit 2 before touching anything", async () => {
-    const { docroot } = await makeSite();
+    const { parent, docroot } = await makeSite();
     const before = await snapshot(docroot);
+    const parentBefore = await ctimes(parent);
     for (const args of [
       ["--docroot", docroot],
       ["--version", "latest", "--docroot", docroot],
@@ -298,14 +393,51 @@ describe("install-release: fixtures and arguments", () => {
       ["--version", "v1.2.3-rc.1", "--docroot", docroot],
       ["--version", VERSION],
       ["--version", VERSION, "--docroot", docroot, "--file-mode", "rw-r--r--"],
+      // Modes that would lock the installer out of its own files.
+      ["--version", VERSION, "--docroot", docroot, "--dir-mode", "0000"],
+      ["--version", VERSION, "--docroot", docroot, "--dir-mode", "0644"],
+      ["--version", VERSION, "--docroot", docroot, "--dir-mode", "0500"],
+      ["--version", VERSION, "--docroot", docroot, "--file-mode", "0000"],
+      ["--version", VERSION, "--docroot", docroot, "--file-mode", "0200"],
       ["--version", VERSION, "--docroot", docroot, "--url", "http://example.test/"],
       ["--version", VERSION, "--docroot", docroot, "--url", "https://user:pw@example.test/"],
       ["--version", VERSION, "--docroot", docroot, "--bogus"],
     ]) {
-      const result = await install(args);
+      const result = await install([...args, "--from-dir", releaseDir]);
       assert.equal(result.code, 2, `${args.join(" ")}: ${result.output}`);
     }
     assert.deepEqual(await snapshot(docroot), before);
+    assert.deepEqual(await ctimes(parent), parentBefore, "no staging directory was created");
+  });
+
+  test("rejects control characters in paths and names, so a trailing newline cannot pick a sibling", async () => {
+    // realpath's output loses a trailing newline in $(...), so "www\n" would become the sibling "www".
+    const parent = join(scratch, "newline");
+    const www = join(parent, "www");
+    await mkdir(www, { recursive: true });
+    await writeFile(join(www, "index.html"), "the sibling site");
+    await writeFile(join(www, "data.txt"), "the sibling's data");
+    const before = await snapshot(www);
+    const fresh = join(parent, "new");
+    for (const args of [
+      ["--docroot", `${www}\n`],
+      ["--docroot", `${www}\n\n`],
+      ["--docroot", `${www}\r`],
+      ["--docroot", `${www}\t`],
+      ["--docroot", fresh, "--backup-dir", `${www}\n`],
+      ["--docroot", fresh, "--staging-dir", `${www}\n`],
+      ["--docroot", fresh, "--from-dir", `${releaseDir}\n`],
+      ["--docroot", fresh, "--version", `${VERSION}\n`],
+      ["--docroot", fresh, "--repo", "owner/name\n"],
+      ["--docroot", fresh, "--owner", `${userInfo().username}\r`],
+      ["--docroot", fresh, "--url", "https://example.test/\n"],
+    ]) {
+      const result = await install(["--version", VERSION, "--from-dir", releaseDir, ...args]);
+      assert.equal(result.code, 2, `${JSON.stringify(args)}: ${result.output}`);
+      assert.match(result.output, /must not contain control characters/);
+    }
+    assert.deepEqual(await snapshot(www), before);
+    assert.deepEqual(await entries(parent), ["www"]);
   });
 
   test("a missing tool exits 3 with its name", async () => {
@@ -323,9 +455,10 @@ describe("install-release: fixtures and arguments", () => {
 });
 
 describe("install-release: happy paths", () => {
-  test("installs over an older deployment, applies modes and owner, keeps a backup, removes staging", async () => {
+  test("installs over an older deployment, applies modes and owner, keeps a private backup, removes staging", async () => {
     const { parent, docroot, backups } = await makeSite();
     const before = await snapshot(docroot);
+    const group = (await run("id", ["-gn"])).stdout.trim();
     const result = await install([
       "--version",
       VERSION,
@@ -338,13 +471,15 @@ describe("install-release: happy paths", () => {
       "--dir-mode",
       "0750",
       "--owner",
-      userInfo().username,
+      `${userInfo().username}:${group}`,
     ]);
     assert.equal(result.code, 0, result.output);
     assert.deepEqual(await snapshot(docroot), expectedSnapshot("640", "750"));
+    assert.equal((await stat(backups)).mode & 0o7777, 0o700, "the backup directory is private");
     const backupNames = await entries(backups);
     assert.equal(backupNames.length, 1);
-    assert.match(backupNames[0] as string, /^\d{8}T\d{6}Z$/);
+    assert.match(backupNames[0] as string, BACKUP_NAME);
+    assert.equal(reportedBackup(result.output), join(backups, backupNames[0] as string));
     assert.deepEqual(await snapshot(join(backups, backupNames[0] as string)), before);
     assert.deepEqual(await entries(parent), [".htdocs-backups", "htdocs"], "no staging directory is left behind");
     assert.match(result.output, /Installed v1\.2\.3 into/);
@@ -383,17 +518,44 @@ describe("install-release: happy paths", () => {
     }
   });
 
-  test("--dry-run verifies the release and changes nothing", async () => {
+  test("--dry-run writes nothing outside a private directory under TMPDIR, and removes that", async () => {
     const { parent, docroot, backups } = await makeSite();
-    const before = await snapshot(docroot);
-    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir, "--dry-run"]);
+    await makeBackups(backups, ["20000101T000000Z-000001"]);
+    const tmp = await mkdtemp(join(scratch, "dry-run-tmp-"));
+    const before = {
+      docroot: await snapshot(docroot),
+      backups: await snapshot(backups),
+      changes: await ctimes(parent),
+    };
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir, "--dry-run"], {
+      TMPDIR: tmp,
+    });
     assert.equal(result.code, 0, result.output);
     assert.match(result.output, /files match SHA256SUMS/);
     assert.match(result.output, /\[dry-run\] would back up/);
-    assert.match(result.output, /\[dry-run\] would chmod directories 0755 and files 0644/);
+    assert.match(result.output, /\[dry-run\] would set directories to 0755 and files to 0644/);
+    assert.match(result.output, new RegExp(`only files written were in ${tmp}/passgen-dry-run\\.`));
+    assert.deepEqual(
+      {
+        docroot: await snapshot(docroot),
+        backups: await snapshot(backups),
+        changes: await ctimes(parent),
+      },
+      before,
+      "nothing in the docroot, the backups or the staging directory changed",
+    );
+    assert.deepEqual(await entries(tmp), [], "the private directory under TMPDIR is removed");
+  });
+
+  test("--dry-run refuses a TMPDIR inside the docroot", async () => {
+    const { docroot } = await makeSite();
+    const before = await snapshot(docroot);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir, "--dry-run"], {
+      TMPDIR: join(docroot, "assets"),
+    });
+    assert.equal(result.code, 4, result.output);
+    assert.match(result.output, /TMPDIR .* must not be inside the docroot/);
     assert.deepEqual(await snapshot(docroot), before);
-    assert.deepEqual(await entries(backups), []);
-    assert.deepEqual(await entries(parent), ["htdocs"]);
   });
 
   test("keeps only the newest three backups", async () => {
@@ -433,14 +595,97 @@ describe("install-release: happy paths", () => {
     }
     const names = await entries(backupRoot);
     assert.deepEqual(
-      names.filter((n) => !/^\d{8}T\d{6}Z(-\d+)?$/.test(n)),
+      names.filter((n) => !BACKUP_NAME.test(n)),
       ["keep-me", "notes.txt"],
     );
     assert.equal(names.length, 5);
   });
+
+  test("numbers backups within one second so they sort, and keeps the one just taken", async () => {
+    // With a stopped clock the old "-N" suffix reached "-10", which sorts before "-2",
+    // and rotation deleted the backup it had just taken.
+    const { docroot, backups } = await makeSite();
+    const before = await snapshot(docroot);
+    const legacy = [FROZEN_SECOND, ...[2, 3, 4, 5, 6, 7, 8, 9].map((n) => `${FROZEN_SECOND}-${n}`)];
+    const numbered = [2, 3, 4, 5, 6, 7, 8, 9].map((n) => `${FROZEN_SECOND}-${String(n).padStart(6, "0")}`);
+    await makeBackups(backups, [...legacy, ...numbered]);
+    const env = await shim("date", [`exec ${q(realDate)} -d @${FROZEN_EPOCH} "$@"`]);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir], env);
+    assert.equal(result.code, 0, result.output);
+    const current = `${FROZEN_SECOND}-000010`;
+    assert.equal(reportedBackup(result.output), join(backups, current));
+    assert.deepEqual(await snapshot(join(backups, current)), before, "the backup just taken is kept");
+    assert.deepEqual(
+      await entries(backups),
+      [...legacy, `${FROZEN_SECOND}-000008`, `${FROZEN_SECOND}-000009`, current].sort(),
+      "the two newest earlier backups are kept; names in another format are left alone",
+    );
+  });
+
+  test("keeps the backup just taken even when older backups sort after it", async () => {
+    // A clock that was once ahead leaves backups whose names sort after today's.
+    const { docroot, backups } = await makeSite();
+    const before = await snapshot(docroot);
+    const future = [1, 2, 3].map((n) => `20991231T235959Z-00000${n}`);
+    await makeBackups(backups, future);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir]);
+    assert.equal(result.code, 0, result.output);
+    const current = reportedBackup(result.output);
+    assert.deepEqual(await snapshot(current), before);
+    assert.deepEqual(await entries(backups), [current.slice(backups.length + 1), ...future.slice(1)].sort());
+  });
+
+  test("a failure to remove an old backup only warns: the verified install stands and exits 0", async () => {
+    const { parent, docroot, backups } = await makeSite();
+    const old = ["20000101T000000Z-000001", "20000101T000000Z-000002", "20000101T000000Z-000003"];
+    await makeBackups(backups, old);
+    const env = await shim("rm", [
+      'for arg in "$@"; do',
+      `  if [[ $arg == *${old[0]}* ]]; then echo "rm: cannot remove '$arg': Operation not permitted" >&2; exit 1; fi`,
+      "done",
+      `exec ${q(realRm)} "$@"`,
+    ]);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir], env);
+    assert.equal(result.code, 0, result.output);
+    assert.match(result.output, /cannot remove '.*20000101T000000Z-000001'/);
+    assert.match(result.output, /could not remove every old backup .* the install itself succeeded/);
+    assert.doesNotMatch(result.output, /restoring the backup/);
+    assert.deepEqual(await snapshot(docroot), expectedSnapshot());
+    assert.deepEqual(await entries(backups), [...old, reportedBackup(result.output).slice(backups.length + 1)].sort());
+    assert.deepEqual(await entries(parent), [".htdocs-backups", "htdocs"], "staging is removed");
+  });
+
+  test("--staging-dir elsewhere on the docroot's filesystem", async () => {
+    const { parent, docroot } = await makeSite();
+    const staging = join(scratch, `staging-${siteCount}`);
+    await mkdir(staging);
+    const result = await install([
+      "--version",
+      VERSION,
+      "--docroot",
+      docroot,
+      "--from-dir",
+      releaseDir,
+      "--staging-dir",
+      staging,
+    ]);
+    assert.equal(result.code, 0, result.output);
+    assert.deepEqual(await snapshot(docroot), expectedSnapshot());
+    assert.deepEqual(await entries(staging), [], "staging is removed");
+    assert.deepEqual(await entries(parent), [".htdocs-backups", "htdocs"]);
+  });
+
+  test("accepts a sticky world-writable directory above the docroot, as /tmp is", async () => {
+    const { parent, docroot } = await makeSite();
+    await chmod(parent, 0o1777);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir]);
+    assert.equal(result.code, 0, result.output);
+    assert.deepEqual(await snapshot(docroot), expectedSnapshot());
+  });
 });
 
 describe("install-release: release verification (exit 5, nothing changed)", () => {
+  const nearMisses = ["indexXhtml", "index.html.bak", "Index.html", "sub/index.html", "index.htm"];
   const cases: ReadonlyArray<readonly [string, () => Promise<string>, RegExp]> = [
     [
       "a bad zip checksum",
@@ -462,6 +707,17 @@ describe("install-release: release verification (exit 5, nothing changed)", () =
           distEntries(DIST.map(([p, t]) => (p === "assets/app-1a2b3c.js" ? [p, `${t}// changed`] : [p, t]))),
           manifestText,
         ),
+      /hashes differ from the manifest[\s\S]*does not match SHA256SUMS/,
+    ],
+    [
+      "a tampered last file when SHA256SUMS has no trailing newline",
+      () => {
+        const last = manifestText.trimEnd().split("\n").at(-1)?.slice(66);
+        return makeRelease(
+          distEntries(DIST.map(([p, t]) => (p === last ? [p, `${t} changed`] : [p, t]))),
+          manifestText.trimEnd(),
+        );
+      },
       /hashes differ from the manifest[\s\S]*does not match SHA256SUMS/,
     ],
     [
@@ -510,6 +766,15 @@ describe("install-release: release verification (exit 5, nothing changed)", () =
         ),
       /does not list index\.html/,
     ],
+    // A consistent release whose page is not exactly index.html: the name must match literally.
+    ...nearMisses.map((name): readonly [string, () => Promise<string>, RegExp] => [
+      `a release whose page is ${name} instead of index.html`,
+      () => {
+        const files = DIST.map(([p, t]): readonly [string, string] => (p === "index.html" ? [name, t] : [p, t]));
+        return makeRelease(distEntries(files), manifestFor(files));
+      },
+      /does not list index\.html/,
+    ]),
     [
       "a manifest with an unsafe path",
       () => makeRelease(distEntries(), `${manifestText}${"0".repeat(64)}  ../outside\n`),
@@ -535,13 +800,78 @@ describe("install-release: release verification (exit 5, nothing changed)", () =
       assert.deepEqual(await entries(parent), ["htdocs"], "staging is removed");
     });
   }
+
+  test("installs a release whose SHA256SUMS has no trailing newline", async () => {
+    const { docroot } = await makeSite();
+    const dir = await makeRelease(distEntries(), manifestText.trimEnd());
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", dir]);
+    assert.equal(result.code, 0, result.output);
+    assert.match(result.output, /4 files match SHA256SUMS/);
+    assert.deepEqual(await snapshot(docroot), expectedSnapshot());
+  });
 });
 
-describe("install-release: refused docroots (exit 4, nothing changed)", () => {
+describe("install-release: refused paths (exit 4, nothing changed)", () => {
   test("refuses / as the docroot", async () => {
     const result = await install(["--version", VERSION, "--docroot", "/", "--from-dir", releaseDir]);
     assert.equal(result.code, 4, result.output);
     assert.match(result.output, /refusing to use \/ as the docroot/);
+  });
+
+  test("refuses a docroot given as a symbolic link, and names the real directory", async () => {
+    const { parent, docroot } = await makeSite();
+    const current = join(parent, "current");
+    await symlink(docroot, current);
+    const before = await snapshot(docroot);
+    for (const given of [current, `${current}/`, `${current}//`]) {
+      const result = await install(["--version", VERSION, "--docroot", given, "--from-dir", releaseDir]);
+      assert.equal(result.code, 4, result.output);
+      assert.match(result.output, new RegExp(`is a symbolic link; pass the directory it points to \\(${docroot}\\)`));
+    }
+    assert.deepEqual(await snapshot(docroot), before);
+    assert.deepEqual(await entries(parent), ["current", "htdocs"]);
+  });
+
+  test("refuses a docroot below a directory other users can write to", async () => {
+    const { parent, docroot } = await makeSite();
+    const before = await snapshot(docroot);
+    for (const mode of [0o777, 0o775]) {
+      await chmod(parent, mode);
+      const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir]);
+      assert.equal(result.code, 4, result.output);
+      assert.match(
+        result.output,
+        new RegExp(`${parent}, on the path to the docroot, is writable by other users \\(mode ${mode.toString(8)}\\)`),
+      );
+    }
+    assert.deepEqual(await snapshot(docroot), before);
+    assert.deepEqual(await entries(parent), ["htdocs"]);
+  });
+
+  test("refuses backup and staging directories other users can write to, or below one", async () => {
+    const { docroot } = await makeSite();
+    const before = await snapshot(docroot);
+    const open = join(scratch, `open-${siteCount}`);
+    await mkdir(join(open, "private"), { recursive: true, mode: 0o700 });
+    await chmod(open, 0o777);
+    const shared = join(scratch, `shared-backups-${siteCount}`);
+    await mkdir(shared);
+    await chmod(shared, 0o770);
+    for (const [args, expected] of [
+      [["--backup-dir", join(open, "backups")], /on the path to the backup directory, is writable by other users/],
+      [["--backup-dir", join(open, "private", "backups")], /on the path to the backup directory, is writable/],
+      [["--backup-dir", shared], /the backup directory .* is writable by other users \(mode 770\); make it 0700/],
+      [["--staging-dir", open], /on the path to the staging directory, is writable by other users/],
+      [["--staging-dir", join(open, "private")], /on the path to the staging directory, is writable/],
+    ] as const) {
+      const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir, ...args]);
+      assert.equal(result.code, 4, `${args.join(" ")}: ${result.output}`);
+      assert.match(result.output, expected);
+    }
+    assert.deepEqual(await snapshot(docroot), before);
+    assert.deepEqual(await entries(open), ["private"]);
+    assert.deepEqual(await entries(join(open, "private")), []);
+    assert.deepEqual(await entries(shared), []);
   });
 
   test("refuses a backup directory inside the docroot, and a docroot inside the backup directory", async () => {
@@ -592,9 +922,103 @@ describe("install-release: refused docroots (exit 4, nothing changed)", () => {
     assert.deepEqual(await snapshot(docroot), before);
     assert.deepEqual(await entries(backups), []);
   });
+
+  test("refuses a docroot file hard-linked from outside, which stays 0600", async () => {
+    // Same content as the release's logo, so a content-based rsync would keep the inode and chmod it.
+    const { parent, docroot, backups } = await makeSite();
+    const outside = join(parent, "outside-secret");
+    await writeFile(outside, LOGO, { mode: 0o600 });
+    await mkdir(join(docroot, "img"));
+    await link(outside, join(docroot, "img", "logo.svg"));
+    const before = await snapshot(docroot);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir]);
+    assert.equal(result.code, 4, result.output);
+    assert.match(result.output, /more than one hard link[\s\S]*img\/logo\.svg \(2 links\)/);
+    assert.equal((await stat(outside)).mode & 0o7777, 0o600);
+    assert.deepEqual(await snapshot(docroot), before);
+    assert.deepEqual(await entries(backups), []);
+  });
+
+  test("refuses --staging-dir on another filesystem than the docroot", async (t) => {
+    if (!(await canUnshareMounts())) return t.skip("needs unprivileged user and mount namespaces");
+    const { docroot } = await makeSite();
+    const before = await snapshot(docroot);
+    const staging = join(scratch, `tmpfs-staging-${siteCount}`);
+    await mkdir(staging);
+    const result = await installWithTmpfs(staging, [
+      "--version",
+      VERSION,
+      "--docroot",
+      docroot,
+      "--from-dir",
+      releaseDir,
+      "--staging-dir",
+      staging,
+    ]);
+    assert.equal(result.code, 4, result.output);
+    assert.match(result.output, /staging directory .* is not on the docroot's filesystem; pass --staging-dir/);
+    assert.deepEqual(await snapshot(docroot), before);
+  });
+
+  test("refuses a docroot that is a mount point when staging would be on another filesystem", async (t) => {
+    if (!(await canUnshareMounts())) return t.skip("needs unprivileged user and mount namespaces");
+    const { parent, docroot } = await makeSite();
+    const result = await installWithTmpfs(docroot, [
+      "--version",
+      VERSION,
+      "--docroot",
+      docroot,
+      "--from-dir",
+      releaseDir,
+    ]);
+    assert.equal(result.code, 4, result.output);
+    assert.match(
+      result.output,
+      /is a mount point, so the staging directory .* is on another filesystem; pass --staging-dir/,
+    );
+    assert.deepEqual(await entries(parent), ["htdocs"], "no backup or staging directory was created");
+  });
 });
 
-describe("install-release: rollback (exit 6)", () => {
+describe("install-release: a docroot swapped during the install (exit 8)", () => {
+  // The reviewer's attack: rename the docroot and leave a symbolic link to a victim
+  // directory in its place, between the script's checks and its writes. The shim
+  // does it just before the matching rsync runs.
+  const swaps: ReadonlyArray<readonly [string, string, RegExp]> = [
+    ["while the backup is taken", "*/.htdocs-backups/*", /is no longer the directory checked at the start/],
+    ["before the first install pass", "*--exclude=/index.html*", /ROLLBACK REFUSED: .* is no longer the directory/],
+    ["before the deleting install pass", "*--delete*", /ROLLBACK REFUSED: .* is no longer the directory/],
+  ];
+
+  for (const [label, trigger, expected] of swaps) {
+    test(`writes nothing through the swapped path, and refuses to roll back, ${label}`, async () => {
+      const { parent, docroot } = await makeSite();
+      const victim = join(parent, "victim");
+      await mkdir(join(victim, "data"), { recursive: true });
+      await writeFile(join(victim, "index.html"), "the victim's page");
+      await writeFile(join(victim, "data", "precious.txt"), "must survive");
+      await chmod(join(victim, "data", "precious.txt"), 0o600);
+      const before = await snapshot(victim);
+      const marker = join(parent, "swapped");
+      const env = await shim("rsync", [
+        `if [[ " $* " == ${trigger} && ! -e ${q(marker)} ]]; then`,
+        `  : > ${q(marker)}`,
+        `  mv ${q(docroot)} ${q(`${docroot}.moved`)}`,
+        `  ln -s ${q(victim)} ${q(docroot)}`,
+        "fi",
+        `exec ${q(realRsync)} "$@"`,
+      ]);
+      const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir], env);
+      assert.ok(existsSync(marker), "the swap happened");
+      assert.equal(result.code, 8, result.output);
+      assert.match(result.output, expected);
+      assert.doesNotMatch(result.output, /rollback complete/);
+      assert.deepEqual(await snapshot(victim), before, "the victim directory is untouched");
+    });
+  }
+});
+
+describe("install-release: rollback (exit 6, or 7 when it is refused)", () => {
   const rollbacks: ReadonlyArray<readonly [string, (docroot: string) => Server, RegExp]> = [
     [
       "the site serves different content",
@@ -646,20 +1070,52 @@ describe("install-release: rollback (exit 6)", () => {
     });
   }
 
-  test("restores the exact previous tree when rsync fails part-way (a file mode nobody can read)", async (t) => {
-    if (process.getuid?.() === 0) return t.skip("root can read mode 0000 files, so rsync does not fail");
+  test("checks the last manifest line on the live site when SHA256SUMS has no trailing newline", async () => {
+    const { docroot } = await makeSite();
+    const before = await snapshot(docroot);
+    const last = manifestText.trimEnd().split("\n").at(-1)?.slice(66) as string;
+    // A site that serves every file right except the one on the manifest's last line.
+    const served = join(scratch, "dist-last-differs");
+    await cp(join(scratch, "dist"), served, { recursive: true });
+    await writeFile(join(served, last), "not the release");
+    const dir = await makeRelease(distEntries(), manifestText.trimEnd());
+    const server = createStaticServer({ root: served });
+    const url = await listen(server);
+    try {
+      const result = await install([
+        "--version",
+        VERSION,
+        "--docroot",
+        docroot,
+        "--from-dir",
+        dir,
+        "--url",
+        url,
+        "--local-http",
+      ]);
+      assert.equal(result.code, 6, result.output);
+      assert.match(
+        result.output,
+        new RegExp(`${last.replaceAll(".", "\\.")}: the served file differs from the release`),
+      );
+      assert.match(result.output, /rollback complete/);
+      assert.deepEqual(await snapshot(docroot), before);
+    } finally {
+      server.close();
+    }
+  });
+
+  test("restores the exact previous tree when rsync fails part-way", async () => {
     const { docroot, backups } = await makeSite();
     const before = await snapshot(docroot);
-    const result = await install([
-      "--version",
-      VERSION,
-      "--docroot",
-      docroot,
-      "--from-dir",
-      releaseDir,
-      "--file-mode",
-      "0000",
+    const env = await shim("rsync", [
+      'if [[ " $* " == *--include=/index.html* ]]; then',
+      '  echo "rsync error: some files/attrs were not transferred (code 23)" >&2',
+      "  exit 23",
+      "fi",
+      `exec ${q(realRsync)} "$@"`,
     ]);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir], env);
     assert.equal(result.code, 6, result.output);
     assert.match(result.output, /rsync error/);
     assert.match(result.output, /rollback complete/);
@@ -671,33 +1127,76 @@ describe("install-release: rollback (exit 6)", () => {
     // Simulate a concurrent writer with an rsync shim on PATH: it runs the real
     // rsync and, once, plants a rogue file after the delete pass. The re-hash of
     // the docroot must notice the extra file and the rollback must remove it.
-    const { docroot, backups } = await makeSite();
+    const { parent, docroot, backups } = await makeSite();
     const before = await snapshot(docroot);
-    const bin = join(scratch, "rogue-bin");
-    await mkdir(bin, { recursive: true });
-    const realRsync = (await run("bash", ["-c", "command -v rsync"])).stdout.trim();
-    const marker = join(bin, "planted");
-    await writeFile(
-      join(bin, "rsync"),
-      [
-        "#!/usr/bin/env bash",
-        `"${realRsync}" "$@"`,
-        "rc=$?",
-        `if [[ " $* " == *" --delete "* && ! -e "${marker}" ]]; then`,
-        `  echo rogue > "${join(docroot, "rogue.txt")}"`,
-        `  : > "${marker}"`,
-        "fi",
-        "exit $rc",
-      ].join("\n"),
-      { mode: 0o755 },
-    );
-    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir], {
-      PATH: `${bin}:${process.env.PATH ?? ""}`,
-    });
+    const marker = join(parent, "planted");
+    const env = await shim("rsync", [
+      `${q(realRsync)} "$@"`,
+      "rc=$?",
+      `if [[ " $* " == *" --delete "* && ! -e ${q(marker)} ]]; then`,
+      `  echo rogue > ${q(join(docroot, "rogue.txt"))}`,
+      `  : > ${q(marker)}`,
+      "fi",
+      "exit $rc",
+    ]);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir], env);
     assert.equal(result.code, 6, result.output);
     assert.match(result.output, /installed files: the file set differs from the manifest:\n\s+extra: rogue\.txt/);
     assert.match(result.output, /rollback complete/);
     assert.deepEqual(await snapshot(docroot), before);
     assert.equal((await entries(backups)).length, 1);
+  });
+
+  test("never changes a file hard-linked into the docroot during the install", async () => {
+    // The link appears after the preflight checks; the installer writes every file anew
+    // instead of changing the mode of the one it finds.
+    const { parent, docroot } = await makeSite();
+    const outside = join(parent, "outside-secret");
+    await writeFile(outside, LOGO, { mode: 0o600 });
+    const marker = join(parent, "linked");
+    const env = await shim("rsync", [
+      `${q(realRsync)} "$@"`,
+      "rc=$?",
+      `if [[ " $* " == *--exclude=/index.html* && ! -e ${q(marker)} ]]; then`,
+      `  ln -f ${q(outside)} ${q(join(docroot, "img", "logo.svg"))}`,
+      `  : > ${q(marker)}`,
+      "fi",
+      "exit $rc",
+    ]);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir], env);
+    assert.ok(existsSync(marker), "the link was planted");
+    assert.equal(result.code, 0, result.output);
+    const info = await stat(outside);
+    assert.equal(info.mode & 0o7777, 0o600, "the outside file keeps its mode");
+    assert.equal(info.nlink, 1, "the docroot no longer shares the outside file");
+    assert.equal(await readFile(outside, "utf8"), LOGO);
+    assert.deepEqual(await snapshot(docroot), expectedSnapshot());
+  });
+
+  test("refuses to restore a backup that changed after it was taken (exit 7)", async () => {
+    const { parent, docroot, backups } = await makeSite();
+    const marker = join(parent, "planted");
+    const env = await shim("rsync", [
+      `${q(realRsync)} "$@"`,
+      "rc=$?",
+      // During the install, rewrite the backup's index.html, then make the post-install check fail.
+      'if [[ " $* " == *--exclude=/index.html* ]]; then',
+      `  for f in ${q(backups)}/*/index.html; do printf tampered > "$f"; done`,
+      "fi",
+      `if [[ " $* " == *" --delete "* && ! -e ${q(marker)} ]]; then`,
+      `  echo rogue > ${q(join(docroot, "rogue.txt"))}`,
+      `  : > ${q(marker)}`,
+      "fi",
+      "exit $rc",
+    ]);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir], env);
+    assert.equal(result.code, 7, result.output);
+    assert.match(result.output, /ROLLBACK REFUSED: the backup in .* changed after it was taken/);
+    assert.notEqual(
+      await readFile(join(docroot, "index.html"), "utf8"),
+      "tampered",
+      "the tampered bytes were not installed",
+    );
+    assert.equal(await readFile(join(docroot, "index.html"), "utf8"), DIST[0]?.[1]);
   });
 });
