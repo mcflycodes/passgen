@@ -2,7 +2,9 @@
 
 Release tags use `vX.Y.Z` and must match `package.json`. Only stable releases are
 supported. The tagged commit must be on `origin/main` and have a successful CI
-push run on that exact commit. Wait for the entire CI workflow to finish.
+push run on that exact commit, including a successful `CI result` job. Wait for
+the entire CI workflow to finish. The required main checks are `CI result` and
+`No attribution`.
 
 ## Prerequisites
 
@@ -47,7 +49,12 @@ The workflow reruns the fast gates, builds without a dependency cache, and
 checks release notes and annotated tag messages for prohibited credits. Build
 and dependency code run with read-only repository permissions; a separate job
 downloads the packaged artifact and rechecks the remote tag before publishing.
-It relies on the existing CI browser matrix rather than running it again.
+Before building or publishing, Release calls the reusable full-suite workflow
+on the validated tagged commit. It runs all five browser projects and the full
+accessibility matrix; a failed or cancelled suite blocks publication. The same
+suite runs nightly on main and on demand. PR/main CI uses desktop functional
+coverage and Chromium's accessibility matrix, with one matrix smoke case in each
+other engine; engine-specific regressions may be caught nightly or pre-release.
 The ZIP contains the contents of `dist/` at its root, ordered by path with fixed
 1980 timestamps and permissions. Repeated builds produce identical ZIP bytes
 when source, configuration and toolchain are the same; this is not a guarantee

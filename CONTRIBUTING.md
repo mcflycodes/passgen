@@ -26,15 +26,36 @@ or WebKit system libraries. Select that coverage explicitly:
 PASSGEN_E2E_PROJECTS=chromium,mobile-chrome pnpm check
 ```
 
-CI runs all five projects (Chromium, Firefox, WebKit, mobile Chrome and mobile
-Safari) in the pinned Playwright container and is the source of truth for browser
-coverage. State any local coverage limits in your pull request.
+Pull requests and main pushes run functional tests in desktop Chromium, Firefox
+and WebKit, the full accessibility matrix in Chromium, and one accessibility
+matrix smoke case in each other engine. Chromium uses two shards because its
+full matrix exceeds five minutes unsharded; the other engines use one job each.
+Combined-gate regressions run once.
+Known documentation-only changes skip the `e2e` and `server-configs` jobs; static,
+build, supply-chain and attribution checks still run. Unknown paths count as code.
+The required checks are `CI result` and `No attribution`.
+
+[Full suite](.github/workflows/full-suite.yml) runs all five projects, including
+mobile Chrome and mobile Safari, with the exhaustive accessibility matrix,
+nightly on main, on demand, and before every release on the tagged commit.
+An engine-specific regression may reach main and be caught nightly or before
+release; this is an accepted coverage tradeoff. Both workflows use the same
+pinned Playwright container. State any local coverage limits in your pull request.
+
+To run the fast browser coverage locally after building:
+
+```sh
+PASSGEN_E2E_MODE=pr pnpm test:e2e
+```
+
+Leave `PASSGEN_E2E_MODE` unset for the full suite. `pnpm check` keeps full local
+coverage by default.
 
 On a supported system, run `pnpm exec playwright install --with-deps` to install
 the browsers and system libraries, then run `pnpm check` with
 `PASSGEN_E2E_PROJECTS` unset. Alternatively, run those checks inside the exact
 Playwright container image, including its digest, in
-[the CI workflow](.github/workflows/ci.yml), using the pinned Node and pnpm
+[the full-suite workflow](.github/workflows/full-suite.yml), using the pinned Node and pnpm
 versions and a frozen-lockfile install there too.
 CI runs the pinned image with `--user 1001 --ipc=host --init` and installs Node via `setup-node`.
 

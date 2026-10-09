@@ -33,8 +33,14 @@ pnpm install --frozen-lockfile
 pnpm check
 ```
 
-The individual gates are listed in `README.md`. CI runs the same gates on all
-Playwright projects; if your machine cannot launch every browser engine, use
+The individual gates are listed in `README.md`. PR and main CI run desktop
+Chromium, Firefox and WebKit functional tests, the accessibility matrix in
+Chromium, and one matrix smoke case in each other engine. Full five-project
+coverage and the exhaustive accessibility matrix run nightly and before releases.
+Known documentation-only changes skip browser and server-config checks only;
+`CI result` and `No attribution` are the required checks. Local `pnpm check`
+retains full coverage by default; `PASSGEN_E2E_MODE=pr pnpm test:e2e` selects
+fast coverage. If your machine cannot launch every browser engine, use
 `PASSGEN_E2E_PROJECTS=chromium,mobile-chrome pnpm check` locally and say so in
 your report. Never weaken or skip a gate to make it pass.
 
