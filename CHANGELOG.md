@@ -15,9 +15,9 @@ Versions follow Semantic Versioning.
   counts, with optional look-alike exclusion.
 - Customize passphrase word count, word lengths, capitalization and separators.
 - See a strength meter with entropy and attack assumptions. Crack-time estimates
-  respect hash-output caps; unavailable estimates are clearly marked.
+  respect hash-output caps.
 - Generate extra results and copy each with its own copy button.
-- Save settings locally, with optional automatic copying after generation.
+- Save settings locally in this browser; generated values are never stored.
 - Choose Calm, Payload, Slate, Green or Purple styles with light, dark or system
   appearance.
 - Build from a validated configuration to customize defaults, limits and text.

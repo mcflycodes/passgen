@@ -172,11 +172,27 @@ test("CI e2e coverage guard rejects an unknown project", () => {
 function checkReleaseWorkflow(configuration: string) {
   assert.match(configuration, /^permissions: \{\}$/m);
   const jobs = (configuration.split("jobs:\n")[1] ?? "").split(/^ {2}(?=[\w-]+:\n)/m).slice(1);
-  assert.equal(jobs.length, 2);
-  assert.match(jobs[0] ?? "", /^validate:\n/);
-  assert.match(jobs[0] ?? "", /permissions:\n {6}contents: read\n {6}actions: read\n/);
-  assert.match(jobs[1] ?? "", /^publish:\n {4}needs: validate\n/);
-  assert.match(jobs[1] ?? "", /permissions:\n {6}contents: write\n {4}steps:/);
+  assert.equal(configuration.match(/^on:\n([\s\S]*?)(?=^\S)/m)?.[1], "  push:\n    tags: ['v*.*.*']\n\n");
+  assert.equal(jobs.length, 3);
+  const [validate = "", build = "", publish = ""] = jobs;
+  assert.match(validate, /^validate:\n/);
+  assert.match(validate, /permissions:\n {6}contents: read\n {6}actions: read\n {4}outputs:/);
+  assert.match(build, /^build:\n {4}needs: validate\n/);
+  assert.match(build, /permissions:\n {6}contents: read\n {4}steps:/);
+  assert.match(publish, /^publish:\n {4}needs: \[validate, build\]\n/);
+  assert.match(publish, /permissions:\n {6}contents: write\n {4}steps:/);
+  assert.doesNotMatch(publish, /checkout|setup-node|action-setup|\bnode\b|\bpnpm\b|\bpython3?\b|\bnpm\b/);
+  assert.match(build, /uses: actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/);
+  assert.match(publish, /uses: actions\/download-artifact@[a-f0-9]{40}/);
+  for (const job of [build, publish]) {
+    assert.match(job, /^ {10}name: passgen-release$/m);
+    assert.match(job, /^ {10}path: release\/$/m);
+  }
+  assert.match(publish, /gh api "repos\/\$GITHUB_REPOSITORY\/git\/ref\/tags\/v\$RELEASE_VERSION"/);
+  assert.match(publish, /gh api "repos\/\$GITHUB_REPOSITORY\/git\/tags\/\$sha"/);
+  assert.match(publish, /test "\$type" = commit/);
+  assert.match(publish, /test "\$sha" = "\$RELEASE_COMMIT"/);
+  assert.match(publish, /gh release create .*--repo "\$GITHUB_REPOSITORY".*--verify-tag.*--notes-file/);
   assert.equal((configuration.match(/contents: write/g) ?? []).length, 1);
   assert.doesNotMatch(configuration, /cache:|actions\/cache@|secrets\.|write-all|read-all|test:e2e/);
   for (const action of configuration.matchAll(/uses: (\S+)/g)) {
@@ -209,4 +225,21 @@ test("release workflow guard rejects broken pins, permissions, caching and input
     releaseWorkflow.replace("run: node scripts/check-release.ts", `run: echo \${{ github.ref_name }}`),
   ])
     assert.throws(() => checkReleaseWorkflow(broken));
+});
+
+test("release workflow guard rejects write permission in build, dependency code in publish and PR triggers", () => {
+  const brokenBuild = releaseWorkflow.replace(/( {2}build:[\s\S]*?contents:) read/, "$1 write");
+  const brokenPublish = releaseWorkflow.replace(
+    "      - name: Verify remote tag and publish release",
+    "      - run: pnpm install\n      - name: Verify remote tag and publish release",
+  );
+  const brokenTrigger = releaseWorkflow.replace("on:\n", "on:\n  pull_request:\n");
+  for (const broken of [brokenBuild, brokenPublish, brokenTrigger]) {
+    assert.notEqual(broken, releaseWorkflow);
+    assert.throws(() => checkReleaseWorkflow(broken));
+  }
+});
+
+test("CI cancels superseded PR runs while preserving every main push run", () => {
+  assert.equal(workflow.match(/^ {2}cancel-in-progress: (.+)$/m)?.[1], `\${{ github.event_name == 'pull_request' }}`);
 });

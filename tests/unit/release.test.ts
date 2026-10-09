@@ -120,7 +120,7 @@ test("release validation command rejects ancestry and API failures before produc
     await writeFile(join(scratch, "package.json"), JSON.stringify({ version: "1.0.0" }));
     await writeFile(
       join(scratch, "bin/git"),
-      '#!/bin/sh\ncase "$1" in\nrev-parse) echo abc ;;\nmerge-base) exit "$ANCESTRY_STATUS" ;;\n*) exit 7 ;;\nesac\n',
+      '#!/bin/sh\ncase "$1" in\nrev-parse) echo abc ;;\ncat-file) if [ "$2" = -t ]; then printf "%s" "$TAG_TYPE"; else printf "%s" "$TAG_MESSAGE"; fi ;;\nmerge-base) exit "$ANCESTRY_STATUS" ;;\n*) exit 7 ;;\nesac\n',
       { mode: 0o755 },
     );
     await writeFile(
@@ -141,6 +141,8 @@ test("release validation command rejects ancestry and API failures before produc
       GITHUB_REF_NAME: "v1.0.0",
       GITHUB_REPOSITORY: "example/project",
       GITHUB_OUTPUT: join(scratch, "output"),
+      TAG_TYPE: "commit",
+      TAG_MESSAGE: "Release 1.0.0",
       ANCESTRY_STATUS: "0",
       API_STATUS: "0",
       API_RESPONSE: JSON.stringify([{ workflow_runs: [] }, { workflow_runs: [valid] }]),
@@ -155,6 +157,7 @@ test("release validation command rejects ancestry and API failures before produc
       { ANCESTRY_STATUS: "1" },
       { API_STATUS: "1" },
       { API_RESPONSE: "[]" },
+      { TAG_TYPE: "tag", TAG_MESSAGE: `Built with ${EXAMPLE_TOOLS[0]}` },
       { GITHUB_REF_NAME: "v2.0.0" },
       { GITHUB_REF_NAME: "v1.0.0-beta" },
     ]) {
@@ -162,6 +165,9 @@ test("release validation command rejects ancestry and API failures before produc
       await assert.rejects(readFile(env.GITHUB_OUTPUT));
     }
     command();
+    assert.equal(await readFile(env.GITHUB_OUTPUT, "utf8"), "version=1.0.0\ncommit=abc\n");
+    await rm(env.GITHUB_OUTPUT);
+    command({ TAG_TYPE: "tag" });
     assert.equal(await readFile(env.GITHUB_OUTPUT, "utf8"), "version=1.0.0\ncommit=abc\n");
   } finally {
     await rm(scratch, { recursive: true, force: true });
@@ -181,6 +187,77 @@ test("release notes command refuses prohibited credits before writing notes", as
     await writeFile(join(scratch, "CHANGELOG.md"), "## [1.0.0]\n### Added\nFirst release.\n");
     command();
     assert.equal(await readFile(join(scratch, "release/notes.md"), "utf8"), "### Added\nFirst release.\n");
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
+  }
+});
+
+test("publish checks remote lightweight and annotated tags before creating a release", async () => {
+  const workflow = await readFile(join(root, ".github/workflows/release.yml"), "utf8");
+  const script = workflow
+    .split("  publish:\n")[1]
+    ?.match(/run: \|\n((?: {10}.*\n)+)/)?.[1]
+    ?.replace(/^ {10}/gm, "");
+  assert.ok(script);
+  const scratch = await mkdtemp(join(tmpdir(), "passgen-publish-"));
+  const commit = "a".repeat(40);
+  const annotation = "b".repeat(40);
+  try {
+    await mkdir(join(scratch, "bin"));
+    await writeFile(
+      join(scratch, "bin/gh"),
+      `#!/bin/bash
+set -eu
+case "$1" in
+  api)
+    case "$2" in
+      repos/example/project/git/ref/tags/v1.0.0)
+        case "$MODE" in
+          lightweight) printf '%s' '${JSON.stringify({ object: { type: "commit", sha: commit } })}' ;;
+          wrong) printf '%s' '${JSON.stringify({ object: { type: "commit", sha: annotation } })}' ;;
+          missing) exit 1 ;;
+          invalid) printf '%s' '${JSON.stringify({ object: { type: "tag", sha: "../bad" } })}' ;;
+          *) printf '%s' '${JSON.stringify({ object: { type: "tag", sha: annotation } })}' ;;
+        esac ;;
+      repos/example/project/git/tags/${annotation})
+        case "$MODE" in
+          cycle) printf '%s' '${JSON.stringify({ object: { type: "tag", sha: annotation } })}' ;;
+          tree) printf '%s' '${JSON.stringify({ object: { type: "tree", sha: commit } })}' ;;
+          annotated-wrong) printf '%s' '${JSON.stringify({ object: { type: "commit", sha: annotation } })}' ;;
+          *) printf '%s' '${JSON.stringify({ object: { type: "commit", sha: commit } })}' ;;
+        esac ;;
+      *) exit 7 ;;
+    esac ;;
+  release) printf '%s\\n' "$@" > published ;;
+  *) exit 8 ;;
+esac
+`,
+      { mode: 0o755 },
+    );
+    const command = (mode: string) =>
+      execFileSync("bash", ["-euo", "pipefail", "-c", script], {
+        cwd: scratch,
+        env: {
+          ...process.env,
+          PATH: `${join(scratch, "bin")}:${process.env.PATH}`,
+          MODE: mode,
+          GITHUB_REPOSITORY: "example/project",
+          RELEASE_VERSION: "1.0.0",
+          RELEASE_COMMIT: commit,
+        },
+        stdio: "pipe",
+      });
+    for (const mode of ["wrong", "missing", "invalid", "cycle", "tree", "annotated-wrong"]) {
+      assert.throws(() => command(mode), mode);
+      await assert.rejects(readFile(join(scratch, "published")));
+    }
+    for (const mode of ["lightweight", "annotated"]) {
+      command(mode);
+      const args = await readFile(join(scratch, "published"), "utf8");
+      assert.match(args, /^release\ncreate\nv1\.0\.0\n/);
+      assert.match(args, /--repo\nexample\/project\n--verify-tag\n/);
+      await rm(join(scratch, "published"));
+    }
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }

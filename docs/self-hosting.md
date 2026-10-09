@@ -94,7 +94,8 @@ verified directory so switching back rolls back the deployment.
 
 Check out source from the same reviewed tag to run its verifier with the pinned
 Node version (`.nvmrc`); installing dependencies is unnecessary for this script.
-Replace the example URL and paths with your deployment and trusted manifest:
+The `--release-dir` path must name the real release directory, not a symlinked
+web root. Replace the example URL and paths with your deployment and trusted manifest:
 
 ```sh
 node scripts/verify-live.ts --url https://example.com/tools/passgen/ \

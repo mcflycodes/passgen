@@ -7,9 +7,8 @@ no tracking, no third-party code, and no network requests after the page loads.
 PassGen is a folder of static files. It works on any ordinary static web server, at
 any domain or subpath, with no hosting provider, CDN or domain required.
 
-**Status:** milestone M2 (interface) in progress. Both generators work on the
-page with their controls, themes and styles; the strength meter, the extra
-results and saved settings follow.
+**Status:** v1 is released, with both generators, strength estimates, extra
+results, saved settings, and five visual styles.
 
 ## Deploy
 
