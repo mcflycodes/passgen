@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { findHostnames } from "../../scripts/lib/dist-checks.ts";
 import { renderSnippets } from "../../scripts/lib/snippets.ts";
@@ -74,4 +75,33 @@ describe("reference header snippets", () => {
       assert.match(snippets.get(file) ?? "", /^\/\*$/m);
     }
   });
+});
+
+// Setup documentation uses generic placeholders, while its source-file references
+// and relative Markdown links must continue to name real repository files.
+test("agent setup docs use generic hosts and valid local links", async () => {
+  const root = resolve(EXAMPLES, "../..");
+  const folder = join(root, "agent-setup");
+  for (const file of await readdir(folder)) {
+    if (!file.endsWith(".md")) continue;
+    const content = await readFile(join(folder, file), "utf8");
+    const withoutLinks = content.replace(/\[[^\]]*\]\(([^)]+)\)/g, (match, target: string) => {
+      assert.ok(!/^[a-z]+:|^\/\//i.test(target), `${file}: use relative documentation links`);
+      const path = target.split("#")[0] ?? "";
+      assert.ok(existsSync(resolve(folder, path)), `${file}: broken link ${target}`);
+      return match.slice(0, match.indexOf("](") + 1);
+    });
+    // Only existing source paths are exempted from domain detection (.sh and
+    // .md are also top-level domains); actual deployment paths remain scanned.
+    const scanText = withoutLinks
+      .replace(/(?:[\w-]+\/)+[\w.-]+/g, (path) => (existsSync(join(root, path)) ? "source-file" : path))
+      .replaceAll("https://example.com/", "example.com")
+      .replace(/passgen-X\.Y\.Z\.zip(?:\.sha256)?/g, "release-asset");
+    assert.deepEqual(
+      findHostnames(`agent-setup/${file}`, scanText, false).filter(
+        (finding) => finding.problem !== "host name: example.com",
+      ),
+      [],
+    );
+  }
 });

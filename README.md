@@ -12,38 +12,211 @@ results, saved settings, and five visual styles.
 
 ## Deploy
 
-Download the release ZIP, `SHA256SUMS` and the ZIP checksum from
-[GitHub Releases](https://github.com/mcflycodes/passgen/releases). Verify the ZIP
-checksum, unpack into an empty staging directory, then check its files against
-`SHA256SUMS`. Promote those files into any static web root. Add the required
-security headers using the ready-made Apache, nginx or Caddy configurations in
-[`deploy/examples/`](deploy/examples/), then check the live site with
-`verify-live` and the trusted manifest.
+### C. Let your AI agent do it
 
-Follow the [step-by-step self-hosting guide](docs/self-hosting.md#deploy-from-a-release)
-for downloads, commands and host requirements. Maintainers can follow
-[the release procedure](docs/releasing.md).
+Copy this prompt into your AI agent:
 
-### Automated install
+> Fetch and follow the instructions at https://raw.githubusercontent.com/mcflycodes/passgen/main/agent-setup/prompt.md to set up PassGen for me.
 
-`scripts/install-release.sh` does the manual steps above on a Linux static web
-server in one command, with the same checks and an automatic rollback:
+It will ask about your server and show you the commands for approval before making
+changes. You can also paste [the instructions](agent-setup/prompt.md) if it cannot
+fetch the URL. To install it yourself, choose A or B below.
 
-```sh
-scripts/install-release.sh --version vX.Y.Z --docroot /path/to/web/root \
-    --url https://example.com/
-```
+### Before you start
 
-It downloads the three release assets with `gh` or `curl` (or takes them from
-`--from-dir`), verifies the ZIP against its checksum, refuses unsafe archive
-entries, unpacks into a staging directory outside the web root and checks every
-file against `SHA256SUMS` with an exact file set. It then backs up the current
-web root, switches to the new files with rsync, applies the file and directory
-modes, re-hashes the result and, with `--url`, fetches every file from the live
-site and checks the security header names. Any failure after the backup
-restores the previous web root and verifies the restore. `--dry-run` shows what
-would change. See [the installer reference](docs/install-release.md) for every
-option, the exit codes and the notes on ACLs, SELinux and caches.
+You need a static web server, a domain with HTTPS already working, and shell
+access with permission to write the site's files and configure the server.
+Use a hostname dedicated to PassGen: other pages on the same origin could read
+its generated passwords. See [why this matters](docs/self-hosting.md#before-you-start).
+For a managed static host without shell access, use the
+[static-host guide](docs/self-hosting.md#any-static-host).
+
+The commands below are for Linux. Replace `1.0.0`, `/srv/passgen` and
+`https://example.com/` with your release number, web root (the folder your server
+publishes), and URL. Keep downloads and source code outside that web root.
+The private repository requires GitHub read access; downloads use authenticated
+`gh`. Stop if any command fails.
+
+### A. Automated install
+
+1. Set the release number in your shell. Pick it from
+   [GitHub Releases](https://github.com/mcflycodes/passgen/releases).
+
+   ```sh
+   VERSION=1.0.0
+   ```
+
+2. Download that release's source into a new folder outside the web root.
+
+   ```sh
+   git clone --depth 1 --branch "v$VERSION" https://github.com/mcflycodes/passgen.git passgen-setup
+   ```
+
+3. Open that folder.
+
+   ```sh
+   cd passgen-setup
+   ```
+
+4. Configure your dedicated site using the ready-made
+   [Apache, nginx or Caddy config and header file](deploy/examples/README.md).
+   Follow your server's [setup steps](docs/self-hosting.md#server-setup): back up
+   any config you change, replace the hostname, web root and certificate paths,
+   and keep the header values exactly as shipped. The installer only handles files.
+
+5. Validate the server configuration using the matching command in the table below.
+
+6. Gracefully reload the server using the matching command in the table below.
+
+7. Install the release. This verifies both checksums, backs up the current web
+   root, and replaces its contents. The default files are readable by the server
+   and owned by the user running the command; with `sudo`, that is root.
+
+   ```sh
+   sudo scripts/install-release.sh --version "v$VERSION" --docroot /srv/passgen
+   ```
+
+   Read the output and save the backup path. See the
+   [installer requirements and ownership options](docs/install-release.md#requirements)
+   if tools are missing or the server needs different permissions.
+
+8. **Optional:** Check the public site during installation by adding
+   `--url https://example.com/` to step 7. A mismatch triggers an attempted rollback.
+   This checks file hashes and header names, rather than exact header values.
+
+9. **Optional:** Download the manifest for the fuller live check.
+
+   ```sh
+   gh release download "v$VERSION" --repo mcflycodes/passgen \
+     --pattern SHA256SUMS --dir "../release-$VERSION"
+   ```
+
+10. **Optional:** Run the live check using the source folder's pinned Node version
+    (`.nvmrc`). No dependency installation is needed.
+
+    ```sh
+    node scripts/verify-live.ts --url https://example.com/ \
+      --manifest "../release-$VERSION/SHA256SUMS" --release-dir /srv/passgen
+    ```
+
+### B. Manual install
+
+1. Set the release number in your shell.
+
+   ```sh
+   VERSION=1.0.0
+   ```
+
+2. Download that release's source into a new folder outside the web root.
+
+   ```sh
+   git clone --depth 1 --branch "v$VERSION" https://github.com/mcflycodes/passgen.git passgen-setup
+   ```
+
+3. Open that folder.
+
+   ```sh
+   cd passgen-setup
+   ```
+
+4. Download the release ZIP and checksum files. The ZIP contains the finished site;
+   you do not need to build it.
+
+   ```sh
+   gh release download "v$VERSION" --repo mcflycodes/passgen --dir "../release-$VERSION" \
+     --pattern "passgen-$VERSION.zip" --pattern "passgen-$VERSION.zip.sha256" --pattern SHA256SUMS
+   ```
+
+5. **Optional, recommended:** Verify the ZIP checksum. Continue only if it says `OK`.
+
+   ```sh
+   (cd "../release-$VERSION" && sha256sum -c "passgen-$VERSION.zip.sha256")
+   ```
+
+6. Create an empty web root. If it already contains files, follow the update steps
+   below first; do not unpack over an old release.
+
+   ```sh
+   sudo mkdir -p /srv/passgen
+   ```
+
+7. Unzip the site into that empty web root.
+
+   ```sh
+   sudo unzip "../release-$VERSION/passgen-$VERSION.zip" -d /srv/passgen
+   ```
+
+8. Give the server read access to the files. These example permissions leave
+   writing to the owner only; use the [hosting guide](docs/self-hosting.md) for
+   ownership or SELinux requirements on your server.
+
+   ```sh
+   sudo chmod -R u=rwX,go=rX /srv/passgen
+   ```
+
+9. **Optional, recommended:** Check the unpacked files against the manifest.
+   Keep the manifest outside the public folder.
+
+   ```sh
+   (cd /srv/passgen && sha256sum -c -) < "../release-$VERSION/SHA256SUMS"
+   ```
+
+10. Add the ready-made [Apache, nginx or Caddy config and header file](deploy/examples/README.md)
+    using your server's [setup steps](docs/self-hosting.md#server-setup).
+    Back up any config you change, replace the hostname, web root and certificate
+    paths, and keep every security header, including the CSP, exactly as shipped.
+
+11. Validate the server configuration using the matching command below.
+
+12. Gracefully reload the server using the matching command below.
+
+13. **Optional:** Run the live check from the source folder, using its pinned
+    Node version (`.nvmrc`). No dependency installation is needed for this check.
+    It verifies served files, exact headers and server behavior.
+
+    ```sh
+    node scripts/verify-live.ts --url https://example.com/ \
+      --manifest "../release-$VERSION/SHA256SUMS" --release-dir /srv/passgen
+    ```
+
+Use only the row for your server. Config paths and service names vary by OS;
+the table uses the paths in the shipped examples.
+
+| Server | Validate before reloading | Graceful reload |
+|---|---|---|
+| Apache | `sudo apachectl configtest` | `sudo apachectl graceful` |
+| nginx | `sudo nginx -t` | `sudo nginx -s reload` |
+| Caddy | `sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile` | `sudo caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile` |
+
+**Optional:** If a CDN sits in front of your server, restrict direct access to the
+origin using the [CDN-only setup](docs/self-hosting.md#optional-raw-peer-restrictions).
+Review [CDN settings](docs/self-hosting.md#cdn-and-proxy-settings) to prevent script
+injection or file rewriting, and check the public URL after any cache purge.
+
+### Updating to a new release
+
+1. Keep the previous release's manifest and any server config backups outside
+   the web root, so you can verify a rollback.
+2. For automated installs, rerun step A7 with the new exact `--version` tag.
+   The installer keeps the newest three backups outside the web root.
+3. For manual installs, move the current web root to a backup directory outside
+   the public root, then repeat path B with a fresh source/download folder and
+   empty web root. Expect a brief interruption; see the
+   [hosting guide](docs/self-hosting.md#deploy-from-a-release) for staged switching.
+
+### Rolling back
+
+1. For an automated install that fails, read its output: it attempts to restore
+   and verify the backup. If it reports a refused or unverified rollback, stop
+   and follow the [exit-code guidance](docs/install-release.md#exit-codes).
+2. To undo a successful install, restore the previous web root from the printed
+   backup's `docroot/` directory (automated), or your saved directory (manual).
+   Replace the failed release completely rather than overlaying files.
+3. Restore any changed server config from your backup, validate it, then reload
+   using the table above. Recheck the site with the previous release's manifest.
+
+See [self-hosting](docs/self-hosting.md), the [installer reference](docs/install-release.md)
+and [verification](docs/verify.md) for details.
 
 ## Requirements
 
