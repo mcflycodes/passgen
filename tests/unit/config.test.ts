@@ -383,6 +383,7 @@ test("accepts sets at every minimum size", () => {
     complex: copy.password.characters.complex.slice(0, 8),
   });
   copy.password.characters.simple = copy.password.characters.simple.replace("^", "");
+  copy.passphrase.words.max = 9;
   validateConfig(copy);
 });
 

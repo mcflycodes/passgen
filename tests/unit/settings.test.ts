@@ -82,6 +82,7 @@ describe("stored settings (R24 to R26, C3)", () => {
     assert.deepEqual(Object.keys(parsed.settings.password).sort(), [
       "complex",
       "counts",
+      "dontStartWithSymbol",
       "excludeLookAlikes",
       "length",
       "lowercase",
@@ -112,6 +113,7 @@ describe("stored settings (R24 to R26, C3)", () => {
         simple: true,
         complex: false,
         excludeLookAlikes: true,
+        dontStartWithSymbol: false,
         counts: {
           lowercase: { min: 3, max: 10 },
           uppercase: { min: 0, max: 33 },
@@ -339,6 +341,23 @@ describe("the storage adapter and the initial settings", () => {
     assert.equal(storage.remove(), true);
     assert.deepEqual([...items.keys()], []);
     assert.deepEqual(writes, [`set ${SETTINGS_STORAGE_KEY}`, `remove ${SETTINGS_STORAGE_KEY}`]);
+  });
+
+  for (const action of ["write", "remove"] as const) {
+    test(`${action} removes legacy settings without touching unrelated keys`, () => {
+      const { area, items } = fakeArea();
+      items.set("passgen:settings:v1", "legacy");
+      items.set("other", "keep");
+      const storage = browserStorage(() => area) as SettingsStorage;
+      assert.equal(action === "write" ? storage.write("new") : storage.remove(), true);
+      assert.equal(items.has("passgen:settings:v1"), false);
+      assert.equal(items.get("other"), "keep");
+    });
+  }
+
+  test("removal that throws reports failure even without a record", () => {
+    const { area } = fakeArea({ remove: true });
+    assert.equal(browserStorage(() => area)?.remove(), false);
   });
 
   test("makes no write at all when the page starts with nothing stored (R24: written only when Save is pressed)", () => {

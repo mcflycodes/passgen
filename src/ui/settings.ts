@@ -122,6 +122,7 @@ function toSettings(stored: StoredSettings, config: Config): Settings | null {
     simple: stored.password.simple,
     complex: stored.password.complex,
     excludeLookAlikes: stored.password.excludeLookAlikes,
+    dontStartWithSymbol: stored.password.dontStartWithSymbol,
     counts: {
       lowercase: { ...stored.password.counts.lowercase },
       uppercase: { ...stored.password.counts.uppercase },
@@ -209,12 +210,17 @@ export function browserStorage(area: () => Storage = () => localStorage): Settin
       return null;
     }
   };
+  // Remove only this app's obsolete schema, never unrelated browser data.
+  const removeLegacy = (): boolean => {
+    if (storage.getItem("passgen:settings:v1") !== null) storage.removeItem("passgen:settings:v1");
+    return storage.getItem("passgen:settings:v1") === null;
+  };
   return {
     read,
     write(text) {
       try {
         storage.setItem(SETTINGS_STORAGE_KEY, text);
-        return read() === text;
+        return removeLegacy() && storage.getItem(SETTINGS_STORAGE_KEY) === text;
       } catch {
         return false;
       }
@@ -222,10 +228,11 @@ export function browserStorage(area: () => Storage = () => localStorage): Settin
     remove() {
       try {
         storage.removeItem(SETTINGS_STORAGE_KEY);
+        const legacyRemoved = removeLegacy();
+        return legacyRemoved && storage.getItem(SETTINGS_STORAGE_KEY) === null;
       } catch {
-        // Fall through: the read below says whether anything is left.
+        return false;
       }
-      return read() === null;
     },
   };
 }
@@ -259,6 +266,7 @@ export const SAVE_UNAVAILABLE_HINT =
   "Saving is unavailable: this browser's local storage is disabled, full or blocked.";
 export const SAVED_STATUS = "Saved as your default.";
 export const RESET_STATUS = "Reset to defaults. Nothing is saved in this browser now.";
+export const RESET_FAILED_STATUS = "Reset to defaults, but could not delete saved settings from this browser.";
 export const SAVE_FAILED_STATUS = "Could not save: this browser's local storage is disabled, full or blocked.";
 export const SAVE_INVALID_STATUS = "Could not save: fix the settings marked with an error first.";
 /** How long the highlight and the status text stay (the feedback is also announced at once). */
@@ -315,9 +323,9 @@ export function mountSaveControl(
     feedback(save, SAVED_STATUS, true);
   });
   reset.addEventListener("click", () => {
-    storage?.remove();
+    const removed = storage?.remove() ?? false;
     store.update(defaultSettings(config));
     onReset();
-    feedback(reset, RESET_STATUS, true);
+    feedback(reset, removed ? RESET_STATUS : RESET_FAILED_STATUS, removed);
   });
 }

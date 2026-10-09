@@ -59,6 +59,7 @@
       "complex": true
     },
     "excludeLookAlikes": false,
+    "dontStartWithSymbol": true,
     "lookAlikes": "lIO01|`'",
     "counts": {
       "lowercase": {

@@ -113,7 +113,7 @@ describe("the boot script", () => {
     });
 
     test("refuses a wrong or missing version, so a copied or edited value never applies", async () => {
-      for (const version of [undefined, 0, 2, "1", null, [1]]) {
+      for (const version of [undefined, 0, SETTINGS_SCHEMA_VERSION + 1, "1", null, [1]]) {
         const text = JSON.stringify({
           version,
           settings: { ...defaultSettings(config), theme: "dark", style: "payload" },

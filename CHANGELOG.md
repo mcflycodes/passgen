@@ -7,6 +7,14 @@ Versions follow Semantic Versioning.
 
 ### Added
 
+- Passphrase separators can now use a random simple symbol for each word gap,
+  with an option to keep every gap's symbol different. Number separators keep
+  the same symbol on both sides. The strength estimate includes these choices.
+- Passwords now avoid starting with a symbol by default. Turn this off if needed.
+  If your other settings require only symbols, this option is skipped with a
+  note. Passwords remain equally likely within your settings, and the strength
+  estimate includes the first-character rule.
+
 - Link to the source repository beside the Style control, and show the version
   and an "Apache-2.0" license link in the footer. Both URLs come from the
   configuration (`links.repoUrl`, `links.licenseUrl`), must be `https`, and
@@ -25,7 +33,7 @@ Versions follow Semantic Versioning.
 ### Removed
 
 - The "Save current settings as default" checkbox and the `saveSettings`
-  configuration key. Saved settings from 1.0.0 still load.
+  configuration key. Saved settings from 1.0.0 are discarded; Save and Reset remove the legacy record.
 
 ## [1.0.0]
 

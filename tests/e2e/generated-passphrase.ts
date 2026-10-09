@@ -26,6 +26,24 @@ function joinedWords(text: string): boolean {
 /** Recognizes complete possible passphrases before any data exception applies. */
 export function isGeneratedPassphrase(text: string): boolean {
   let valid = /^[a-zA-Z]+$/.test(text) && joinedWords(text);
+  // Random modes can use a different symbol for each word gap.
+  const segments = text.split(/([^a-zA-Z]+)/);
+  const words = segments.filter((_, index) => index % 2 === 0);
+  const gaps = segments.filter((_, index) => index % 2 === 1);
+  if (
+    isWords(words) &&
+    [false, true].some((numbered) =>
+      gaps.every((gap) =>
+        numbered
+          ? gap.length === 4 &&
+            symbols.includes(gap[0] as string) &&
+            gap[0] === gap[3] &&
+            /^[0-9]{2}$/.test(gap.slice(1, 3))
+          : gap.length === 1 && symbols.includes(gap),
+      ),
+    )
+  )
+    valid = true;
   for (const symbol of symbols) {
     const parts = text.split(symbol);
     if (isWords(parts)) valid = true;
@@ -45,5 +63,5 @@ export function isGeneratedPassphrase(text: string): boolean {
 
 /** Valid output blanks only known collisions; every other word remains scanned. */
 export function generatedPassphraseInput(text: string): string {
-  return isGeneratedPassphrase(text) ? blankDictionaryCollisions(text) : text;
+  return isGeneratedPassphrase(text) ? text.replace(/[a-z]+/gi, blankDictionaryCollisions) : text;
 }

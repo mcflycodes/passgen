@@ -91,7 +91,7 @@ test.describe("page shell", () => {
     const symbols = await page
       .locator("#pp-symbol-char option")
       .evaluateAll((els) => els.map((e) => (e as HTMLOptionElement).value));
-    expect(symbols).toEqual([...config.password.characters.simple]);
+    expect(symbols).toEqual([...config.password.characters.simple, "random", "random-unique"]);
     await expect(page.locator("#pp-symbol-char")).toHaveValue(config.passphrase.separator.defaultSymbol);
     await expect(page.locator("#pw-simple-chars")).toHaveText([...config.password.characters.simple].join(" "));
     await expect(page.locator("#pw-lookalikes-chars")).toHaveText([...config.password.lookAlikes].join(" "));

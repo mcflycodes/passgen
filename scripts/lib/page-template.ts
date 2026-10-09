@@ -207,7 +207,13 @@ export function renderPage(html: string, config: PageConfig, build: BuildInfo): 
         return `<option value="${escapeHtml(char)}"${char === chosen ? " selected" : ""}>${escapeHtml(label)}</option>`;
       })
       .join("");
-    return `<select${before}${after}>${options}</select>`;
+    const modes = [
+      ["random", "Random"],
+      ["random-unique", "Random (unique)"],
+    ]
+      .map(([value, label]) => `<option value="${value}"${value === chosen ? " selected" : ""}>${label}</option>`)
+      .join("");
+    return `<select${before}${after}>${options}${modes}</select>`;
   });
 
   const leftover = out.match(/data-cfg-[a-z-]+=|<!-- \/?passgen:(?!(?:csp|boot) -->)[a-z-]+ -->/);

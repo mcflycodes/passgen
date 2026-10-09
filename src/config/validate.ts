@@ -43,6 +43,7 @@ const schema: Schema = {
     characters: classes,
     enabled: { lowercase: "boolean", uppercase: "boolean", numbers: "boolean", simple: "boolean", complex: "boolean" },
     excludeLookAlikes: "boolean",
+    dontStartWithSymbol: "boolean",
     lookAlikes: "string",
     counts: { lowercase: count, uppercase: count, numbers: count, symbols: count },
   },
@@ -278,13 +279,25 @@ export function validateConfig(value: unknown): asserts value is Config {
   if (valid < 1n << BigInt(strongBits))
     fail("password.length.default", "defaults must provide at least 80 bits and meet the configured Strong threshold");
   const s = c.passphrase.separator;
-  if (s.defaultSymbol.length !== 1 || !c.password.characters.simple.includes(s.defaultSymbol))
-    fail("passphrase.separator.defaultSymbol", "must be one simple symbol");
+  if (c.passphrase.words.max - 1 > c.password.characters.simple.length)
+    fail("passphrase.words.max", "unique separators require at least one simple symbol per word gap");
+  if (
+    !["random", "random-unique"].includes(s.defaultSymbol) &&
+    (s.defaultSymbol.length !== 1 || !c.password.characters.simple.includes(s.defaultSymbol))
+  )
+    fail("passphrase.separator.defaultSymbol", "must be one simple symbol or a random mode");
   if (s.numberMin !== 0 || s.numberMax !== 99 || s.numberDigits !== 2)
     fail("passphrase.separator", "requires two-digit numbers 00–99");
   const filteredCount = WORDS.filter((word) => word.length >= w.defaultMin && word.length <= w.defaultMax).length;
   if (!filteredCount) fail("passphrase.wordLength", "default filter is empty");
+  const gaps = c.passphrase.words.default - 1;
+  let symbolBits = 0;
+  if (s.symbol && ["random", "random-unique"].includes(s.defaultSymbol)) {
+    for (let i = 0; i < gaps; i += 1)
+      symbolBits += Math.log2(c.password.characters.simple.length - (s.defaultSymbol === "random-unique" ? i : 0));
+  }
   const bits =
+    symbolBits +
     c.passphrase.words.default * Math.log2(filteredCount) +
     (s.number ? (c.passphrase.words.default - 1) * Math.log2(100) : 0) +
     (c.passphrase.capitalize ? c.passphrase.words.default : 0);

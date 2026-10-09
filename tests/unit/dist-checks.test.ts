@@ -117,16 +117,16 @@ describe("configured links (decision 0005, point 5)", () => {
   const OTHER = "https://forge.example/passgen-fork";
   const allowed = [LINK];
 
-  test("blanks a link only where it stands whole: the entire text, or quoted", () => {
+  test("blanks only an already isolated exact value", () => {
     assert.equal(blankAllowedLinks(LINK, allowed), "");
-    assert.equal(blankAllowedLinks(`href="${LINK}"`, allowed), `href=${" ".repeat(LINK.length + 2)}`);
-    assert.equal(blankAllowedLinks(`x='${LINK}'`, allowed), `x=${" ".repeat(LINK.length + 2)}`);
-    assert.equal(blankAllowedLinks(`x=\`${LINK}\``, allowed), `x=${" ".repeat(LINK.length + 2)}`);
-    for (const text of [`see ${LINK}`, `${LINK}/x`, `"${LINK}/x"`, `"${OTHER}"`, `"${LINK} "`]) {
-      assert.equal(blankAllowedLinks(text, allowed), text, text);
+    for (const text of [`href="${LINK}"`, `x='${LINK}'`, `see ${LINK}`, `"${LINK}"`]) {
+      assert.equal(blankAllowedLinks(text, allowed), text);
     }
-    assert.equal(blankAllowedLinks(LINK, []), LINK);
-    assert.equal(blankAllowedLinks(LINK, [""]), LINK);
+  });
+
+  test("accepts an exact decoded anchor href containing an ampersand", () => {
+    const url = "https://github.com/mcflycodes/passgen?tab=readme&view=all";
+    assert.deepEqual(checkHtml("index.html", page("", `<a href="${url.replaceAll("&", "&amp;")}">x</a>`), [url]), []);
   });
 
   test("an anchor to a configured link passes the HTML check; the same link anywhere else does not", () => {
@@ -137,8 +137,9 @@ describe("configured links (decision 0005, point 5)", () => {
       ["another link", `<a href="${OTHER}">x</a>`],
       ["the link with something added", `<a href="${LINK}?x">x</a>`],
       ["the link as text", `<p>${LINK}</p>`],
-      ["the link in a comment", `<!-- ${LINK} -->`],
-      ["the link in a single-quoted attribute of a text", `<p title='${LINK}'>${OTHER}</p>`],
+      ["the link in a comment", `<!-- "${LINK}" -->`],
+      ["the link in a title attribute", `<a title="${LINK}">x</a>`],
+      ["the link in a single-quoted attribute of a text", `<p title='${LINK}'>x</p>`],
     ] as const) {
       assert.ok(flagged(checkHtml("index.html", page("", body), allowed)), label);
     }
@@ -152,7 +153,8 @@ describe("configured links (decision 0005, point 5)", () => {
     for (const [label, js] of [
       ["another link", `const u="${OTHER}";`],
       ["the link with a path added", `const u="${LINK}/releases";`],
-      ["the link in a comment", `x=1; // ${LINK}`],
+      ["the link in a comment", `x=1; // "${LINK}"`],
+      ["the link in longer prose", `const x=\`see "${LINK}" here\`;`],
       ["the link in a template with a substitution", `const u=\`${LINK}\${x}\`;`],
       ["the link as a module specifier", `import "${LINK}";`],
     ] as const) {

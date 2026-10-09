@@ -51,6 +51,7 @@ export interface StoredSettings {
     readonly simple: boolean;
     readonly complex: boolean;
     readonly excludeLookAlikes: boolean;
+    readonly dontStartWithSymbol: boolean;
     readonly counts: {
       readonly lowercase: StoredCount;
       readonly uppercase: StoredCount;
@@ -113,6 +114,7 @@ function storedPassword(value: unknown, limits: StoredLimits): StoredSettings["p
     "simple",
     "complex",
     "excludeLookAlikes",
+    "dontStartWithSymbol",
     "counts",
   ]);
   if (!p) return null;
@@ -124,7 +126,9 @@ function storedPassword(value: unknown, limits: StoredLimits): StoredSettings["p
   const simple = p.simple;
   const complex = p.complex;
   const excludeLookAlikes = p.excludeLookAlikes;
+  const dontStartWithSymbol = p.dontStartWithSymbol;
   if (!storedBoolean(lowercase) || !storedBoolean(uppercase) || !storedBoolean(numbers)) return null;
+  if (!storedBoolean(dontStartWithSymbol)) return null;
   if (!storedBoolean(simple) || !storedBoolean(complex) || !storedBoolean(excludeLookAlikes)) return null;
   // The R8 symbol rule and R9: Complex needs Simple, and some type must be on.
   if (complex && !simple) return null;
@@ -149,6 +153,7 @@ function storedPassword(value: unknown, limits: StoredLimits): StoredSettings["p
     simple,
     complex,
     excludeLookAlikes,
+    dontStartWithSymbol,
     counts: { lowercase: lower, uppercase: upper, numbers: digits, symbols },
   };
 }
@@ -175,8 +180,13 @@ function storedPassphrase(value: unknown, limits: StoredLimits): StoredSettings[
   if (!storedInteger(minWordLength, limits.wordLength.min, limits.wordLength.max)) return null;
   if (!storedInteger(maxWordLength, minWordLength, limits.wordLength.max)) return null;
   if (!storedBoolean(number) || !storedBoolean(symbol) || !storedBoolean(capitalize)) return null;
-  if (typeof separatorSymbol !== "string" || separatorSymbol.length !== 1) return null;
-  if (!limits.separators.includes(separatorSymbol)) return null;
+  if (typeof separatorSymbol !== "string") return null;
+  if (
+    !["random", "random-unique"].includes(separatorSymbol) &&
+    (separatorSymbol.length !== 1 || !limits.separators.includes(separatorSymbol))
+  )
+    return null;
+  if (symbol && separatorSymbol === "random-unique" && words - 1 > limits.separators.length) return null;
   return { words, minWordLength, maxWordLength, number, symbol, separatorSymbol, capitalize };
 }
 

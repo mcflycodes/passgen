@@ -35,6 +35,7 @@ import {
   setRange,
 } from "./helpers.ts";
 
+const RESET_FAILED_STATUS = "Reset to defaults, but could not delete saved settings from this browser.";
 const KEY = SETTINGS_STORAGE_KEY;
 const DEFAULT_LENGTH = String(config.password.length.default);
 const DEFAULT_WORDS = String(config.passphrase.words.default);
@@ -71,6 +72,7 @@ async function expectDefaults(page: Page): Promise<void> {
   await expect(page.locator("#pw-numbers")).toBeChecked();
   await expect(page.locator("#pw-complex")).toBeChecked();
   await expect(page.locator("#pw-lookalikes")).not.toBeChecked();
+  await expect(page.locator("#pw-no-start-symbol")).toBeChecked();
   await expect(page.locator("#pw-lowercase-min")).toHaveValue("1");
   await expect(page.locator("#pw-uppercase-max")).toHaveValue(DEFAULT_LENGTH);
   await expect(page.locator("#pp-words-number")).toHaveValue(DEFAULT_WORDS);
@@ -171,6 +173,7 @@ async function changeEverything(page: Page): Promise<void> {
   await page.locator("#pw-numbers").uncheck();
   await page.locator("#pw-complex").uncheck();
   await page.locator("#pw-lookalikes").check();
+  await page.locator("#pw-no-start-symbol").uncheck();
   await setNumber(page.locator("#pw-lowercase-min"), 3);
   await setNumber(page.locator("#pw-uppercase-max"), 5);
   await setNumber(page.locator("#pw-symbols-min"), 2);
@@ -178,7 +181,7 @@ async function changeEverything(page: Page): Promise<void> {
   await setNumber(page.locator("#pp-min-length"), 4);
   await setNumber(page.locator("#pp-max-length"), 6);
   await page.locator("#pp-number").uncheck();
-  await page.locator("#pp-symbol-char").selectOption(".");
+  await page.locator("#pp-symbol-char").selectOption("random-unique");
   await page.locator("#pp-capitalize").check();
 }
 
@@ -195,6 +198,7 @@ const EVERYTHING_CHANGED = {
       simple: true,
       complex: false,
       excludeLookAlikes: true,
+      dontStartWithSymbol: false,
       counts: {
         lowercase: { min: 3, max: 32 },
         uppercase: { min: 1, max: 5 },
@@ -208,7 +212,7 @@ const EVERYTHING_CHANGED = {
       maxWordLength: 6,
       number: false,
       symbol: true,
-      separatorSymbol: ".",
+      separatorSymbol: "random-unique",
       capitalize: true,
     },
   },
@@ -252,6 +256,7 @@ test.describe("saved settings", () => {
     await expect(page.locator("#pw-complex")).not.toBeChecked();
     await expect(page.locator("#pw-simple")).toBeChecked();
     await expect(page.locator("#pw-lookalikes")).toBeChecked();
+    await expect(page.locator("#pw-no-start-symbol")).not.toBeChecked();
     await expect(page.locator("#pw-lowercase-min")).toHaveValue("3");
     await expect(page.locator("#pw-uppercase-max")).toHaveValue("5");
     await expect(page.locator("#pw-symbols-min")).toHaveValue("2");
@@ -259,7 +264,7 @@ test.describe("saved settings", () => {
     await expect(page.locator("#pp-min-length")).toHaveValue("4");
     await expect(page.locator("#pp-max-length")).toHaveValue("6");
     await expect(page.locator("#pp-number")).not.toBeChecked();
-    await expect(page.locator("#pp-symbol-char")).toHaveValue(".");
+    await expect(page.locator("#pp-symbol-char")).toHaveValue("random-unique");
     await expect(page.locator("#pp-capitalize")).toBeChecked();
     // The generators use the restored settings, not just the controls.
     const password = await resultText(page, "pw-value");
@@ -268,8 +273,9 @@ test.describe("saved settings", () => {
     expect([...password].filter((c) => /[a-z]/.test(c)).length).toBeGreaterThanOrEqual(3);
     expect([...password].filter((c) => /[A-Z]/.test(c)).length).toBeLessThanOrEqual(5);
     const passphrase = await resultText(page, "pp-value");
-    expect(passphrase.split(".")).toHaveLength(7);
-    for (const word of passphrase.split(".")) expect(word).toMatch(/^[A-Za-z]{4,6}$/);
+    expect(passphrase.split(/[^A-Za-z]/)).toHaveLength(7);
+    for (const word of passphrase.split(/[^A-Za-z]/)) expect(word).toMatch(/^[A-Za-z]{4,6}$/);
+    expect(new Set(passphrase.match(/[^A-Za-z]/g)).size).toBe(6);
     // Loading writes nothing and leaves the stored text as it was.
     expect(await recordedWrites(page)).toEqual([]);
     expect(JSON.parse((await storedText(page)) as string)).toEqual(EVERYTHING_CHANGED);
@@ -324,7 +330,9 @@ test.describe("saved settings", () => {
     expect(await storageKeys(page)).toEqual([KEY]);
     const before = await resultText(page, "pw-value");
 
-    await reset(page).click();
+    await reset(page).focus();
+    await reset(page).press("Enter");
+    await expect(reset(page)).toBeFocused();
     await expect(status(page)).toHaveText(RESET_STATUS);
     await expect(reset(page)).toHaveClass(/is-done/);
     expect(await storageKeys(page)).toEqual([]);
@@ -356,6 +364,39 @@ test.describe("saved settings", () => {
     await expectDefaults(page);
     expect(await recordedWrites(page)).toEqual([]);
     expect(await storageKeys(page)).toEqual([]);
+    await expectQuiet(page, watched);
+  });
+
+  for (const action of ["Save", "Reset"] as const) {
+    test(`${action} removes the legacy v1 record and preserves unrelated storage`, async ({ page, watched }) => {
+      await openPage(page);
+      await page.evaluate(() => {
+        localStorage.setItem("passgen:settings:v1", "old settings");
+        localStorage.setItem("unrelated", "keep");
+      });
+      await (action === "Save" ? save(page) : reset(page)).click();
+      await expect(status(page)).toHaveText(action === "Save" ? SAVED_STATUS : RESET_STATUS);
+      expect(await page.evaluate(() => localStorage.getItem("passgen:settings:v1"))).toBeNull();
+      expect(await page.evaluate(() => localStorage.getItem("unrelated"))).toBe("keep");
+      await expectQuiet(page, watched);
+    });
+  }
+
+  test("Reset reports a record that silently survives removal", async ({ page, watched }) => {
+    await openPage(page);
+    await save(page).click();
+    await chooseTheme(page, "dark");
+    await page.evaluate(() => {
+      Storage.prototype.removeItem = () => {};
+    });
+    await reset(page).focus();
+    await reset(page).press("Space");
+    await expect(reset(page)).toBeFocused();
+    await expect(status(page)).toHaveText(RESET_FAILED_STATUS);
+    await expect(status(page)).toHaveClass(/is-error/);
+    await expect(reset(page)).not.toHaveClass(/is-done/);
+    await expectDefaults(page);
+    expect(await storedText(page)).not.toBeNull();
     await expectQuiet(page, watched);
   });
 
@@ -694,7 +735,7 @@ test.describe("saved settings", () => {
       await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
       // Reset still restores the defaults in the page.
       await reset(page).click();
-      await expect(status(page)).toHaveText(RESET_STATUS);
+      await expect(status(page)).toHaveText(RESET_FAILED_STATUS);
       await expectDefaults(page);
       await expectQuiet(page, watched);
     });
@@ -754,8 +795,10 @@ test.describe("saved settings", () => {
       await save(page).click();
       await expect(status(page)).toHaveText(SAVE_FAILED_STATUS);
       await reset(page).click();
-      await expect(status(page)).toHaveText(RESET_STATUS);
+      await expect(status(page)).toHaveText(RESET_FAILED_STATUS);
       await expectDefaults(page);
+      await expect(status(page)).toHaveClass(/is-error/);
+      await expect(reset(page)).not.toHaveClass(/is-done/);
       expect(await storedText(page)).toBe(before);
       await page.locator("#pw-regen").click();
       await expect(page.locator("#pw-value")).not.toHaveText("");

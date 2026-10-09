@@ -77,6 +77,7 @@ function generate(r: ReturnType<typeof rng>): unknown {
     simple,
     complex: r.chance(0.85) ? simple === true && r.chance(0.6) : bool(),
     excludeLookAlikes: bool(),
+    dontStartWithSymbol: bool(),
     counts: { lowercase: count(), uppercase: count(), numbers: count(), symbols: count() },
   };
   const minWord = int(limits.wordLength.min, limits.wordLength.max);
@@ -86,7 +87,9 @@ function generate(r: ReturnType<typeof rng>): unknown {
     maxWordLength: r.chance(0.9) && typeof minWord === "number" ? int(minWord, limits.wordLength.max) : int(3, 9),
     number: bool(),
     symbol: bool(),
-    separatorSymbol: r.chance(0.95) ? r.pick([...limits.separators]) : r.pick(["", "--", "<", "a", 5, null]),
+    separatorSymbol: r.chance(0.95)
+      ? r.pick([...limits.separators, "random", "random-unique"])
+      : r.pick(["", "--", "<", "a", 5, null]),
     capitalize: bool(),
   };
   const settings: Json = {
@@ -99,7 +102,7 @@ function generate(r: ReturnType<typeof rng>): unknown {
   if (r.chance(0.02)) delete settings.style;
   // An own "__proto__" key, as JSON.parse would create one; never the prototype itself.
   if (r.chance(0.02)) Object.defineProperty(password, "__proto__", { value: { polluted: true }, enumerable: true });
-  const version = r.chance(0.95) ? SETTINGS_SCHEMA_VERSION : r.pick([0, 2, "1", null]);
+  const version = r.chance(0.95) ? SETTINGS_SCHEMA_VERSION : r.pick([0, SETTINGS_SCHEMA_VERSION + 1, "1", null]);
   return r.chance(0.98) ? { version, settings } : r.pick([null, [], "x", { version }, { settings }]);
 }
 
