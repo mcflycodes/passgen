@@ -63,6 +63,7 @@ function all(length: number, overrides: Partial<PasswordOptions> = {}): Password
     simple: true,
     complex: true,
     excludeLookAlikes: false,
+    dontStartWithSymbol: false,
     counts: counts(length),
     ...overrides,
   };
@@ -156,6 +157,7 @@ describe("defaultOptions: the page starts from the configured defaults (R5, R6, 
       simple: true,
       complex: true,
       excludeLookAlikes: false,
+      dontStartWithSymbol: true,
       counts: {
         lowercase: { min: 1, max: 20 },
         uppercase: { min: 1, max: 20 },

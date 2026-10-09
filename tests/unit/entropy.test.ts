@@ -29,7 +29,7 @@ test("default anchors are pinned within 0.01 bits", () => {
   const password = passwordEntropy();
   assert.equal(password.count, countPasswords(planPassword(defaultOptions(config.password), config.password)));
   assert.ok(Math.abs(password.bits - Math.log2(Number(password.count))) < 0.01);
-  assert.ok(Math.abs(password.bits - 130.93) < 0.01);
+  assert.ok(Math.abs(password.bits - 130.34) < 0.01);
   assert.equal(filteredWordCount(), 7223);
   const phrase = passphraseEntropy();
   assert.equal(phrase.count, 7223n ** 5n * 100n ** 4n);
@@ -65,7 +65,7 @@ test("BigInt logarithm handles powers, adjacent integers and values beyond Numbe
   const options = { ...defaultOptions(config.password), length: 128, counts: defaultCounts(config.password, 128) };
   const full = passwordEntropy(options);
   assert.ok(full.count > 2n ** 800n);
-  assert.ok(Math.abs(full.bits - 128 * Math.log2(94)) < 0.01);
+  assert.ok(Math.abs(full.bits - (127 * Math.log2(94) + Math.log2(62))) < 0.01);
 });
 
 test("password entropy matches independent enumeration with filters and bounded counts", () => {
@@ -79,6 +79,7 @@ test("password entropy matches independent enumeration with filters and bounded 
       for (const min of [0, 1]) {
         const options = {
           ...defaultOptions(small),
+          dontStartWithSymbol: false,
           length,
           excludeLookAlikes,
           numbers: false,
@@ -148,6 +149,7 @@ test("enumeration covers all four types, merged symbols and automatic Max adjust
       const selected = names.filter((_, index) => mask & (1 << index));
       const options = {
         ...defaultOptions(small),
+        dontStartWithSymbol: false,
         lowercase: selected.includes("lowercase"),
         uppercase: selected.includes("uppercase"),
         numbers: selected.includes("numbers"),

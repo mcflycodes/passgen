@@ -56,7 +56,7 @@
 
           <div class="result">
             <!-- biome-ignore lint/a11y/useSemanticElements: output preserves its control associations; group replaces its implicit live status without announcing secrets. -->
-            <output class="value" id="pw-value" for="pw-length pw-lowercase pw-uppercase pw-numbers pw-simple pw-complex pw-lookalikes" data-generated tabindex="-1" role="group" aria-live="off" aria-label="Generated password"></output>
+            <output class="value" id="pw-value" for="pw-no-start-symbol pw-length pw-lowercase pw-uppercase pw-numbers pw-simple pw-complex pw-lookalikes" data-generated tabindex="-1" role="group" aria-live="off" aria-label="Generated password"></output>
             <div class="result-actions">
               <button type="button" class="btn btn-primary" id="pw-copy" aria-label="Copy main password">Copy</button>
               <button type="button" class="btn" id="pw-regen">Regenerate</button>
@@ -136,6 +136,7 @@
             <fieldset class="control-row" aria-labelledby="pw-readability-label">
               <div class="control-label" id="pw-readability-label">Readability</div>
               <div class="control-input checks">
+                <label class="check"><input type="checkbox" id="pw-no-start-symbol" data-cfg-checked="password.dontStartWithSymbol" aria-describedby="pw-no-start-symbol-hint"><span class="box"></span><span class="check-text">Don't start with a symbol <span class="hint" id="pw-no-start-symbol-hint">Skipped if the other settings require only symbols</span></span></label>
                 <label class="check"><input type="checkbox" id="pw-lookalikes" data-cfg-checked="password.excludeLookAlikes"><span class="box"></span><span class="check-text">No look-alike characters <code id="pw-lookalikes-chars"></code></span></label>
               </div>
             </fieldset>
@@ -209,8 +210,9 @@
                 <label class="check"><input type="checkbox" id="pp-number" data-cfg-checked="passphrase.separator.number"><span class="box"></span><span class="check-text">Number <span class="hint">a random two-digit number between words</span></span></label>
                 <label class="check"><input type="checkbox" id="pp-symbol" data-cfg-checked="passphrase.separator.symbol"><span class="box"></span><span class="check-text">Symbol</span></label>
                 <label class="inline-field select-field"><span>Symbol</span>
-                  <select id="pp-symbol-char" data-cfg-options="password.characters.simple" data-cfg-selected="passphrase.separator.defaultSymbol"></select>
+                  <select id="pp-symbol-char" aria-describedby="pp-symbol-hint" data-cfg-options="password.characters.simple" data-cfg-selected="passphrase.separator.defaultSymbol"></select>
                 </label>
+                <span class="hint" id="pp-symbol-hint">Random picks a symbol for each gap; Random (unique) never repeats between gaps. A number uses the same symbol on both sides.</span>
               </div>
             </fieldset>
 

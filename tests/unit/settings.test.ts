@@ -76,6 +76,7 @@ describe("stored settings (R24 to R26, C3)", () => {
     assert.deepEqual(Object.keys(parsed.settings.password).sort(), [
       "complex",
       "counts",
+      "dontStartWithSymbol",
       "excludeLookAlikes",
       "length",
       "lowercase",
@@ -106,6 +107,7 @@ describe("stored settings (R24 to R26, C3)", () => {
         simple: true,
         complex: false,
         excludeLookAlikes: true,
+        dontStartWithSymbol: false,
         counts: {
           lowercase: { min: 3, max: 10 },
           uppercase: { min: 0, max: 33 },

@@ -48,10 +48,16 @@ function validate(options: PassphraseOptions): void {
     throw new PassphraseOptionsError("Passphrase switches must be booleans");
   if (
     typeof options.separatorSymbol !== "string" ||
-    options.separatorSymbol.length !== 1 ||
-    !config.password.characters.simple.includes(options.separatorSymbol)
+    (!["random", "random-unique"].includes(options.separatorSymbol) &&
+      (options.separatorSymbol.length !== 1 || !config.password.characters.simple.includes(options.separatorSymbol)))
   )
-    throw new PassphraseOptionsError("Passphrase separator must be one simple symbol");
+    throw new PassphraseOptionsError("Passphrase separator must be a simple symbol or a random mode");
+  if (
+    options.symbol &&
+    options.separatorSymbol === "random-unique" &&
+    options.words - 1 > config.password.characters.simple.length
+  )
+    throw new PassphraseOptionsError("Not enough simple symbols for unique separators");
 }
 
 // The wordlist is immutable: compute the bounded set of length ranges once.
@@ -71,7 +77,7 @@ export function filteredWordCount(options: PassphraseOptions = defaultPassphrase
   return filteredWords(options).length;
 }
 
-/** Independent picks with replacement. Errors return no partial result. */
+/** Words use independent picks with replacement; unique separators use a shrinking pool. No partial result on error. */
 export function generatePassphrase(
   options: PassphraseOptions = defaultPassphraseOptions,
   source: RandomSource = webCrypto,
@@ -79,10 +85,18 @@ export function generatePassphrase(
   validate(options);
   const pool = filteredWords(options);
   if (!pool.length) throw new EmptyWordlistError("No words remain in the selected length range");
+  const available = Array.from(config.password.characters.simple);
   let result = "";
   for (let index = 0; index < options.words; index++) {
     if (index) {
-      const symbol = options.symbol ? options.separatorSymbol : "";
+      // One choice per word gap; number separators reuse it on both sides.
+      let symbol = "";
+      if (options.symbol) {
+        if (options.separatorSymbol === "random") symbol = pick(available, source);
+        else if (options.separatorSymbol === "random-unique")
+          symbol = available.splice(randomInt(available.length, source), 1)[0] as string;
+        else symbol = options.separatorSymbol;
+      }
       result += symbol;
       if (options.number) {
         for (let digit = 0; digit < c.separator.numberDigits; digit++) result += String(randomInt(10, source));
