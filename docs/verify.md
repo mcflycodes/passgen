@@ -121,11 +121,12 @@ Caddy has no inherited browse setting: `file_server browse` belongs to a site's
 handler route. Adding it to PassGen would alter or shadow the shipped example,
 so CI reports that inherited-baseline test as unsupported for Caddy.
 
-Dependabot does not update the server digests stored in workflow environment
-variables. To refresh them, resolve the current manifest/index digest from Docker
-Hub for each official tag (`httpd:2.4`, `nginx:stable`, `caddy:2`), replace its
-`@sha256:…` value in `.github/workflows/ci.yml`, and open a reviewed PR. Require
-the workflow guard and all three real-server checks to pass before merging.
+Dependabot does not update the server image digests stored in workflow
+environment variables. To refresh them, look up the current index digest on
+Docker Hub for each official image and tag the workflow names (Apache 2.4,
+nginx stable and Caddy 2), replace the pinned digest in
+`.github/workflows/ci.yml`, and open a reviewed PR. Require the workflow guard
+and all three real-server checks to pass before merging.
 
 Run the additional curl probes against any deployment (the manifest must include
 the built favicon and fingerprinted assets):
