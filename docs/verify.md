@@ -100,6 +100,35 @@ sha256sum downloaded-index.html
 Compare the digest to the trusted `index.html` entry; remove the download after
 checking. Do not compare an error page, redirect target or raw compressed bytes.
 
+## Real server example checks
+
+The `server-configs` CI job builds once without cache, renders the shipped
+Apache, nginx and Caddy examples by substituting their documented placeholders,
+and validates and probes digest-pinned official containers sequentially. It
+checks GET and HEAD on every manifest file, exact header counts and values,
+caching, method refusal, hidden/map paths, directories and 404s, then runs
+`verify-live` with the same trusted manifest and local release directory.
+Caddy's automatic HTTP redirect is checked too. Apache and nginx deliberately
+leave the redirect listener to the operator; CI reports that unsupported probe.
+
+Run the additional curl probes against any deployment (the manifest must include
+the built favicon and fingerprinted assets):
+
+```sh
+node scripts/probe-server.ts --url https://example.com/ \
+  --manifest dist-manifest/SHA256SUMS --redirect
+```
+
+Omit `--redirect` when testing only HTTPS. For a private CA, add
+`--ca-file /path/to/ca.pem`; `--address 127.0.0.1` selects curl's `--resolve`
+target without changing the TLS hostname. The existing live verifier uses Node's
+standard CA environment variable, with certificate validation still enabled:
+
+```sh
+NODE_EXTRA_CA_CERTS=/path/to/ca.pem node scripts/verify-live.ts \
+  --url https://example.com/ --manifest dist-manifest/SHA256SUMS --release-dir dist
+```
+
 ## Mismatches
 
 Stop promoting or using an unverified release until the difference is explained.

@@ -145,3 +145,32 @@ jobs:
         run: pnpm licenses:check
       - name: Dependency audit
         run: pnpm run audit
+
+  server-configs:
+    name: Real Apache, nginx and Caddy examples
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build once without cache and check the shipped examples
+        run: |
+          pnpm headers:check
+          pnpm build
+          pnpm verify:dist
+          pnpm manifest
+      - name: Validate and probe each real server over trusted HTTPS
+        env:
+          HTTPD_IMAGE: httpd:2.4@sha256:c842ac797bd1fe8b3cd26d002ac9d948aa2814097544600600b35aef42e6785a
+          NGINX_IMAGE: nginx:stable@sha256:9bf97bd7714f5e24c1ccd545ecb9eb5435cb6d109c97cebb15e7e455e0239edb
+          CADDY_IMAGE: caddy:2@sha256:f2a1290d0463aad60660d4ec134943f183ee2a5f6c3eb7bf32dd984f2f020772
+        run: |
+          echo '127.0.0.1 passgen.test' | sudo tee -a /etc/hosts
+          mkdir -p "$RUNNER_TEMP/passgen-configs"
+          TMPDIR="$RUNNER_TEMP/passgen-configs" bash scripts/test-server-configs.sh
