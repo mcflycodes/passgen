@@ -34,6 +34,11 @@ export interface PasswordPanelDeps {
   readonly results: ResultsBox;
 }
 
+/** The mounted panel; `refresh` shows and generates from the store's options after something else changed them (Reset). */
+export interface Panel {
+  refresh(): void;
+}
+
 const TYPE_LABELS: Readonly<Record<PasswordTypeName, string>> = {
   lowercase: "Lowercase letters",
   uppercase: "Capital letters",
@@ -59,7 +64,7 @@ export function passwordErrorMessage(error: unknown): string {
   return "The password could not be generated with these settings.";
 }
 
-export function mountPasswordPanel(store: SettingsStore, config: Config, deps: PasswordPanelDeps): void {
+export function mountPasswordPanel(store: SettingsStore, config: Config, deps: PasswordPanelDeps): Panel {
   const output = byId("pw-value", HTMLOutputElement);
   const copy = byId("pw-copy", HTMLButtonElement);
   const regenerate = byId("pw-regen", HTMLButtonElement);
@@ -243,6 +248,10 @@ export function mountPasswordPanel(store: SettingsStore, config: Config, deps: P
   regenerate.addEventListener("click", () => render());
   bindCopy(copy, () => output.textContent ?? "", output);
 
-  lengthPair.set(options().length);
-  render();
+  const refresh = () => {
+    lengthPair.set(options().length);
+    render();
+  };
+  refresh();
+  return { refresh };
 }

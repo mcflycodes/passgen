@@ -1,11 +1,16 @@
 // Fails if the build output in dist/ breaks domain or host independence (decision 0005)
-// or carries a missing or misplaced CSP <meta> tag (requirement H2).
+// or carries a missing or misplaced CSP <meta> tag (requirement H2). The only
+// addresses allowed are the configured links, exactly as this checkout's
+// configuration declares them, where they stand whole in HTML and JavaScript.
 
 import { readFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { config, configuredLinks } from "../src/config/validate.ts";
 import { checkFile, type Finding, findProviderFiles } from "./lib/dist-checks.ts";
 import { listRegularFiles } from "./lib/walk.ts";
+
+const ALLOWED_LINKS = configuredLinks(config);
 
 const { values } = parseArgs({ options: { dir: { type: "string" } } });
 const DIST = resolve(values.dir ?? join(import.meta.dirname, "..", "dist"));
@@ -32,11 +37,13 @@ for (const file of files) {
     continue;
   }
   const text = await readFile(join(DIST, file), "utf8");
-  findings.push(...checkFile(file, text));
+  findings.push(...checkFile(file, text, ALLOWED_LINKS));
 }
 
 if (findings.length > 0) {
   for (const f of findings) console.error(`${f.file}: ${f.problem}`);
   process.exit(1);
 }
-console.log(`dist/: ${files.length} files, no hostnames, no provider files, CSP <meta> in place.`);
+console.log(
+  `dist/: ${files.length} files, no hostnames beyond the ${ALLOWED_LINKS.length} configured links, no provider files, CSP <meta> in place.`,
+);

@@ -287,6 +287,28 @@ summary,
   text-transform: uppercase;
 }
 
+/* Header link (decision 0005, point 5): the configured repository, as quiet
+   text beside the Style control, underlined so it reads as a link. --text-2
+   is checked against every colour the header can show. */
+.top-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 4px;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+.top-link:hover {
+  text-decoration-thickness: 2px;
+}
+
 .theme-control {
   display: inline-flex;
   border: 1px solid var(--line-strong);
@@ -813,36 +835,100 @@ select {
 }
 
 /* ---------- Saved settings (R24) ---------- */
+/* Save and Reset write storage only when pressed (src/ui/settings.ts). The
+   pressed button is highlighted in the ok colour with a ring that fades out;
+   the status beside it says what happened and is announced. With reduced
+   motion there is no fade: the highlight simply ends. */
 .save-settings {
   margin: 28px clamp(20px, 4vw, 72px) 0;
   padding-top: 20px;
   border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.save-settings .check {
+.save-settings .hint {
   max-width: 640px;
 }
-.save-settings .check input:disabled {
-  cursor: default;
+.save-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  flex-wrap: wrap;
 }
-.save-settings .check input:disabled + .box {
-  opacity: 0.5;
+.save-actions .btn {
+  flex: 0 1 auto;
 }
-.save-settings .check input:disabled ~ .check-text {
-  color: var(--muted);
+.save-feedback {
+  font-size: 14px;
+  color: var(--text-2);
+}
+.save-feedback.is-error {
+  color: var(--bad);
+}
+.save-feedback:empty {
+  display: none;
+}
+.btn.is-done {
+  background: var(--ok);
+  color: var(--on-accent);
+  border-color: var(--ok);
+  box-shadow: 0 0 0 4px transparent;
+  animation: save-ring 1.6s ease-out forwards;
+}
+@keyframes save-ring {
+  from {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 50%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 4px transparent;
+  }
 }
 
 /* ---------- Footer ---------- */
 /* The footer sits on the page itself, with the decorative layers behind it,
    so it uses the secondary text colour: the build checks --text-2 against
-   every colour those layers can place there. */
+   every colour those layers can place there. The right side carries the
+   version and the configured license link. */
 .foot {
   margin: 0 clamp(20px, 4vw, 72px);
   padding: 28px 0 40px;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px 32px;
   color: var(--text-2);
   font-size: 13px;
+}
+.foot-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 420px;
+  min-width: 0;
+}
+.foot-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.foot-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+.foot-link:hover {
+  text-decoration-thickness: 2px;
 }
 
 /* ---------- Narrow widths (R3) ---------- */
@@ -904,9 +990,20 @@ select {
     margin-bottom: 10px;
   }
 }
+/* Reduced motion: no transition or animation. The class rules above outrank
+   the universal one, so they are named here too; the Save highlight then
+   simply ends when src/ui/settings.ts removes the class. */
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none;
+    animation: none;
+  }
+  .btn,
+  .chip {
+    transition: none;
+  }
+  .btn.is-done {
+    animation: none;
   }
 }
 

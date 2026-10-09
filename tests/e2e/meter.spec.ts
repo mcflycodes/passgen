@@ -281,19 +281,19 @@ test("saved passphrase settings restore matching meter bits on reload and update
     capitalize: true,
   };
   const expectedBits = (value: typeof options) => `${(Math.floor(passphraseBits(value) * 10) / 10).toFixed(1)} bits`;
-  await page.locator("#save-settings").check();
   await setNumber(page.locator("#pp-words-number"), options.words);
   await setNumber(page.locator("#pp-min-length"), options.minWordLength);
   await setNumber(page.locator("#pp-max-length"), options.maxWordLength);
   await page.locator("#pp-number").uncheck();
   await page.locator("#pp-capitalize").check();
   await expect(page.locator("#pp-bits")).toHaveText(expectedBits(options));
+  await page.locator("#save-settings").click();
+  await expect(page.locator("#save-settings-status")).toContainText("Saved");
   const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "null"), SETTINGS_STORAGE_KEY);
   expect(stored.settings.passphrase).toEqual(options);
   expect(Object.keys(stored.settings).sort()).toEqual(["passphrase", "password", "style", "theme"]);
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-ready", "true");
-  await expect(page.locator("#save-settings")).toBeChecked();
   await expect(page.locator("#pp-words-number")).toHaveValue("7");
   await expect(page.locator("#pp-min-length")).toHaveValue("6");
   await expect(page.locator("#pp-max-length")).toHaveValue("6");

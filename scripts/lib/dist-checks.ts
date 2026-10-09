@@ -274,6 +274,46 @@ export interface Finding {
   readonly problem: string;
 }
 
+/** Exempts an already isolated, decoded value; callers must establish its context. */
+export function blankAllowedLinks(text: string, allowed: readonly string[]): string {
+  return text !== "" && allowed.includes(text) ? "" : text;
+}
+
+/** Decode the character references emitted by the page template, plus numeric references. */
+function decodeHref(value: string): string {
+  const entities: Record<string, string> = { amp: "&", quot: '"', apos: "'", lt: "<", gt: ">" };
+  return value.replace(/&(#x[0-9a-f]+|#[0-9]+|amp|quot|apos|lt|gt);/gi, (raw, name: string) => {
+    if (!name.startsWith("#")) return entities[name] ?? raw;
+    const point =
+      name.startsWith("#x") || name.startsWith("#X") ? Number.parseInt(name.slice(2), 16) : Number(name.slice(1));
+    return point > 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff) ? String.fromCodePoint(point) : raw;
+  });
+}
+
+/** Narrow HTML text rule: only a complete quoted href on an anchor is exempt.
+ * Comments and raw-text elements are consumed whole so their contents cannot impersonate tags.
+ * Other syntax stays visible to the hostname scanner (fail closed).
+ */
+function blankAnchorLinks(html: string, allowed: readonly string[]): string {
+  return html.replace(
+    /<!--[\s\S]*?(?:-->|$)|<(script|style|textarea|title)\b[^>]*>[\s\S]*?<\/\1\s*>|<[^>]*>/gi,
+    (tag) => {
+      if (!/^<a\s/i.test(tag)) return tag;
+      // Require a complete start tag made exclusively of ordinary named attributes.
+      if (!/^<a(?:\s+[a-z][\w:-]*(?:\s*=\s*(?:"[^"<>]*"|'[^'<>]*'|[^\s"'<>\x60=]+))?)*\s*\/?>(?:$)/i.test(tag))
+        return tag;
+      const attributes = [...tag.matchAll(/\s+([a-z][\w:-]*)(?:\s*=\s*("[^"<>]*"|'[^'<>]*'|[^\s"'<>\x60=]+))?/gi)];
+      const hrefs = attributes.filter((attr) => attr[1]?.toLowerCase() === "href");
+      if (hrefs.length !== 1) return tag;
+      const attr = hrefs[0];
+      const quoted = attr?.[2];
+      if (!attr || !quoted || !/^["']/.test(quoted) || !allowed.includes(decodeHref(quoted.slice(1, -1)))) return tag;
+      const start = (attr.index ?? 0) + attr[0].indexOf(quoted);
+      return tag.slice(0, start) + " ".repeat(quoted.length) + tag.slice(start + quoted.length);
+    },
+  );
+}
+
 /** Absolute and scheme-relative URLs, IP addresses and localhost. */
 export function findAddresses(file: string, text: string): Finding[] {
   const findings: Finding[] = [];
@@ -286,9 +326,16 @@ export function findAddresses(file: string, text: string): Finding[] {
 /**
  * Addresses, plus any dotted name with a top-level domain (IANA or special-use)
  * after its first label: "example.education" and "a.com.js" are reported; "button.copy",
- * "passgen.settings" and "a.min.js" are not.
+ * "passgen.settings" and "a.min.js" are not. `allowed` lists the configured
+ * links, exempt only where they stand whole (`blankAllowedLinks`).
  */
-export function findHostnames(file: string, text: string, hostContexts = true): Finding[] {
+export function findHostnames(
+  file: string,
+  rawText: string,
+  hostContexts = true,
+  allowed: readonly string[] = [],
+): Finding[] {
+  const text = blankAllowedLinks(rawText, allowed);
   const findings = [...findAddresses(file, text), ...findInternalHostnames(file, text, hostContexts)];
   for (const match of text.matchAll(DOTTED_NAME)) {
     // This explicit source-relative documentation path names a file. Bare
@@ -355,7 +402,7 @@ export function resolveWithinDist(fromFile: string, url: string): string | null 
  * references, text, attribute values, URLs) is checked in the browser by
  * tests/e2e/built-html.spec.ts, using resolveWithinDist() and findHostnames().
  */
-export function checkHtml(file: string, html: string): Finding[] {
+export function checkHtml(file: string, html: string, allowed: readonly string[] = []): Finding[] {
   const findings: Finding[] = [];
   const add = (problem: string) => findings.push({ file, problem });
   if (!requiredHtmlHead().test(html)) {
@@ -365,7 +412,7 @@ export function checkHtml(file: string, html: string): Finding[] {
   }
   const httpEquivs = html.match(/http-equiv/gi)?.length ?? 0;
   if (httpEquivs !== 1) add(`expected exactly one http-equiv attribute, found ${httpEquivs}`);
-  findings.push(...findHostnames(file, html));
+  findings.push(...findHostnames(file, blankAnchorLinks(html, allowed)));
   for (const credit of scanText(file, html)) add(`attribution: ${credit}`);
   return dedupe(findings);
 }
@@ -396,10 +443,13 @@ export function checkSvg(file: string, svg: string): Finding[] {
 /**
  * JavaScript, parsed with oxc: host names in string, template and regex
  * literals and comments; addresses anywhere; and every module specifier and
- * `new URL("…", import.meta.url)` asset path must stay inside the build.
+ * `new URL("…", import.meta.url)` asset path must stay inside the build. A
+ * configured link may appear as a whole string literal (the bundled
+ * configuration carries it) and nowhere else.
  */
-export function checkJs(file: string, source: string): Finding[] {
-  const findings = findAddresses(file, source);
+export function checkJs(file: string, source: string, allowed: readonly string[] = []): Finding[] {
+  const findings: Finding[] = [];
+  const linkSpans: Array<{ start: number; end: number }> = [];
   const { program, comments, errors } = parseSync(file, source, { sourceType: "module" });
   for (const e of errors) findings.push({ file, problem: `does not parse: ${e.message}` });
 
@@ -407,9 +457,19 @@ export function checkJs(file: string, source: string): Finding[] {
   const wordData = verifiedWordData(join(import.meta.dirname, "../.."));
   const dataSpans: Array<{ start: number; end: number }> = [];
   const exemptQuasis = new Set<number>();
+  const linkQuasis = new Set<number>();
   new Visitor({
     TemplateLiteral(node) {
       const quasi = node.quasis[0];
+      if (
+        node.expressions.length === 0 &&
+        node.quasis.length === 1 &&
+        quasi?.value.cooked &&
+        allowed.includes(quasi.value.cooked)
+      ) {
+        linkSpans.push({ start: node.start, end: node.end });
+        linkQuasis.add(quasi.start);
+      }
       if (node.expressions.length === 0 && node.quasis.length === 1 && quasi?.value.cooked === wordData) {
         dataSpans.push({ start: node.start, end: node.end });
         exemptQuasis.add(quasi.start);
@@ -431,11 +491,14 @@ export function checkJs(file: string, source: string): Finding[] {
         if (node.value === wordData) {
           dataSpans.push({ start: node.start, end: node.end });
           texts.push(blankDictionaryCollisions(node.value));
+        } else if (allowed.includes(node.value)) {
+          linkSpans.push({ start: node.start, end: node.end });
         } else texts.push(node.value);
       }
       if ("regex" in node && node.regex) texts.push(node.regex.pattern, node.regex.pattern.replace(/\\(.)/g, "$1"));
     },
     TemplateElement(node) {
+      if (linkQuasis.has(node.start)) return;
       if (exemptQuasis.has(node.start)) {
         texts.push(blankDictionaryCollisions(node.value.raw));
         if (typeof node.value.cooked === "string") texts.push(blankDictionaryCollisions(node.value.cooked));
@@ -467,6 +530,11 @@ export function checkJs(file: string, source: string): Finding[] {
     },
   }).visit(program);
 
+  let addressSource = source;
+  for (const { start, end } of linkSpans.sort((a, b) => b.start - a.start)) {
+    addressSource = addressSource.slice(0, start) + " ".repeat(end - start) + addressSource.slice(end);
+  }
+  findings.push(...findAddresses(file, addressSource));
   for (const text of texts) {
     findings.push(...findHostnames(file, text));
     if (/^\s*(?:\/\/|\\\\)/.test(text)) findings.push({ file, problem: `scheme-relative URL in a string: ${text}` });
@@ -576,12 +644,12 @@ export function checkCss(file: string, source: string): Finding[] {
   return dedupe(findings);
 }
 
-/** Runs the checks that fit a build file's type. */
-export function checkFile(file: string, text: string): Finding[] {
+/** Runs the checks that fit a build file's type; `allowed` lists the configured links (HTML and JavaScript only). */
+export function checkFile(file: string, text: string, allowed: readonly string[] = []): Finding[] {
   const ext = file.slice(file.lastIndexOf(".") + 1).toLowerCase();
-  if (ext === "html") return checkHtml(file, text);
+  if (ext === "html") return checkHtml(file, text, allowed);
   if (ext === "svg") return checkSvg(file, text);
-  if (ext === "js" || ext === "mjs") return checkJs(file, text);
+  if (ext === "js" || ext === "mjs") return checkJs(file, text, allowed);
   if (ext === "css") return checkCss(file, text);
   return dedupe(findHostnames(file, text));
 }

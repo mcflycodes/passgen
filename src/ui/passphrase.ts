@@ -15,6 +15,7 @@ import { RandomUnavailableError } from "../core/random.ts";
 import { bindCopy } from "./copy.ts";
 import { bindRangePair, byId, integerValue } from "./dom.ts";
 import type { Meter } from "./meter.ts";
+import type { Panel } from "./password.ts";
 import type { ResultsBox } from "./results.ts";
 import type { SettingsStore } from "./settings.ts";
 
@@ -32,7 +33,7 @@ export function passphraseErrorMessage(error: unknown): string {
   return "The passphrase could not be generated with these settings.";
 }
 
-export function mountPassphrasePanel(store: SettingsStore, config: Config, deps: PassphrasePanelDeps): void {
+export function mountPassphrasePanel(store: SettingsStore, config: Config, deps: PassphrasePanelDeps): Panel {
   const output = byId("pp-value", HTMLOutputElement);
   const copy = byId("pp-copy", HTMLButtonElement);
   const regenerate = byId("pp-regen", HTMLButtonElement);
@@ -125,6 +126,10 @@ export function mountPassphrasePanel(store: SettingsStore, config: Config, deps:
   regenerate.addEventListener("click", render);
   bindCopy(copy, () => output.textContent ?? "", output);
 
-  wordsPair.set(options().words);
-  render();
+  const refresh = () => {
+    wordsPair.set(options().words);
+    render();
+  };
+  refresh();
+  return { refresh };
 }

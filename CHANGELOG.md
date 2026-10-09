@@ -5,7 +5,7 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
-- Add step-by-step deployment guides and setup instructions for your AI agent.
+### Added
 
 - Passphrase separators can now use a random simple symbol for each word gap,
   with an option to keep every gap's symbol different. Number separators keep
@@ -14,6 +14,27 @@ Versions follow Semantic Versioning.
   If your other settings require only symbols, this option is skipped with a
   note. Passwords remain equally likely within your settings, and the strength
   estimate includes the first-character rule.
+- Link to the source repository beside the Style control, and show the version
+  and an "Apache-2.0" license link in the footer. Both URLs come from the
+  configuration (`links.repoUrl`, `links.licenseUrl`), must be `https`, and
+  can be left empty to hide a link.
+- Step-by-step deployment guides, and setup instructions you can hand to your
+  AI agent (`agent-setup/prompt.md`).
+
+### Changed
+
+- Saving settings is now explicit. "Save as my default" saves every setting of
+  both generators, the theme and the style once; "Reset to defaults" removes the
+  saved settings and restores the defaults. Changes made after saving are not
+  saved unless Save is pressed again. Each press shows a short confirmation,
+  announced to screen readers, and a highlight that fades out, or simply ends
+  under reduced motion. Nothing is written to the browser until Save or Reset
+  is pressed.
+
+### Removed
+
+- The "Save current settings as default" checkbox and the `saveSettings`
+  configuration key. Saved settings from 1.0.0 are discarded; Save and Reset remove the legacy record.
 
 ## [1.0.0]
 

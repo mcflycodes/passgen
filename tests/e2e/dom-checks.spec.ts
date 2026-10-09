@@ -113,6 +113,41 @@ test.describe("live DOM", () => {
     );
   });
 
+  test("allows a configured link only as the href of an anchor, exactly as configured", async ({ page }) => {
+    const link = "https://forge.example/passgen";
+    await page.setContent(`<a href="${link}" rel="noopener noreferrer">x</a>`);
+    expect(liveDomProblems("index.html", await collectLiveDom(page), [link])).toEqual([]);
+    expect(liveDomProblems("index.html", await collectLiveDom(page)).length).toBeGreaterThan(0);
+    for (const html of [
+      `<a href="${link}/x">x</a>`,
+      `<a href="https://forge.example/other">x</a>`,
+      `<link rel="stylesheet" href="${link}">`,
+      `<form action="${link}"></form>`,
+      `<a href="${link}" ping="${link}">x</a>`,
+    ]) {
+      await page.setContent(html);
+      expect(liveDomProblems("index.html", await collectLiveDom(page), [link]).length, html).toBeGreaterThan(0);
+    }
+  });
+
+  test("the static scan allows a configured link only as an anchor's href", async ({ page }) => {
+    const link = "https://forge.example/passgen";
+    expect(await staticHostnameProblems(page, "t.html", `<main><a href="${link}">x</a></main>`, [link])).toEqual([]);
+    expect(
+      (await staticHostnameProblems(page, "t.html", `<main><a href="${link}">x</a></main>`)).length,
+    ).toBeGreaterThan(0);
+    for (const html of [
+      `<main><p>${link}</p></main>`,
+      `<main><a href="${link}">${link}</a></main>`,
+      `<main><a title="${link}" href="${link}">x</a></main>`,
+      `<main><!-- ${link} --></main>`,
+      `<main><a href="${link}/x">x</a></main>`,
+      `<main><link href="${link}"></main>`,
+    ]) {
+      expect((await staticHostnameProblems(page, "t.html", html, [link])).length, html).toBeGreaterThan(0);
+    }
+  });
+
   test("allows only the named pointer properties on <html>, with bounded values and no !important", async ({
     page,
   }) => {
