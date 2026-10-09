@@ -24,6 +24,27 @@ Follow the [step-by-step self-hosting guide](docs/self-hosting.md#deploy-from-a-
 for downloads, commands and host requirements. Maintainers can follow
 [the release procedure](docs/releasing.md).
 
+### Automated install
+
+`scripts/install-release.sh` does the manual steps above on a Linux static web
+server in one command, with the same checks and an automatic rollback:
+
+```sh
+scripts/install-release.sh --version vX.Y.Z --docroot /path/to/web/root \
+    --url https://example.com/
+```
+
+It downloads the three release assets with `gh` or `curl` (or takes them from
+`--from-dir`), verifies the ZIP against its checksum, refuses unsafe archive
+entries, unpacks into a staging directory outside the web root and checks every
+file against `SHA256SUMS` with an exact file set. It then backs up the current
+web root, switches to the new files with rsync, applies the file and directory
+modes, re-hashes the result and, with `--url`, fetches every file from the live
+site and checks the security header names. Any failure after the backup
+restores the previous web root and verifies the restore. `--dry-run` shows what
+would change. See [the installer reference](docs/install-release.md) for every
+option, the exit codes and the notes on ACLs, SELinux and caches.
+
 ## Requirements
 
 - Node.js 22.23.2 (see `.nvmrc`)
