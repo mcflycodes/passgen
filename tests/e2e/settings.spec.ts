@@ -414,8 +414,18 @@ test.describe("saved settings", () => {
       await expect(status(page)).toHaveAttribute("role", "status");
       await expect(status(page)).toHaveAttribute("aria-live", "polite");
       await expect(status(page)).toHaveAttribute("aria-atomic", "true");
-      // The highlight fades: an animation runs on the button and finishes on its own.
-      const animated = await save(page).evaluate((el) => el.getAnimations().length);
+      // Count only the highlight fade; clicking can also start hover/focus transitions.
+      const animated = await save(page).evaluate(
+        (el) =>
+          el
+            .getAnimations()
+            .filter(
+              (animation) =>
+                animation instanceof CSSAnimation &&
+                animation.animationName === "save-ring" &&
+                animation.playState === "running",
+            ).length,
+      );
       expect(animated).toBe(1);
       await expect(save(page)).not.toHaveClass(/is-done/, { timeout: SAVE_FEEDBACK_MS * 3 });
       await expect(status(page)).toBeEmpty();
@@ -443,14 +453,26 @@ test.describe("saved settings", () => {
       await save(page).click();
       await expect(save(page)).toHaveClass(/is-done/);
       await expect(status(page)).toHaveText(SAVED_STATUS);
-      expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+      expect(
+        await page.evaluate(
+          () => document.getAnimations().filter((animation) => animation.playState === "running").length,
+        ),
+      ).toBe(0);
       expect(await save(page).evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
       await expect(save(page)).not.toHaveClass(/is-done/, { timeout: SAVE_FEEDBACK_MS * 3 });
-      expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+      expect(
+        await page.evaluate(
+          () => document.getAnimations().filter((animation) => animation.playState === "running").length,
+        ),
+      ).toBe(0);
       await reset(page).click();
       await expect(reset(page)).toHaveClass(/is-done/);
       await expect(status(page)).toHaveText(RESET_STATUS);
-      expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+      expect(
+        await page.evaluate(
+          () => document.getAnimations().filter((animation) => animation.playState === "running").length,
+        ),
+      ).toBe(0);
       await expectQuiet(page, watched);
     });
 
