@@ -168,3 +168,107 @@ test("CI e2e coverage guard rejects an unknown project", () => {
     /must cover every Playwright project with every shard exactly once/,
   );
 });
+
+function checkReleaseWorkflow(configuration: string) {
+  assert.match(configuration, /^permissions: \{\}$/m);
+  const jobs = (configuration.split("jobs:\n")[1] ?? "").split(/^ {2}(?=[\w-]+:\n)/m).slice(1);
+  assert.equal(configuration.match(/^on:\n([\s\S]*?)(?=^\S)/m)?.[1], "  push:\n    tags: ['v*.*.*']\n\n");
+  assert.equal(jobs.length, 3);
+  const [validate = "", build = "", publish = ""] = jobs;
+  assert.match(validate, /^validate:\n/);
+  assert.match(validate, /permissions:\n {6}contents: read\n {6}actions: read\n {4}outputs:/);
+  assert.match(build, /^build:\n {4}needs: validate\n/);
+  assert.match(build, /permissions:\n {6}contents: read\n {4}steps:/);
+  assert.match(publish, /^publish:\n {4}needs: \[validate, build\]\n/);
+  assert.match(publish, /permissions:\n {6}contents: write\n {4}steps:/);
+  assert.doesNotMatch(publish, /checkout|setup-node|action-setup|\bnode\b|\bpnpm\b|\bpython3?\b|\bnpm\b/);
+  assert.match(build, /uses: actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/);
+  assert.match(publish, /uses: actions\/download-artifact@[a-f0-9]{40}/);
+  for (const job of [build, publish]) {
+    assert.match(job, /^ {10}name: passgen-release$/m);
+    assert.match(job, /^ {10}path: release\/$/m);
+  }
+  assert.match(publish, /gh api "repos\/\$GITHUB_REPOSITORY\/git\/ref\/tags\/v\$RELEASE_VERSION"/);
+  assert.match(publish, /gh api "repos\/\$GITHUB_REPOSITORY\/git\/tags\/\$sha"/);
+  assert.match(publish, /test "\$type" = commit/);
+  assert.match(publish, /test "\$sha" = "\$RELEASE_COMMIT"/);
+  assert.match(publish, /gh release create .*--repo "\$GITHUB_REPOSITORY".*--verify-tag.*--notes-file/);
+  assert.equal((configuration.match(/contents: write/g) ?? []).length, 1);
+  assert.doesNotMatch(configuration, /cache:|actions\/cache@|secrets\.|write-all|read-all|test:e2e/);
+  for (const action of configuration.matchAll(/uses: (\S+)/g)) {
+    assert.match(action[1] ?? "", /@[a-f0-9]{40}$/);
+  }
+  assert.match(configuration, /pnpm install --frozen-lockfile --ignore-scripts/);
+  assert.match(configuration, /ref: \$\{\{ needs\.validate\.outputs\.commit \}\}/);
+  assert.match(configuration, /run: node scripts\/check-release\.ts/);
+  assert.match(configuration, /node scripts\/release-notes\.ts/);
+  assert.match(configuration, /gh release create .*--verify-tag.*--notes-file/);
+  assert.doesNotMatch(configuration, /--draft|--prerelease/);
+  for (const run of configuration.matchAll(/run:.*(?:\n {10}.*)*/g)) assert.doesNotMatch(run[0], /\$\{\{/);
+}
+
+const releaseWorkflow = read(".github/workflows/release.yml");
+function read(path: string) {
+  return readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+}
+
+test("release workflow pins actions, limits permissions and builds without cache", () => {
+  checkReleaseWorkflow(releaseWorkflow);
+});
+
+test("release workflow guard rejects broken pins, permissions, caching and input interpolation", () => {
+  for (const broken of [
+    releaseWorkflow.replace(/@[a-f0-9]{40}/, "@main"),
+    releaseWorkflow.replace("permissions: {}", "permissions: write-all"),
+    releaseWorkflow.replace("contents: read", "contents: write"),
+    releaseWorkflow.replace("node-version-file: .nvmrc", "node-version-file: .nvmrc\n          cache: pnpm"),
+    releaseWorkflow.replace("run: node scripts/check-release.ts", `run: echo \${{ github.ref_name }}`),
+  ])
+    assert.throws(() => checkReleaseWorkflow(broken));
+});
+
+test("release workflow guard rejects write permission in build, dependency code in publish and PR triggers", () => {
+  const brokenBuild = releaseWorkflow.replace(/( {2}build:[\s\S]*?contents:) read/, "$1 write");
+  const brokenPublish = releaseWorkflow.replace(
+    "      - name: Verify remote tag and publish release",
+    "      - run: pnpm install\n      - name: Verify remote tag and publish release",
+  );
+  const brokenTrigger = releaseWorkflow.replace("on:\n", "on:\n  pull_request:\n");
+  for (const broken of [brokenBuild, brokenPublish, brokenTrigger]) {
+    assert.notEqual(broken, releaseWorkflow);
+    assert.throws(() => checkReleaseWorkflow(broken));
+  }
+});
+
+function checkPushConcurrency(configuration: string, prefix: string) {
+  assert.equal(
+    configuration.match(/^ {2}group: (.+)$/m)?.[1],
+    `${prefix}-\${{ github.workflow }}-\${{ github.event_name == 'pull_request' && github.ref || github.sha }}`,
+    "Push runs must use their commit SHA; PR runs must share their ref's group",
+  );
+  assert.equal(
+    configuration.match(/^ {2}cancel-in-progress: (.+)$/m)?.[1],
+    `\${{ github.event_name == 'pull_request' }}`,
+  );
+}
+
+const concurrencyWorkflows = [
+  { name: "CI", prefix: "ci", configuration: workflow },
+  { name: "Attribution", prefix: "attribution", configuration: read(".github/workflows/attribution.yml") },
+];
+for (const { name, prefix, configuration } of concurrencyWorkflows) {
+  test(`${name} groups push runs by SHA and supersedes PR runs by ref`, () => {
+    checkPushConcurrency(configuration, prefix);
+  });
+}
+
+test("push concurrency guard rejects ref-wide grouping and unconditional cancellation", () => {
+  for (const { prefix, configuration } of concurrencyWorkflows) {
+    assert.throws(() =>
+      checkPushConcurrency(configuration.replace(/^( {2}group:).+$/m, `$1 ${prefix}-\${{ github.ref }}`), prefix),
+    );
+    assert.throws(() =>
+      checkPushConcurrency(configuration.replace(/^ {2}cancel-in-progress:.+$/m, "  cancel-in-progress: true"), prefix),
+    );
+  }
+});
