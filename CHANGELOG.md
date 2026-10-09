@@ -14,11 +14,12 @@ Versions follow Semantic Versioning.
   If your other settings require only symbols, this option is skipped with a
   note. Passwords remain equally likely within your settings, and the strength
   estimate includes the first-character rule.
-
 - Link to the source repository beside the Style control, and show the version
   and an "Apache-2.0" license link in the footer. Both URLs come from the
   configuration (`links.repoUrl`, `links.licenseUrl`), must be `https`, and
   can be left empty to hide a link.
+- Step-by-step deployment guides, and setup instructions you can hand to your
+  AI agent (`agent-setup/prompt.md`).
 
 ### Changed
 

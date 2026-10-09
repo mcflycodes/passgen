@@ -22,9 +22,8 @@ also shared with everything on that origin.
 
 ## Build from a reviewed tag
 
-Replace `<tag>` with a tag whose source you have reviewed and trust. The private
-repository requires access. Use that tag's pinned Node (`.nvmrc`) and pnpm
-(`package.json`) versions:
+Replace `<tag>` with a tag whose source you have reviewed and trust. The repository
+is public. Use that tag's pinned Node (`.nvmrc`) and pnpm (`package.json`) versions:
 
 ```sh
 git clone https://github.com/mcflycodes/passgen.git
@@ -53,22 +52,21 @@ HTTP to HTTPS.
 
 ## Deploy from a release
 
-Choose a reviewed tag and download all three assets from its GitHub Release into
-a working directory outside the web root. While the repository is private,
-authenticate `gh` with a GitHub account that has repository read access:
-
-```sh
-gh release download vX.Y.Z --repo mcflycodes/passgen \
-  --pattern 'passgen-X.Y.Z.zip' --pattern 'passgen-X.Y.Z.zip.sha256' \
-  --pattern SHA256SUMS
-```
-
-Once the repository is public, plain `curl` works instead:
+Choose a reviewed tag and download all three assets from its public GitHub Release
+into a working directory outside the web root. No GitHub login is required:
 
 ```sh
 curl --fail --location --remote-name https://github.com/mcflycodes/passgen/releases/download/vX.Y.Z/passgen-X.Y.Z.zip
 curl --fail --location --remote-name https://github.com/mcflycodes/passgen/releases/download/vX.Y.Z/passgen-X.Y.Z.zip.sha256
 curl --fail --location --remote-name https://github.com/mcflycodes/passgen/releases/download/vX.Y.Z/SHA256SUMS
+```
+
+Optional alternative with `gh`:
+
+```sh
+gh release download vX.Y.Z --repo mcflycodes/passgen \
+  --pattern 'passgen-X.Y.Z.zip' --pattern 'passgen-X.Y.Z.zip.sha256' \
+  --pattern SHA256SUMS
 ```
 
 Replace `X.Y.Z` throughout with the selected version. Verify the ZIP before

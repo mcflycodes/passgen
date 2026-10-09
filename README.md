@@ -13,38 +13,455 @@ has changed since.
 
 ## Deploy
 
-Download the release ZIP, `SHA256SUMS` and the ZIP checksum from
-[GitHub Releases](https://github.com/mcflycodes/passgen/releases). Verify the ZIP
-checksum, unpack into an empty staging directory, then check its files against
-`SHA256SUMS`. Promote those files into any static web root. Add the required
-security headers using the ready-made Apache, nginx or Caddy configurations in
-[`deploy/examples/`](deploy/examples/), then check the live site with
-`verify-live` and the trusted manifest.
+### A. Let your AI agent do it
 
-Follow the [step-by-step self-hosting guide](docs/self-hosting.md#deploy-from-a-release)
-for downloads, commands and host requirements. Maintainers can follow
-[the release procedure](docs/releasing.md).
+Copy this prompt into your AI agent:
 
-### Automated install
+> Fetch and follow the instructions at https://raw.githubusercontent.com/mcflycodes/passgen/main/agent-setup/prompt.md to set up PassGen for me.
 
-`scripts/install-release.sh` does the manual steps above on a Linux static web
-server in one command, with the same checks and an automatic rollback:
+It will ask about your server and show you the commands for approval before making
+changes. You can also paste [the instructions](agent-setup/prompt.md) if it cannot
+fetch the URL. To install it yourself, choose B or C below.
 
-```sh
-scripts/install-release.sh --version vX.Y.Z --docroot /path/to/web/root \
-    --url https://example.com/
-```
+### Before you start
 
-It downloads the three release assets with `gh` or `curl` (or takes them from
-`--from-dir`), verifies the ZIP against its checksum, refuses unsafe archive
-entries, unpacks into a staging directory outside the web root and checks every
-file against `SHA256SUMS` with an exact file set. It then backs up the current
-web root, switches to the new files with rsync, applies the file and directory
-modes, re-hashes the result and, with `--url`, fetches every file from the live
-site and checks the security header names. Any failure after the backup
-restores the previous web root and verifies the restore. `--dry-run` shows what
-would change. See [the installer reference](docs/install-release.md) for every
-option, the exit codes and the notes on ACLs, SELinux and caches.
+You need a static web server, a domain with HTTPS already working, and shell
+access with permission to write the site's files and configure the server.
+Use a hostname dedicated to PassGen: other pages on the same origin could read
+its generated passwords. See [why this matters](docs/self-hosting.md#before-you-start).
+For a managed static host without shell access, use the
+[static-host guide](docs/self-hosting.md#any-static-host).
+
+The commands below are for Linux. Replace `1.0.0`, `/srv/passgen` and
+`https://example.com/` with your release number, web root (the folder your server
+publishes), and URL. Keep downloads and source code outside that web root.
+The repository is public; `curl` downloads need no GitHub login.
+Stop if any command fails, except `diff` returning 1 to report expected differences.
+
+Use only the row for your server when a step says validate or reload. Config
+paths vary by OS; these are the paths in the shipped examples. Always validate
+successfully before reloading.
+
+| Server | Validate configuration | Graceful reload |
+|---|---|---|
+| Apache | `sudo apachectl configtest` | `sudo apachectl graceful` |
+| nginx | `sudo nginx -t` | `sudo nginx -s reload` |
+| Caddy | `sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile` | `sudo caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile` |
+
+### B. Automated install
+
+1. Set the release number. Pick it from
+   [GitHub Releases](https://github.com/mcflycodes/passgen/releases).
+
+   ```sh
+   VERSION=1.0.0
+   ```
+
+2. Download that release's source into a fresh folder outside the web root.
+
+   ```sh
+   git clone --depth 1 --branch "v$VERSION" https://github.com/mcflycodes/passgen.git "passgen-setup-$VERSION"
+   ```
+
+3. Open that folder.
+
+   ```sh
+   cd "passgen-setup-$VERSION"
+   ```
+
+4. Configure your dedicated site using the ready-made
+   [Apache, nginx or Caddy config and header file](deploy/examples/README.md).
+   Follow your server's [setup steps](docs/self-hosting.md#server-setup): back up
+   any config you change, replace the hostname, web root and certificate paths,
+   and keep the header values exactly as shipped. The installer only handles files.
+
+5. Validate the server configuration using your row in the table above.
+
+6. Gracefully reload the server using your row in the table above.
+
+7. Install the release. This verifies the ZIP and every payload file, backs up
+   the current web root, and replaces its contents. Default permissions let the
+   server read the files; with `sudo`, new files belong to root.
+
+   ```sh
+   sudo scripts/install-release.sh --version "v$VERSION" --docroot /srv/passgen
+   ```
+
+   **Optional variant:** Instead of the command above, check the live files and
+   header names during the install. A mismatch triggers an attempted rollback.
+   Configure headers and clear stale CDN caches first; this does not check exact
+   header values.
+
+   ```sh
+   sudo scripts/install-release.sh --version "v$VERSION" --docroot /srv/passgen --url https://example.com/
+   ```
+
+   Save the printed backup path. See [requirements and ownership options](docs/install-release.md#requirements)
+   for missing tools or different permissions, and
+   [administrator notes](docs/install-release.md#notes-for-administrators) for SELinux labeling.
+   The installer downloads anonymously with `curl` unless authenticated `gh` is available.
+
+8. **Optional:** Download the manifest for the fuller live check.
+
+   ```sh
+   curl --fail --location --remote-name "https://github.com/mcflycodes/passgen/releases/download/v$VERSION/SHA256SUMS"
+   ```
+
+   **Optional alternative:** Use `gh release download "v$VERSION" --repo mcflycodes/passgen --pattern SHA256SUMS` instead.
+
+9. **Optional:** Run the live check. Node **22.18 or newer** is needed; prefer the
+   release's pinned version in `.nvmrc`. No dependency installation is needed.
+
+   ```sh
+   node scripts/verify-live.ts --url https://example.com/ --manifest SHA256SUMS --release-dir /srv/passgen
+   ```
+
+### C. Manual install
+
+1. Set the release number.
+
+   ```sh
+   VERSION=1.0.0
+   ```
+
+2. Download that release's source into a fresh folder outside the web root.
+
+   ```sh
+   git clone --depth 1 --branch "v$VERSION" https://github.com/mcflycodes/passgen.git "passgen-setup-$VERSION"
+   ```
+
+3. Open that folder.
+
+   ```sh
+   cd "passgen-setup-$VERSION"
+   ```
+
+4. Download the release ZIP. It contains the finished site; no build is needed.
+
+   ```sh
+   curl --fail --location --remote-name "https://github.com/mcflycodes/passgen/releases/download/v$VERSION/passgen-$VERSION.zip"
+   ```
+
+   **Optional alternative to steps 4–6:** Download all three assets with `gh`:
+
+   ```sh
+   gh release download "v$VERSION" --repo mcflycodes/passgen \
+     --pattern "passgen-$VERSION.zip" --pattern "passgen-$VERSION.zip.sha256" --pattern SHA256SUMS
+   ```
+
+5. Download the ZIP checksum.
+
+   ```sh
+   curl --fail --location --remote-name "https://github.com/mcflycodes/passgen/releases/download/v$VERSION/passgen-$VERSION.zip.sha256"
+   ```
+
+6. Download the file manifest. Keep it outside the public root for later checks.
+
+   ```sh
+   curl --fail --location --remote-name "https://github.com/mcflycodes/passgen/releases/download/v$VERSION/SHA256SUMS"
+   ```
+
+7. **Optional, recommended:** Verify the ZIP checksum. Continue only if it says `OK`.
+
+   ```sh
+   sha256sum -c "passgen-$VERSION.zip.sha256"
+   ```
+
+8. Unzip into a fresh staging folder outside the public root, on the web root's
+   filesystem. This keeps incomplete files away from visitors.
+
+   ```sh
+   sudo unzip "passgen-$VERSION.zip" -d "/srv/passgen-staging-$VERSION"
+   ```
+
+9. **Optional, recommended:** Verify the staged files before publishing.
+
+   ```sh
+   (cd "/srv/passgen-staging-$VERSION" && sha256sum -c -) < SHA256SUMS
+   ```
+
+10. Give the server read access; only the owner can write.
+
+    ```sh
+    sudo chmod -R u=rwX,go=rX "/srv/passgen-staging-$VERSION"
+    ```
+
+11. Move staging into place. `/srv/passgen` must not exist; use the update steps
+    below if a release is already installed. `-T` prevents nesting in an existing folder.
+
+    ```sh
+    sudo mv -T "/srv/passgen-staging-$VERSION" /srv/passgen
+    ```
+
+12. **If SELinux is enforcing:** Set up the correct labels before serving.
+    On RHEL/AlmaLinux, a new directory under `/srv` defaults to a label unsuitable
+    for web content, so httpd returns 403; moving files also preserves old labels.
+    See [Notes for administrators](docs/install-release.md#notes-for-administrators)
+    and [Red Hat's labeling procedure](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/7/html/selinux_users_and_administrators_guide/sect-security-enhanced_linux-working_with_selinux-selinux_contexts_labeling_files).
+    For this web root, add the persistent rule once (if absent):
+
+    ```sh
+    sudo semanage fcontext -a -t httpd_sys_content_t '/srv/passgen(/.*)?'
+    ```
+
+13. **If SELinux is enforcing:** Apply that rule. Repeat this after each install,
+    manual update or rollback; do not disable SELinux.
+
+    ```sh
+    sudo restorecon -R /srv/passgen
+    ```
+
+14. Add the ready-made [Apache, nginx or Caddy config and header file](deploy/examples/README.md)
+    using your server's [setup steps](docs/self-hosting.md#server-setup).
+    Back up any config you change, replace the hostname, web root and certificate
+    paths, and keep every security header, including the CSP, exactly as shipped.
+
+15. Validate configuration using your server's row in the table above.
+
+16. Gracefully reload using your server's row in the table above.
+
+17. **Optional:** Run the live check from this source folder. Node **22.18 or newer**
+    is needed; prefer the release's pinned `.nvmrc` version. No dependencies are needed.
+
+    ```sh
+    node scripts/verify-live.ts --url https://example.com/ --manifest SHA256SUMS --release-dir /srv/passgen
+    ```
+
+**Optional:** If a CDN sits in front of your server, restrict direct access to the
+origin using the [CDN-only setup](docs/self-hosting.md#optional-raw-peer-restrictions).
+Review [CDN settings](docs/self-hosting.md#cdn-and-proxy-settings) to prevent script
+injection or file rewriting, and check the public URL after any cache purge.
+
+### Updating to a new release
+
+Start in the old `passgen-setup-<version>` source folder. Keep it and its
+`SHA256SUMS` for rollback. Replace `X.Y.Z` with the new release number. Backup and
+staging paths must be outside every public root and must not already exist.
+
+1. Record the installed version.
+
+   ```sh
+   PREVIOUS=1.0.0
+   ```
+
+2. **If you skipped the earlier manifest download:** Save the previous release's
+   manifest here before leaving its source folder.
+
+   ```sh
+   curl --fail --location --remote-name "https://github.com/mcflycodes/passgen/releases/download/v$PREVIOUS/SHA256SUMS"
+   ```
+
+3. Set the new release number.
+
+   ```sh
+   VERSION=X.Y.Z
+   ```
+
+4. Go to the source folder's parent.
+
+   ```sh
+   cd ..
+   ```
+
+5. Clone the new tag into its own fresh folder.
+
+   ```sh
+   git clone --depth 1 --branch "v$VERSION" https://github.com/mcflycodes/passgen.git "passgen-setup-$VERSION"
+   ```
+
+6. Compare the shipped configs and headers. `diff` exit code 1 means they changed;
+   review and apply those changes to your backed-up site config before reloading.
+
+   ```sh
+   diff -ru "passgen-setup-$PREVIOUS/deploy/examples" "passgen-setup-$VERSION/deploy/examples"
+   ```
+
+7. Open the new source folder. All following scripts and examples come from this tag.
+
+   ```sh
+   cd "passgen-setup-$VERSION"
+   ```
+
+8. Download the new ZIP.
+
+   ```sh
+   curl --fail --location --remote-name "https://github.com/mcflycodes/passgen/releases/download/v$VERSION/passgen-$VERSION.zip"
+   ```
+
+9. Download its ZIP checksum.
+
+   ```sh
+   curl --fail --location --remote-name "https://github.com/mcflycodes/passgen/releases/download/v$VERSION/passgen-$VERSION.zip.sha256"
+   ```
+
+10. Download its new manifest. Never check the new release against the old manifest.
+
+    ```sh
+    curl --fail --location --remote-name "https://github.com/mcflycodes/passgen/releases/download/v$VERSION/SHA256SUMS"
+    ```
+
+11. Back up the PassGen server config you will change. Replace these two paths
+    with your actual config and a new backup filename; repeat for each changed file.
+
+    ```sh
+    sudo cp -a /path/to/passgen-site.conf /path/to/passgen-site.conf.previous
+    ```
+
+12. Apply any config/header changes found in step 6 using this release's
+    `deploy/examples/` and your existing hostname, paths and certificates.
+
+13. **Automated:** Run the new tag's installer. It verifies the downloaded assets,
+    backs up the old web root again, and keeps the newest three backups.
+    Skip steps 14–20, then continue with SELinux labeling, validation and reload.
+
+    ```sh
+    sudo scripts/install-release.sh --version "v$VERSION" --docroot /srv/passgen --from-dir "$PWD"
+    ```
+
+14. **Manual:** Verify the ZIP checksum before extracting. Continue only on `OK`.
+
+    ```sh
+    sha256sum -c "passgen-$VERSION.zip.sha256"
+    ```
+
+15. **Manual:** Unzip the new release into fresh staging.
+
+    ```sh
+    sudo unzip "passgen-$VERSION.zip" -d "/srv/passgen-staging-$VERSION"
+    ```
+
+16. **Manual:** Verify staged files before switching.
+
+    ```sh
+    (cd "/srv/passgen-staging-$VERSION" && sha256sum -c -) < SHA256SUMS
+    ```
+
+17. **Manual:** Give the server read access to staging.
+
+    ```sh
+    sudo chmod -R u=rwX,go=rX "/srv/passgen-staging-$VERSION"
+    ```
+
+18. **Manual:** Set root ownership, so the server cannot write the new files.
+
+    ```sh
+    sudo chown -R root:root "/srv/passgen-staging-$VERSION"
+    ```
+
+19. **Manual:** Move the old web root to its backup. Visitors may see a brief
+    interruption until the next step finishes.
+
+    ```sh
+    sudo mv -T /srv/passgen "/srv/passgen-backup-$PREVIOUS"
+    ```
+
+20. **Manual:** Move the verified staging folder into place.
+
+    ```sh
+    sudo mv -T "/srv/passgen-staging-$VERSION" /srv/passgen
+    ```
+
+21. **If SELinux is enforcing:** Reapply your existing web-content label rule.
+    Automated-path (B) users: follow C12 first if you have not yet added the
+    `semanage fcontext` rule.
+
+    ```sh
+    sudo restorecon -R /srv/passgen
+    ```
+
+22. Validate configuration using your server's row in the table above.
+
+23. Gracefully reload using your server's row in the table above.
+
+24. Check the new site using the new source folder and new manifest (Node 22.18+).
+
+    ```sh
+    node scripts/verify-live.ts --url https://example.com/ --manifest SHA256SUMS --release-dir /srv/passgen
+    ```
+
+### Rolling back
+
+For a failed automated install, read its output: it attempts to restore and
+verify its backup. If rollback was refused or unverified, stop and follow the
+[exit-code guidance](docs/install-release.md#exit-codes). Do not copy from a
+changed backup or through a replaced root.
+
+To undo a successful update, start in the new source folder and use the previous
+release number saved during updating. For the web-root directory moves/copies,
+use destination paths that do not already exist.
+
+1. Set the previous release number you want to restore.
+
+   ```sh
+   PREVIOUS=1.0.0
+   ```
+
+2. Set the release number being replaced (substitute its actual number).
+
+   ```sh
+   VERSION=X.Y.Z
+   ```
+
+3. **Automated:** Reinstall the previous tag. This re-verifies that release and
+   backs up the current web root again; it does not restore server config.
+   Skip steps 4–5, then continue with config restoration.
+
+   ```sh
+   sudo scripts/install-release.sh --version "v$PREVIOUS" --docroot /srv/passgen
+   ```
+
+4. **Manual (or automated backup fallback):** Move the current release aside.
+
+   ```sh
+   sudo mv -T /srv/passgen "/srv/passgen-failed-$VERSION"
+   ```
+
+5. **Manual:** Move the saved web root back into place.
+
+   ```sh
+   sudo mv -T "/srv/passgen-backup-$PREVIOUS" /srv/passgen
+   ```
+
+   **Automated fallback:** Instead of the command above, copy from the backup
+   printed by the update install (Updating step 13). Replace the placeholder with
+   that backup's exact `docroot/` path.
+   This fallback is for an intact backup and unchanged root, not a refused rollback.
+
+   ```sh
+   sudo cp -a /path/to/installer-backup/docroot /srv/passgen
+   ```
+
+6. Restore each server config/header file changed during the update from its
+   saved copy. Replace the paths with the pair used when you backed it up.
+
+   ```sh
+   sudo cp -a /path/to/passgen-site.conf.previous /path/to/passgen-site.conf
+   ```
+
+7. **If SELinux is enforcing:** Reapply the existing label rule.
+
+   ```sh
+   sudo restorecon -R /srv/passgen
+   ```
+
+8. Validate configuration using your server's row in the table above.
+
+9. Gracefully reload using your server's row in the table above.
+
+10. Return to the previous release's source folder.
+
+    ```sh
+    cd "../passgen-setup-$PREVIOUS"
+    ```
+
+11. Verify with its saved manifest (Node 22.18+).
+
+    ```sh
+    node scripts/verify-live.ts --url https://example.com/ --manifest SHA256SUMS --release-dir /srv/passgen
+    ```
+
+See [self-hosting](docs/self-hosting.md), the [installer reference](docs/install-release.md)
+and [verification](docs/verify.md) for details.
 
 ## Requirements
 
