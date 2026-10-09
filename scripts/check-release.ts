@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { appendFile, readFile } from "node:fs/promises";
 import { scanText } from "./lib/attribution-scan.ts";
-import { type CIRun, releaseVersion, requireSuccessfulCI } from "./lib/release.ts";
+import { type CIRun, releaseVersion, requireCIResult, requireSuccessfulCI } from "./lib/release.ts";
 
 const run = (command: string, args: string[]) => execFileSync(command, args, { encoding: "utf8" });
 const tag = process.env.GITHUB_REF_NAME ?? "";
@@ -23,9 +23,14 @@ const pages = JSON.parse(
     `repos/${repository}/actions/workflows/ci.yml/runs?head_sha=${commit}&branch=main&event=push&per_page=100`,
   ]),
 ) as { workflow_runs: CIRun[] }[];
-requireSuccessfulCI(
+const successful = requireSuccessfulCI(
   pages.flatMap((page) => page.workflow_runs),
   commit,
 );
+if (!Number.isSafeInteger(successful.id) || successful.id <= 0) throw new Error("Invalid CI run ID");
+const jobPages = JSON.parse(
+  run("gh", ["api", "--paginate", "--slurp", `repos/${repository}/actions/runs/${successful.id}/jobs?per_page=100`]),
+) as { jobs: { name: string; status: string; conclusion: string | null }[] }[];
+requireCIResult(jobPages.flatMap((page) => page.jobs));
 if (!process.env.GITHUB_OUTPUT) throw new Error("Missing GITHUB_OUTPUT");
 await appendFile(process.env.GITHUB_OUTPUT, `version=${version}\ncommit=${commit}\n`);

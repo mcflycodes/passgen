@@ -7,7 +7,13 @@ import { join, resolve } from "node:path";
 import { test } from "node:test";
 import { EXAMPLE_TOOLS } from "../../scripts/lib/attribution-patterns.ts";
 import { scanText } from "../../scripts/lib/attribution-scan.ts";
-import { type CIRun, releaseNotes, releaseVersion, requireSuccessfulCI } from "../../scripts/lib/release.ts";
+import {
+  type CIRun,
+  releaseNotes,
+  releaseVersion,
+  requireCIResult,
+  requireSuccessfulCI,
+} from "../../scripts/lib/release.ts";
 
 const root = resolve(import.meta.dirname, "../..");
 
@@ -23,6 +29,7 @@ test("release tag must be stable and match the package version", () => {
 
 test("release requires completed successful push CI on the exact main commit", () => {
   const valid: CIRun = {
+    id: 123,
     head_sha: "abc",
     head_branch: "main",
     event: "push",
@@ -125,10 +132,11 @@ test("release validation command rejects ancestry and API failures before produc
     );
     await writeFile(
       join(scratch, "bin/gh"),
-      '#!/bin/sh\n[ "$API_STATUS" = 0 ] || exit "$API_STATUS"\nprintf "%s" "$API_RESPONSE"\n',
+      '#!/bin/sh\n[ "$API_STATUS" = 0 ] || exit "$API_STATUS"\ncase "$*" in *"/jobs?"*) printf "%s" "$JOBS_RESPONSE" ;; *) printf "%s" "$API_RESPONSE" ;; esac\n',
       { mode: 0o755 },
     );
     const valid: CIRun = {
+      id: 123,
       head_sha: "abc",
       head_branch: "main",
       event: "push",
@@ -145,6 +153,7 @@ test("release validation command rejects ancestry and API failures before produc
       TAG_MESSAGE: "Release 1.0.0",
       ANCESTRY_STATUS: "0",
       API_STATUS: "0",
+      JOBS_RESPONSE: JSON.stringify([{ jobs: [{ name: "CI result", status: "completed", conclusion: "success" }] }]),
       API_RESPONSE: JSON.stringify([{ workflow_runs: [] }, { workflow_runs: [valid] }]),
     };
     const command = (changes: Record<string, string> = {}) =>
@@ -157,6 +166,7 @@ test("release validation command rejects ancestry and API failures before produc
       { ANCESTRY_STATUS: "1" },
       { API_STATUS: "1" },
       { API_RESPONSE: "[]" },
+      { JOBS_RESPONSE: JSON.stringify([{ jobs: [] }]) },
       { TAG_TYPE: "tag", TAG_MESSAGE: `Built with ${EXAMPLE_TOOLS[0]}` },
       { GITHUB_REF_NAME: "v2.0.0" },
       { GITHUB_REF_NAME: "v1.0.0-beta" },
@@ -261,4 +271,19 @@ esac
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }
+});
+
+test("release requires exactly one completed successful CI result", () => {
+  const job = { name: "CI result", status: "completed", conclusion: "success" };
+  requireCIResult([job]);
+  for (const jobs of [
+    [],
+    [job, job],
+    [{ ...job, name: "Other" }],
+    [{ ...job, status: "in_progress" }],
+    [{ ...job, conclusion: "skipped" }],
+    [{ ...job, conclusion: "failure" }],
+    [{ ...job, conclusion: "cancelled" }],
+  ])
+    assert.throws(() => requireCIResult(jobs));
 });

@@ -551,8 +551,9 @@ Other commands:
 
 ## Gates
 
-`pnpm check` runs these in order and stops at the first failure. CI runs the same
-gates on every pull request.
+`pnpm check` runs these in order and stops at the first failure. PR and main CI
+retain the static, build, supply-chain and attribution gates, with browser
+coverage described below.
 
 | Gate | Command |
 |---|---|
@@ -575,7 +576,12 @@ gates on every pull request.
 
 The end-to-end tests run on Chromium, Firefox and WebKit, plus mobile emulation.
 On a machine that cannot launch every engine, narrow a local run explicitly, e.g.
-`PASSGEN_E2E_PROJECTS=chromium,mobile-chrome pnpm check`. CI always runs all of them.
+`PASSGEN_E2E_PROJECTS=chromium,mobile-chrome pnpm check`. PR and main CI run
+functional tests in the three desktop engines, the accessibility matrix in
+Chromium and one matrix smoke case in each other engine. Known documentation-only
+changes skip the browser and real-server jobs. The full five-project suite and
+accessibility matrix run nightly and before releases on the tagged commit.
+See [browser coverage](CONTRIBUTING.md#browser-coverage) for details.
 
 ## Configuration
 

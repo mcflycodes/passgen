@@ -23,18 +23,28 @@ export const PROJECTS = [
   { name: "mobile-safari", use: { ...devices["iPhone 15"] } },
 ];
 
-// CI runs every project across its matrix; tests/unit/ci-e2e.test.ts guards coverage.
+// Fast CI selects desktop projects; nightly and release CI run the full suite.
+// tests/unit/ci-e2e.test.ts guards both coverage contracts.
+const mode = process.env.PASSGEN_E2E_MODE;
+if (mode !== undefined && mode !== "pr") throw new Error(`Unknown Playwright mode: ${mode}`);
+export const PR_PROJECTS = PROJECTS.slice(0, 3).map((project) => ({
+  ...project,
+  ...(project.name === "chromium" ? {} : { grepInvert: /(?=.*@a11y-matrix)(?!.*@a11y-smoke)/ }),
+}));
 // PASSGEN_E2E_PROJECTS selects a matrix leg or narrows a local run on a machine
 // that cannot launch every engine. Unknown projects fail instead of silently skipping.
 function selectedProjects() {
   const wanted = process.env.PASSGEN_E2E_PROJECTS;
-  if (wanted === undefined || wanted === "") return PROJECTS;
+  const projects = mode === "pr" ? PR_PROJECTS : PROJECTS;
+  if (wanted === undefined || wanted === "") return projects;
   const names = wanted.split(",").map((n) => n.trim());
-  const unknown = names.filter((n) => !PROJECTS.some((p) => p.name === n));
+  const unknown = names.filter((n) => !projects.some((p) => p.name === n));
   if (unknown.length > 0) throw new Error(`Unknown Playwright project(s): ${unknown.join(", ")}`);
   if (!process.env.CI && process.env.TEST_WORKER_INDEX === undefined)
-    console.warn(`PASSGEN_E2E_PROJECTS: running only ${names.join(", ")}; CI runs all ${PROJECTS.length} projects.`);
-  return PROJECTS.filter((p) => names.includes(p.name));
+    console.warn(
+      `PASSGEN_E2E_PROJECTS: running only ${names.join(", ")}; full CI runs all ${PROJECTS.length} projects.`,
+    );
+  return projects.filter((p) => names.includes(p.name));
 }
 
 export default defineConfig({

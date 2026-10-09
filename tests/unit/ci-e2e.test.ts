@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { PROJECTS } from "../../playwright.config.ts";
+import { runInNewContext } from "node:vm";
+import { PR_PROJECTS, PROJECTS } from "../../playwright.config.ts";
 
 const workflow = readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
-const job = workflow.match(/^ {2}e2e:\n[\s\S]*?(?=^ {2}[\w-]+:|$(?![\s\S]))/m)?.[0];
+const fullWorkflow = readFileSync(new URL("../../.github/workflows/full-suite.yml", import.meta.url), "utf8");
+const job = fullWorkflow.match(/^ {2}e2e:\n[\s\S]*?(?=^ {2}[\w-]+:|$(?![\s\S]))/m)?.[0];
 assert.ok(job, "CI must have an e2e job");
 type MatrixEntry = { project: string; shard: number };
 
@@ -124,7 +126,7 @@ test("CI e2e guard rejects sharding the accessibility matrix together with the r
 
 test("the accessibility matrix carries the tag CI shards it by", () => {
   const spec = readFileSync(new URL("../../tests/e2e/accessibility.spec.ts", import.meta.url), "utf8");
-  assert.match(spec, new RegExp(`^ *test\\(\`accessibility .*\`, \\{ tag: "${A11Y_TAG}" \\}, async`, "m"));
+  assert.match(spec, /test\([\s\S]*?`accessibility [\s\S]*?@a11y-matrix.*@a11y-smoke/);
 });
 
 test("CI e2e guard rejects artifact names shared by all shards", () => {
@@ -173,13 +175,18 @@ function checkReleaseWorkflow(configuration: string) {
   assert.match(configuration, /^permissions: \{\}$/m);
   const jobs = (configuration.split("jobs:\n")[1] ?? "").split(/^ {2}(?=[\w-]+:\n)/m).slice(1);
   assert.equal(configuration.match(/^on:\n([\s\S]*?)(?=^\S)/m)?.[1], "  push:\n    tags: ['v*.*.*']\n\n");
-  assert.equal(jobs.length, 3);
-  const [validate = "", build = "", publish = ""] = jobs;
+  assert.equal(jobs.length, 4);
+  const [validate = "", full = "", build = "", publish = ""] = jobs;
+  assert.match(full, /^full-suite:\n {4}needs: validate\n/);
+  assert.match(full, /uses: \.\/\.github\/workflows\/full-suite\.yml/);
+  assert.match(full, /commit: \$\{\{ needs\.validate\.outputs\.commit \}\}/);
+  assert.match(full, /permissions:\n {6}contents: read/);
+  assert.doesNotMatch(full, /secrets:|if:/);
   assert.match(validate, /^validate:\n/);
   assert.match(validate, /permissions:\n {6}contents: read\n {6}actions: read\n {4}outputs:/);
-  assert.match(build, /^build:\n {4}needs: validate\n/);
+  assert.match(build, /^build:\n {4}needs: \[validate, full-suite\]\n/);
   assert.match(build, /permissions:\n {6}contents: read\n {4}steps:/);
-  assert.match(publish, /^publish:\n {4}needs: \[validate, build\]\n/);
+  assert.match(publish, /^publish:\n {4}needs: \[validate, full-suite, build\]\n/);
   assert.match(publish, /permissions:\n {6}contents: write\n {4}steps:/);
   assert.doesNotMatch(publish, /checkout|setup-node|action-setup|\bnode\b|\bpnpm\b|\bpython3?\b|\bnpm\b/);
   assert.match(build, /uses: actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/);
@@ -196,6 +203,7 @@ function checkReleaseWorkflow(configuration: string) {
   assert.equal((configuration.match(/contents: write/g) ?? []).length, 1);
   assert.doesNotMatch(configuration, /cache:|actions\/cache@|secrets\.|write-all|read-all|test:e2e/);
   for (const action of configuration.matchAll(/uses: (\S+)/g)) {
+    if (action[1] === "./.github/workflows/full-suite.yml") continue;
     assert.match(action[1] ?? "", /@[a-f0-9]{40}$/);
   }
   assert.match(configuration, /pnpm install --frozen-lockfile --ignore-scripts/);
@@ -347,4 +355,152 @@ test("server config guard rejects expressions in single-line and multiline run c
     assert.notEqual(broken, workflow);
     assert.throws(() => checkServerWorkflow(broken));
   }
+});
+
+function jobBlock(configuration: string, name: string): string {
+  const block = configuration.match(new RegExp(`^ {2}${name}:\\n[\\s\\S]*?(?=^ {2}[\\w-]+:|$(?![\\s\\S]))`, "m"))?.[0];
+  assert.ok(block, `Missing job ${name}`);
+  return block;
+}
+
+function checkFast(configuration: string) {
+  const browser = jobBlock(configuration, "e2e");
+  assert.deepEqual(JSON.parse(browser.match(/^ {8}include: (\[.*\])$/m)?.[1] ?? "[]"), [
+    { project: "chromium", shard: 1, label: "chromium 1/2" },
+    { project: "chromium", shard: 2, label: "chromium 2/2" },
+    { project: "firefox", shard: 0, label: "firefox" },
+    { project: "webkit", shard: 0, label: "webkit" },
+  ]);
+  assert.doesNotMatch(browser, /mobile-chrome|mobile-safari/);
+  assert.match(browser, /^ {10}PASSGEN_E2E_MODE: pr$/m);
+  assert.match(browser, /^ {10}PASSGEN_E2E_PROJECTS: \$\{\{ matrix.project \}\}$/m);
+  assert.match(browser, /^ {10}PLAYWRIGHT_SHARD: \$\{\{ matrix.shard \}\}$/m);
+  assert.match(browser, /if \[ "\$PLAYWRIGHT_SHARD" = 0 \]; then\n {12}pnpm test:e2e\n {10}else/);
+  for (const command of E2E_COMMANDS) assert.ok(browser.includes(command.replace("/3", "/2")));
+  assert.match(browser, /name: playwright-report-pr-\$\{\{ matrix.project \}\}-\$\{\{ matrix.shard \}\}/);
+  assert.match(browser, /^ {8}if: matrix.project == 'chromium' && matrix.shard == 1$/m);
+  assert.equal((configuration.match(/run: pnpm test:gate/g) ?? []).length, 1);
+  checkContainer(browser, playwrightVersion);
+  assert.match(browser, /^ {6}options: --init --ipc=host --user 1001$/m);
+  assert.doesNotMatch(configuration, /secrets\.|pull_request_target|contents: write/);
+  for (const name of ["e2e", "server-configs"]) {
+    const block = jobBlock(configuration, name);
+    assert.match(block, /^ {4}needs: changes$/m);
+    assert.match(block, /^ {4}if: needs.changes.outputs.code == 'true'$/m);
+  }
+  for (const name of ["static", "build", "supply-chain"]) {
+    assert.doesNotMatch(jobBlock(configuration, name), /^ {4}(?:if|needs):/m);
+  }
+  const changes = jobBlock(configuration, "changes");
+  assert.match(changes, /fetch-depth: 0/);
+  assert.match(changes, /run: node scripts\/ci-changes.ts/);
+  assert.match(changes, /CHANGE_BASE: \$\{\{ github.event.pull_request.base.sha \|\| github.event.before \}\}/);
+  const summary = jobBlock(configuration, "result");
+  assert.match(summary, /^ {4}name: CI result$/m);
+  assert.match(summary, /^ {4}if: always\(\)$/m);
+  const needs: string[] = summary.match(/^ {4}needs: \[(.*)\]$/m)?.[1]?.split(", ") ?? [];
+  const jobNames = [...(configuration.split("jobs:\n")[1] ?? "").matchAll(/^ {2}([\w-]+):$/gm)]
+    .map((match) => match[1])
+    .filter((name) => name !== "result");
+  assert.deepEqual(needs.sort(), jobNames.sort(), "Summary must need every other job");
+}
+
+function runSummary(configuration: string, code: string, overrides: Record<string, string> = {}) {
+  const summary = jobBlock(configuration, "result");
+  const script = summary.split("node <<'JS'\n")[1]?.split("          JS")[0];
+  assert.ok(script);
+  const names = ["changes", "static", "build", "e2e", "supply-chain", "server-configs"];
+  const results = Object.fromEntries(
+    names.map((name) => [
+      name,
+      {
+        result:
+          overrides[name] ?? (code === "false" && ["e2e", "server-configs"].includes(name) ? "skipped" : "success"),
+        outputs: name === "changes" ? { code } : {},
+      },
+    ]),
+  );
+  const resultProcess = {
+    env: { RESULTS: JSON.stringify(results) },
+    exitCode: 0,
+    exit: (code: number) => {
+      throw new Error(`Summary exited ${code}`);
+    },
+  };
+  runInNewContext(script, { process: resultProcess, console: { error: () => {} } });
+  assert.equal(resultProcess.exitCode, 0, "Summary must reject this result");
+}
+
+test("fast CI covers desktop engines and always runs static, build and supply chain", () => {
+  checkFast(workflow);
+  assert.deepEqual(
+    PR_PROJECTS.map((project) => project.name),
+    ["chromium", "firefox", "webkit"],
+  );
+  const spec = read("tests/e2e/accessibility.spec.ts");
+  assert.match(spec, /style === STYLES\[0\] && theme === "system" && scheme === "light" && intro/);
+  for (const project of PR_PROJECTS) {
+    if (project.name === "chromium") assert.equal(project.grepInvert, undefined);
+    else {
+      assert.equal(project.grepInvert?.test("functional"), false);
+      assert.equal(project.grepInvert?.test("accessibility @a11y-matrix"), true);
+      assert.equal(project.grepInvert?.test("accessibility @a11y-matrix @a11y-smoke"), false);
+    }
+  }
+  assert.doesNotMatch(read(".github/workflows/attribution.yml"), /^ {4}if:|paths-ignore:|paths:/m);
+});
+
+test("fast CI guards reject mobile projects, missing needs, skipped mandatory jobs and missing split", () => {
+  for (const broken of [
+    workflow.replace('"project":"webkit"', '"project":"mobile-safari"'),
+    workflow.replace('"shard":2', '"shard":1'),
+    workflow.replace("$PLAYWRIGHT_SHARD/2", "1/2"),
+    workflow.replace(" && matrix.shard == 1", ""),
+    workflow.replace(
+      "[changes, static, build, e2e, supply-chain, server-configs]",
+      "[changes, static, build, e2e, supply-chain]",
+    ),
+    workflow.replace("  static:\n", "  static:\n    if: needs.changes.outputs.code == 'true'\n"),
+    workflow.replace("PASSGEN_E2E_MODE: pr", "PASSGEN_E2E_MODE: full"),
+    workflow.replace("matrix.project == 'chromium'", "always()"),
+  ]) {
+    assert.notEqual(broken, workflow);
+    assert.throws(() => checkFast(broken));
+  }
+});
+
+test("summary permits only planned skips and rejects every failed or cancelled job", () => {
+  runSummary(workflow, "true");
+  runSummary(workflow, "false");
+  assert.throws(() => runSummary(workflow, ""));
+  for (const code of ["true", "false"]) {
+    for (const name of ["changes", "static", "build", "e2e", "supply-chain", "server-configs"]) {
+      for (const result of ["failure", "cancelled"])
+        assert.throws(() => runSummary(workflow, code, { [name]: result }));
+      if (code === "true" || !["e2e", "server-configs"].includes(name))
+        assert.throws(() => runSummary(workflow, code, { [name]: "skipped" }));
+    }
+  }
+  const broken = workflow.replace("process.exitCode = 1;", "process.exitCode = 0;");
+  assert.throws(() => assert.throws(() => runSummary(broken, "true", { static: "failure" })));
+});
+
+test("full suite runs nightly, manually and on the validated release commit", () => {
+  assert.match(fullWorkflow, /schedule:\n {4}- cron: '/);
+  assert.match(fullWorkflow, /^ {2}workflow_dispatch:$/m);
+  assert.match(fullWorkflow, /^ {2}workflow_call:$/m);
+  assert.match(fullWorkflow, /commit:[\s\S]*?required: true\n {8}type: string/);
+  assert.match(job, /ref: \$\{\{ inputs.commit \|\| github.sha \}\}/);
+  assert.match(fullWorkflow, /^permissions:\n {2}contents: read$/m);
+  assert.doesNotMatch(fullWorkflow, /PASSGEN_E2E_MODE|secrets\.|pull_request/);
+});
+
+test("release guard rejects bypassing the full suite or testing a different commit", () => {
+  for (const broken of [
+    releaseWorkflow.replace("needs: [validate, full-suite]", "needs: validate"),
+    releaseWorkflow.replace("needs: [validate, full-suite, build]", "needs: [validate, build]"),
+    releaseWorkflow.replace(`commit: \${{ needs.validate.outputs.commit }}`, "commit: main"),
+    releaseWorkflow.replace("  full-suite:\n", "  full-suite:\n    if: always()\n"),
+  ])
+    assert.throws(() => checkReleaseWorkflow(broken));
 });

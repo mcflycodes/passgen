@@ -18,6 +18,7 @@ export function releaseNotes(changelog: string, version: string): string {
 }
 
 export interface CIRun {
+  id: number;
   head_sha: string;
   head_branch: string;
   event: string;
@@ -25,17 +26,21 @@ export interface CIRun {
   conclusion: string | null;
 }
 
-export function requireSuccessfulCI(runs: CIRun[], commit: string): void {
-  if (
-    !runs.some(
-      (run) =>
-        run.head_sha === commit &&
-        run.head_branch === "main" &&
-        run.event === "push" &&
-        run.status === "completed" &&
-        run.conclusion === "success",
-    )
-  ) {
-    throw new Error("No successful main CI workflow on the tagged commit");
-  }
+export function requireSuccessfulCI(runs: CIRun[], commit: string): CIRun {
+  const successful = runs.find(
+    (run) =>
+      run.head_sha === commit &&
+      run.head_branch === "main" &&
+      run.event === "push" &&
+      run.status === "completed" &&
+      run.conclusion === "success",
+  );
+  if (!successful) throw new Error("No successful main CI workflow on the tagged commit");
+  return successful;
+}
+
+export function requireCIResult(jobs: { name: string; status: string; conclusion: string | null }[]): void {
+  const results = jobs.filter((job) => job.name === "CI result");
+  if (results.length !== 1 || results[0]?.status !== "completed" || results[0]?.conclusion !== "success")
+    throw new Error("Missing successful CI result on the tagged commit");
 }

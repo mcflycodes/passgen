@@ -34,8 +34,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/check-release.ts
 
-  build:
+  full-suite:
     needs: validate
+    permissions:
+      contents: read
+    uses: ./.github/workflows/full-suite.yml
+    with:
+      commit: ${{ needs.validate.outputs.commit }}
+
+  build:
+    needs: [validate, full-suite]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -78,7 +86,7 @@ jobs:
           retention-days: 7
 
   publish:
-    needs: [validate, build]
+    needs: [validate, full-suite, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
