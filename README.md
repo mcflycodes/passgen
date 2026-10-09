@@ -8,7 +8,8 @@ PassGen is a folder of static files. It works on any ordinary static web server,
 any domain or subpath, with no hosting provider, CDN or domain required.
 
 **Status:** v1 is released, with both generators, strength estimates, extra
-results, saved settings, and five visual styles.
+results, saved settings, and five visual styles. See `CHANGELOG.md` for what
+has changed since.
 
 ## Deploy
 
@@ -173,11 +174,27 @@ successfully before reloading.
    sudo unzip "passgen-$VERSION.zip" -d "/srv/passgen-staging-$VERSION"
    ```
 
-9. **Optional, recommended:** Verify the staged files before publishing.
+9. **Required:** Verify the staged files, check for symlinks, then refresh timestamps.
+   Continue only if every checksum says `OK`.
 
    ```sh
    (cd "/srv/passgen-staging-$VERSION" && sha256sum -c -) < SHA256SUMS
    ```
+
+   Continue only if every checksum says `OK`; otherwise, stop.
+
+   ```sh
+   sudo find -P "/srv/passgen-staging-$VERSION" -type l -print
+   ```
+
+   If this prints anything, stop: the release contains a symbolic link. Do not continue.
+
+   ```sh
+   sudo find -P "/srv/passgen-staging-$VERSION" \( -type f -o -type d \) -exec touch -h -c {} +
+   ```
+
+   Refreshing timestamps prevents the ZIP’s 1980 dates from making browsers
+   and CDNs keep an older page.
 
 10. Give the server read access; only the owner can write.
 
@@ -329,11 +346,27 @@ staging paths must be outside every public root and must not already exist.
     sudo unzip "passgen-$VERSION.zip" -d "/srv/passgen-staging-$VERSION"
     ```
 
-16. **Manual:** Verify staged files before switching.
+16. **Manual, required:** Verify staged files, check for symlinks, then refresh
+    timestamps before switching. Continue only if every checksum says `OK`.
 
     ```sh
     (cd "/srv/passgen-staging-$VERSION" && sha256sum -c -) < SHA256SUMS
     ```
+
+    Continue only if every checksum says `OK`; otherwise, stop.
+
+    ```sh
+    sudo find -P "/srv/passgen-staging-$VERSION" -type l -print
+    ```
+
+    If this prints anything, stop: the release contains a symbolic link. Do not continue.
+
+    ```sh
+    sudo find -P "/srv/passgen-staging-$VERSION" \( -type f -o -type d \) -exec touch -h -c {} +
+    ```
+
+    Refreshing timestamps prevents the ZIP’s 1980 dates from making browsers
+    and CDNs keep an older page.
 
 17. **Manual:** Give the server read access to staging.
 
@@ -415,9 +448,23 @@ use destination paths that do not already exist.
    sudo mv -T /srv/passgen "/srv/passgen-failed-$VERSION"
    ```
 
-5. **Manual:** Move the saved web root back into place.
+5. **Manual:** Verify the saved web root with the previous release’s trusted
+   manifest, check for symlinks, then refresh timestamps and restore it.
 
    ```sh
+   (cd "/srv/passgen-backup-$PREVIOUS" && sha256sum -c -) < "../passgen-setup-$PREVIOUS/SHA256SUMS"
+   ```
+
+   Continue only if every checksum says `OK`; otherwise, stop.
+
+   ```sh
+   sudo find -P "/srv/passgen-backup-$PREVIOUS" -type l -print
+   ```
+
+   If this prints anything, stop: the release contains a symbolic link. Do not continue.
+
+   ```sh
+   sudo find -P "/srv/passgen-backup-$PREVIOUS" \( -type f -o -type d \) -exec touch -h -c {} +
    sudo mv -T "/srv/passgen-backup-$PREVIOUS" /srv/passgen
    ```
 
@@ -428,7 +475,23 @@ use destination paths that do not already exist.
 
    ```sh
    sudo cp -a /path/to/installer-backup/docroot /srv/passgen
+   (cd /srv/passgen && sha256sum -c -) < "../passgen-setup-$PREVIOUS/SHA256SUMS"
    ```
+
+   Continue only if every checksum says `OK`; otherwise, stop.
+
+   ```sh
+   sudo find -P /srv/passgen -type l -print
+   ```
+
+   If this prints anything, stop: the release contains a symbolic link. Do not continue.
+
+   ```sh
+   sudo find -P /srv/passgen \( -type f -o -type d \) -exec touch -h -c {} +
+   ```
+
+   Refresh restored timestamps so browsers and CDNs revalidate the restored
+   page; wait until the next second if rolling back immediately after an install.
 
 6. Restore each server config/header file changed during the update from its
    saved copy. Replace the paths with the pair used when you backed it up.
@@ -504,7 +567,7 @@ coverage described below.
 | Reference header snippets match the definition | `pnpm headers:check` |
 | Style checks (R4b): tokens, contrast, CSS-only rules | `pnpm styles:check` |
 | HTML-sink gate, configuration validation (C2) and style checks, then production build | `pnpm build` |
-| No hostname, provider file, inline code or CSS resource in the build; CSP meta in place | `pnpm verify:dist` |
+| No hostname beyond the configured links, no provider file, inline code or CSS resource in the build; CSP meta in place | `pnpm verify:dist` |
 | SHA-256 manifest of the build | `pnpm manifest` |
 | End-to-end, accessibility and header tests on the built files | `pnpm test:e2e` |
 | Combined-gate regressions: injected fixtures through build, verify-dist and browser checks | `pnpm test:gate` |
@@ -531,22 +594,34 @@ fixtures.
 
 The build fills `index.html` from the configuration (`scripts/lib/page-template.ts`):
 the header tagline, the optional intro headline and paragraph, the control
-defaults and bounds, the style options and the separator symbols are inserted
-as escaped plain text at build time, with length caps checked by the validator
-and the result scanned by the attribution and host-name checks. An empty
-tagline leaves the tagline out; `text.intro.enabled: false` leaves the intro
-out; one offered style leaves the Style control out.
+defaults and bounds, the style options, the separator symbols and the two
+outward links are inserted as escaped plain text and attribute values at build
+time, with length caps checked by the validator and the result scanned by the
+attribution and host-name checks. An empty tagline leaves the tagline out;
+`text.intro.enabled: false` leaves the intro out; one offered style leaves the
+Style control out. The footer also shows the version from `package.json`.
 
-`saveSettings` is whether "Save current settings as default" starts checked
-when nothing is stored. It is a per-visit default, not a remembered choice:
-unchecking the box removes the stored settings, which is the only record there
-is, so with `saveSettings: true` the next visit starts saving again. The
-shipped value is `false`. Saved settings live in the browser's local storage
-under one versioned key (`src/boot/storage.ts`), are checked by
-`src/boot/stored-settings.ts` both before the first paint and when the app
-starts, and never include a generated value. Nothing is written to storage
-until the box is checked, not even a probe; a browser that refuses the first
-write disables the box and says why.
+`links.repoUrl` is the repository link beside the Style control and
+`links.licenseUrl` is the "Apache-2.0" link in the footer. Each is an `https`
+URL, written in its normalised form with no credentials, or empty to leave
+that link out. They render as plain anchors with `rel="noopener noreferrer"`,
+cause no request, and are the only addresses the build may carry: the
+host-name checks accept each one exactly as configured, as an anchor's `href`
+and as the configuration string in the bundle, and nothing else.
+
+Saved settings are explicit. "Save as my default" writes one snapshot of
+every setting of both generators, the theme and the style to the browser's
+local storage under one versioned key (`src/boot/storage.ts`); "Reset to
+defaults" removes it and restores the configured defaults. A change made after
+saving is not saved unless Save is pressed again, so a one-off tweak never
+becomes the default. Each press is confirmed by a short status beside the
+buttons, announced politely to screen readers, and a highlight on the button
+that fades out (or simply ends under reduced motion). A stored record is
+checked by `src/boot/stored-settings.ts` both before the first paint and when
+the app starts, never includes a generated value, and is removed when it fails
+the check. Nothing is written to storage until Save or Reset is pressed, not
+even a probe; a browser whose storage cannot be read says so under the
+buttons, and one that refuses the write says so when Save is pressed.
 
 Unspecified slow-hash and online attack estimates are `null`: consumers must
 show them as unavailable, rather than substituting an estimate. The optional
@@ -601,8 +676,8 @@ Attributes, comments, CSS content and non-output text remain scanned.
 `src/main.ts` wires the page. `src/ui/password.ts` and `src/ui/passphrase.ts`
 bind the controls to the generators and turn each core error into a message
 with generation disabled; `src/ui/settings.ts` holds every user-changeable
-setting in one serialisable object; `src/ui/theme.ts` applies the theme and
-style choices; `src/ui/pointer.ts` is the shared pointer effect for decorative
+setting in one serialisable object and binds the Save and Reset buttons;
+`src/ui/theme.ts` applies the theme and style choices; `src/ui/pointer.ts` is the shared pointer effect for decorative
 backgrounds; `src/ui/meter.ts` and `src/ui/results.ts` own the strength meter
 and the extra-results markup.
 
@@ -643,7 +718,11 @@ of the Vite toolchain), check HTML against a byte-exact head structure, and
 leave how the page actually parses to the browser tests. Host names are
 recognised by their top-level domain, from a committed snapshot of IANA's list
 in `scripts/lib/data/iana-tlds.txt`; refresh it from
-`https://data.iana.org/TLD/tlds-alpha-by-domain.txt` when needed.
+`https://data.iana.org/TLD/tlds-alpha-by-domain.txt` when needed. The one
+exception is the configured links (`links.repoUrl`, `links.licenseUrl`), which
+may appear exactly as configured as an anchor's `href` in the page and as a
+whole string in the bundle; written any other way, or anywhere else, they are
+reported like any other address.
 
 Each build also writes `dist-manifest/SHA256SUMS`, so anyone can check that a
 deployed copy matches a reviewed build: run `sha256sum -c SHA256SUMS` inside the

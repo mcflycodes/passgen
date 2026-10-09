@@ -194,9 +194,9 @@ jobs:
           pnpm manifest
       - name: Validate and probe each real server over trusted HTTPS
         env:
-          HTTPD_IMAGE: httpd:2.4@sha256:c842ac797bd1fe8b3cd26d002ac9d948aa2814097544600600b35aef42e6785a
-          NGINX_IMAGE: nginx:stable@sha256:9bf97bd7714f5e24c1ccd545ecb9eb5435cb6d109c97cebb15e7e455e0239edb
-          CADDY_IMAGE: caddy:2@sha256:f2a1290d0463aad60660d4ec134943f183ee2a5f6c3eb7bf32dd984f2f020772
+          HTTPD_IMAGE: public.ecr.aws/docker/library/httpd:2.4@sha256:c842ac797bd1fe8b3cd26d002ac9d948aa2814097544600600b35aef42e6785a
+          NGINX_IMAGE: public.ecr.aws/docker/library/nginx:stable@sha256:9bf97bd7714f5e24c1ccd545ecb9eb5435cb6d109c97cebb15e7e455e0239edb
+          CADDY_IMAGE: public.ecr.aws/docker/library/caddy:2@sha256:f2a1290d0463aad60660d4ec134943f183ee2a5f6c3eb7bf32dd984f2f020772
         run: |
           echo '127.0.0.1 passgen.test' | sudo tee -a /etc/hosts
           mkdir -p "$RUNNER_TEMP/passgen-configs"

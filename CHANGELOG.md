@@ -5,7 +5,18 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
-- Add step-by-step deployment guides and setup instructions for your AI agent.
+## [1.1.1] - 2026-10-09
+
+### Fixed
+
+- The installer now stamps installed files with the install time and gives
+  restored files a newer timestamp on rollback, helping browsers and CDNs
+  revalidate changed pages. Manual deployment instructions now check for
+  symbolic links and then safely refresh timestamps before publishing.
+
+## [1.1.0] - 2026-10-09
+
+### Added
 
 - Passphrase separators can now use a random simple symbol for each word gap,
   with an option to keep every gap's symbol different. Number separators keep
@@ -14,6 +25,28 @@ Versions follow Semantic Versioning.
   If your other settings require only symbols, this option is skipped with a
   note. Passwords remain equally likely within your settings, and the strength
   estimate includes the first-character rule.
+- A source repository link beside the Style control, plus the version
+  and an "Apache-2.0" license link in the footer. Both URLs come from the
+  configuration (`links.repoUrl`, `links.licenseUrl`), must be `https`, and
+  can be left empty to hide a link.
+- Step-by-step deployment guides, and setup instructions you can hand to your
+  AI agent (`agent-setup/prompt.md`).
+
+### Changed
+
+- Saving settings is now explicit. "Save as my default" saves every setting of
+  both generators, the theme and the style once; "Reset to defaults" removes the
+  saved settings and restores the defaults. Changes made after saving are not
+  saved unless Save is pressed again. Successful saves and resets show a short
+  confirmation, announced to screen readers, and a highlight that fades out,
+  or simply ends under reduced motion. Changing controls does not write settings
+  to the browser.
+
+### Removed
+
+- The "Save current settings as default" checkbox and the `saveSettings`
+  configuration key. Saved settings from 1.0.0 are ignored; Save and Reset remove
+  the old record.
 
 ## [1.0.0]
 

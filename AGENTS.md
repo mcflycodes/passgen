@@ -62,6 +62,9 @@ your report. Never weaken or skip a gate to make it pass.
   every package. A new dev dependency needs a reason in the pull request.
 - **No hostnames.** Nothing in the build may name a domain, URL, address or
   hosting provider. Asset paths stay relative. `pnpm verify:dist` enforces it.
+  The only exception is the two links the configuration declares
+  (`links.repoUrl`, `links.licenseUrl`), accepted exactly as configured, as an
+  anchor's `href` and as the configuration string in the bundle.
 - **CSP.** No inline script, inline style, event-handler attributes, `eval`,
   or network requests. Same-origin files only. Trusted Types are enforced, so
   build DOM with `createElement` and `textContent`, never `innerHTML`.

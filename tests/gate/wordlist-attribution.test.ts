@@ -115,6 +115,9 @@ test("a production bundle exempts its word data while scanning other literals", 
     const { build } = await import("vite");
     const { readdir } = await import("node:fs/promises");
     const { checkJs } = await import("../../scripts/lib/dist-checks.ts");
+    const { config, configuredLinks } = await import("../../src/config/validate.ts");
+    // The bundle carries the configured links (decision 0005, point 5); nothing else is exempt.
+    const allowed = configuredLinks(config);
     async function bundle(extra: string): Promise<string> {
       await writeFile(main, original + exercise + extra);
       await build({ root: dir, configFile: join(root, "vite.config.ts"), logLevel: "silent" });
@@ -126,9 +129,10 @@ test("a production bundle exempts its word data while scanning other literals", 
     }
     const clean = await bundle("");
     assert.ok(clean.includes(name.toLowerCase()));
-    assert.deepEqual(checkJs("bundle.js", clean), []);
+    assert.deepEqual(checkJs("bundle.js", clean, allowed), []);
+    assert.ok(checkJs("bundle.js", clean).length > 0, "the configured links are found without the list");
     const bad = await bundle(`\ndocument.title = "${name}";\n`);
-    assert.ok(checkJs("bundle.js", bad).some((finding) => finding.problem.includes("attribution")));
+    assert.ok(checkJs("bundle.js", bad, allowed).some((finding) => finding.problem.includes("attribution")));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

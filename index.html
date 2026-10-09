@@ -20,6 +20,11 @@
         <!-- /passgen:tagline -->
       </div>
       <div class="top-controls">
+        <!-- passgen:repo-link -->
+        <!-- biome-ignore lint/a11y/useValidAnchor: the build fills the href from the configuration (decision 0005) -->
+        <!-- biome-ignore lint/a11y/useAriaPropsSupportedByRole: with its href the element is a link, which supports aria-label -->
+        <a class="top-link" id="repo-link" data-cfg-href="links.repoUrl" rel="noopener noreferrer" aria-label="PassGen on GitHub">GitHub</a>
+        <!-- /passgen:repo-link -->
         <!-- passgen:style-control -->
         <div class="style-control">
           <label class="style-label" for="style">Style</label>
@@ -231,15 +236,31 @@
         </section>
       </div>
 
-      <section class="save-settings" aria-labelledby="save-settings-title">
+      <section class="save-settings" id="save-settings-area" aria-labelledby="save-settings-title">
         <h2 class="sr-only" id="save-settings-title">Saved settings</h2>
-        <label class="check"><input type="checkbox" id="save-settings" aria-describedby="save-settings-hint" data-cfg-checked="saveSettings"><span class="box"></span><span class="check-text">Save current settings as default <span class="hint" id="save-settings-hint">Kept in this browser only. Nothing generated is ever stored.</span></span></label>
+        <div class="save-actions">
+          <button type="button" class="btn btn-primary" id="save-settings" aria-describedby="save-settings-hint">Save as my default</button>
+          <button type="button" class="btn" id="reset-settings" aria-describedby="save-settings-hint">Reset to defaults</button>
+          <p class="save-feedback" id="save-settings-status" role="status" aria-live="polite" aria-atomic="true"></p>
+        </div>
+        <p class="hint" id="save-settings-hint"></p>
       </section>
     </main>
 
     <footer class="foot">
-      <p>Everything happens in this tab: no account, no tracking, no network requests after the page loads.</p>
-      <p>Passphrase words come from the <span class="nowrap">EFF Large Wordlist</span> by Joseph Bonneau, used under CC BY 3.0.</p>
+      <div class="foot-text">
+        <p>Everything happens in this tab: no account, no tracking, no network requests after the page loads.</p>
+        <p>Passphrase words come from the <span class="nowrap">EFF Large Wordlist</span> by Joseph Bonneau, used under CC BY 3.0.</p>
+      </div>
+      <p class="foot-meta">
+        <span class="foot-version">v<!-- passgen:version --></span>
+        <!-- passgen:license-link -->
+        <span class="foot-sep" aria-hidden="true">·</span>
+        <!-- biome-ignore lint/a11y/useValidAnchor: the build fills the href from the configuration (decision 0005) -->
+        <!-- biome-ignore lint/a11y/useAriaPropsSupportedByRole: with its href the element is a link, which supports aria-label -->
+        <a class="foot-link" id="license-link" data-cfg-href="links.licenseUrl" rel="noopener noreferrer" aria-label="Apache-2.0 license">Apache-2.0</a>
+        <!-- /passgen:license-link -->
+      </p>
     </footer>
   </body>
 </html>

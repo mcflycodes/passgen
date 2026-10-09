@@ -26,7 +26,7 @@ async function axe(page: Page, state: string) {
 // Test the drawn proxy of hidden checkboxes/radios, not their invisible input.
 async function keyboard(page: Page) {
   const ids = await page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>("button, input, select, summary")]
+    [...document.querySelectorAll<HTMLElement>("a[href], button, input, select, summary")]
       .filter((el) => {
         if ((el as HTMLInputElement).disabled || el.hidden || !el.getClientRects().length) return false;
         return !(el instanceof HTMLInputElement && el.type === "radio" && !el.checked);
@@ -258,8 +258,19 @@ for (const style of STYLES) {
         await expect(page.locator("#pw-lowercase-min")).toHaveAccessibleDescription(/Min/);
         await axe(page, "invalid settings");
         await setNumber(page.locator("#pw-lowercase-min"), 1);
-        await page.locator("#save-settings").check();
-        await axe(page, "saving on");
+        await page.locator("#save-settings").click();
+        const saved = page.locator("#save-settings-status");
+        await expect(saved).toContainText("Saved");
+        await expect(saved).toHaveAttribute("aria-live", "polite");
+        await expect(page.locator("#save-settings")).toHaveClass(/is-done/);
+        await axe(page, "saved");
+        await page.locator("#reset-settings").click();
+        await expect(saved).toContainText("Reset to defaults");
+        await axe(page, "reset");
+        for (const link of await page.locator("a[href]").all()) {
+          await expect(link).toHaveAccessibleName(/.+/);
+          await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+        }
         await page.locator("#pw-copy").focus();
         await page.keyboard.press("Enter");
         await expect(page.locator("#pw-copy")).toHaveText("Copy failed");
@@ -278,6 +289,14 @@ for (const style of STYLES) {
           await expect(input).toHaveAccessibleName(/.+/);
         }
         expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+        const transitionDurations = await page.locator(".btn").evaluateAll((buttons) =>
+          buttons.flatMap((button) =>
+            getComputedStyle(button)
+              .transitionDuration.split(",")
+              .map((value) => value.trim()),
+          ),
+        );
+        for (const duration of transitionDurations) expect(duration).toBe("0s");
         // 200% of the 1280x800 desktop viewport is 640x400 CSS pixels.
         // Also exercise 320 CSS px, independently of the project's device.
         const original = page.viewportSize();

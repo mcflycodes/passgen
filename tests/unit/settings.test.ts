@@ -8,6 +8,12 @@ import {
   defaultSettings,
   initialSettings,
   parseStoredSettings,
+  RESET_STATUS,
+  SAVE_FAILED_STATUS,
+  SAVE_HINT,
+  SAVE_INVALID_STATUS,
+  SAVE_UNAVAILABLE_HINT,
+  SAVED_STATUS,
   type Settings,
   type SettingsStorage,
   serializeSettings,
@@ -337,7 +343,24 @@ describe("the storage adapter and the initial settings", () => {
     assert.deepEqual(writes, [`set ${SETTINGS_STORAGE_KEY}`, `remove ${SETTINGS_STORAGE_KEY}`]);
   });
 
-  test("makes no write at all when the page starts with nothing stored (R24: stored only while checked)", () => {
+  for (const action of ["write", "remove"] as const) {
+    test(`${action} removes legacy settings without touching unrelated keys`, () => {
+      const { area, items } = fakeArea();
+      items.set("passgen:settings:v1", "legacy");
+      items.set("other", "keep");
+      const storage = browserStorage(() => area) as SettingsStorage;
+      assert.equal(action === "write" ? storage.write("new") : storage.remove(), true);
+      assert.equal(items.has("passgen:settings:v1"), false);
+      assert.equal(items.get("other"), "keep");
+    });
+  }
+
+  test("removal that throws reports failure even without a record", () => {
+    const { area } = fakeArea({ remove: true });
+    assert.equal(browserStorage(() => area)?.remove(), false);
+  });
+
+  test("makes no write at all when the page starts with nothing stored (R24: written only when Save is pressed)", () => {
     const { area, writes } = fakeArea();
     const storage = browserStorage(() => area) as SettingsStorage;
     assert.deepEqual(initialSettings(config, storage), { settings: defaultSettings(config), stored: false });
@@ -406,6 +429,18 @@ describe("the storage adapter and the initial settings", () => {
     const dark = { ...defaultSettings(config), theme: "dark" as const, style: "slate" };
     items.set(SETTINGS_STORAGE_KEY, serializeSettings(dark, config) as string);
     assert.deepEqual(initialSettings(config, storage), { settings: dark, stored: true });
+  });
+
+  test("the Save and Reset texts say what happens, in one short sentence or two, and are fixed strings", () => {
+    assert.match(SAVED_STATUS, /^Saved/);
+    assert.match(RESET_STATUS, /^Reset to defaults/);
+    assert.match(SAVE_FAILED_STATUS, /^Could not save/);
+    assert.match(SAVE_INVALID_STATUS, /^Could not save/);
+    assert.match(SAVE_HINT, /not saved unless you save again/);
+    assert.match(SAVE_HINT, /Nothing generated is ever stored/);
+    assert.match(SAVE_UNAVAILABLE_HINT, /unavailable/);
+    for (const text of [SAVED_STATUS, RESET_STATUS, SAVE_FAILED_STATUS, SAVE_INVALID_STATUS, SAVE_HINT])
+      assert.ok(text.length <= 200 && !text.includes("\n"), text);
   });
 
   test("discards corrupt stored settings, removes them and starts from the defaults (R26)", () => {

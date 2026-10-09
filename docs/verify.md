@@ -122,9 +122,18 @@ handler route. Adding it to PassGen would alter or shadow the shipped example,
 so CI reports that inherited-baseline test as unsupported for Caddy.
 
 Dependabot does not update the server image digests stored in workflow
-environment variables. To refresh them, look up the current index digest on
-Docker Hub for each official image and tag the workflow names (Apache 2.4,
-nginx stable and Caddy 2), replace the pinned digest in
+environment variables. CI pulls Docker Official Images from AWS ECR Public's
+mirror at `public.ecr.aws/docker/library/` to avoid Docker Hub's anonymous pull
+limit. To refresh the pins, look up each tag's current index digest on that
+mirror:
+
+```sh
+docker buildx imagetools inspect public.ecr.aws/docker/library/httpd:2.4
+docker buildx imagetools inspect public.ecr.aws/docker/library/nginx:stable
+docker buildx imagetools inspect public.ecr.aws/docker/library/caddy:2
+```
+
+Use the top-level `Digest` from each result, replace the pinned digest in
 `.github/workflows/ci.yml`, and open a reviewed PR. Require the workflow guard
 and all three real-server checks to pass before merging.
 

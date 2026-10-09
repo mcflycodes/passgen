@@ -6,9 +6,13 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { metaCsp } from "../../security/headers.ts";
+import { config, configuredLinks } from "../../src/config/validate.ts";
 import { attributionProblems, collectLiveDom, liveDomProblems, staticHostnameProblems } from "./dom-checks.ts";
 import { expect, test } from "./fixtures.ts";
 import { DIST_DIR, ORIGINS, SUBPATH } from "./servers.ts";
+
+/** The configured links, the only addresses the page may carry (decision 0005, point 5). */
+const ALLOWED_LINKS = configuredLinks(config);
 
 const HTML_FILES = readdirSync(DIST_DIR, { recursive: true, encoding: "utf8" })
   .filter((f) => f.endsWith(".html"))
@@ -23,12 +27,12 @@ for (const file of HTML_FILES) {
   test.describe(`dist/${file}`, () => {
     test("has no host names in its static content as the browser parses it", async ({ page }) => {
       const html = readFileSync(join(DIST_DIR, file), "utf8");
-      expect(await staticHostnameProblems(page, file, html)).toEqual([]);
+      expect(await staticHostnameProblems(page, file, html, ALLOWED_LINKS)).toEqual([]);
     });
 
     test("follows the markup and URL rules in the live DOM", async ({ page }) => {
       await page.goto(`${ORIGINS.subpath}${SUBPATH}${file}`);
-      expect(liveDomProblems(file, await collectLiveDom(page))).toEqual([]);
+      expect(liveDomProblems(file, await collectLiveDom(page), ALLOWED_LINKS)).toEqual([]);
     });
 
     test("credits no tool anywhere a reader could see, including CSS-generated text", async ({ page }) => {

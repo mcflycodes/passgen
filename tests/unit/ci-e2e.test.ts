@@ -293,11 +293,14 @@ function checkServerWorkflow(configuration: string) {
   assert.match(server, /^ {4}runs-on: ubuntu-24\.04$/m);
   assert.doesNotMatch(server, /permissions:|cache:|actions\/cache|secrets\.|container:|self-hosted/);
   for (const [variable, image] of [
-    ["HTTPD", "httpd:2.4"],
-    ["NGINX", "nginx:stable"],
-    ["CADDY", "caddy:2"],
-  ]) {
-    assert.match(server, new RegExp(`^ {10}${variable}_IMAGE: ${image}@sha256:[a-f0-9]{64}$`, "m"));
+    ["HTTPD", "public.ecr.aws/docker/library/httpd:2.4"],
+    ["NGINX", "public.ecr.aws/docker/library/nginx:stable"],
+    ["CADDY", "public.ecr.aws/docker/library/caddy:2"],
+  ] as const) {
+    assert.match(
+      server,
+      new RegExp(`^ {10}${variable}_IMAGE: ${image.replaceAll(".", "\\.")}@sha256:[a-f0-9]{64}$`, "m"),
+    );
   }
   for (const run of server.matchAll(/run:.*(?:\n {10}.*)*/g)) assert.doesNotMatch(run[0], /\$\{\{/);
   for (const action of server.matchAll(/uses: (\S+)/g)) assert.match(action[1] ?? "", /@[a-f0-9]{40}$/);
@@ -312,8 +315,12 @@ test("server config CI pins official images, actions, read-only permissions and 
 });
 
 test("server config guard rejects each missing image digest", () => {
-  for (const image of ["httpd:2.4", "nginx:stable", "caddy:2"]) {
-    const broken = workflow.replace(new RegExp(`${image}@sha256:[a-f0-9]{64}`), image);
+  for (const image of [
+    "public.ecr.aws/docker/library/httpd:2.4",
+    "public.ecr.aws/docker/library/nginx:stable",
+    "public.ecr.aws/docker/library/caddy:2",
+  ]) {
+    const broken = workflow.replace(new RegExp(`${image.replaceAll(".", "\\.")}@sha256:[a-f0-9]{64}`), image);
     assert.notEqual(broken, workflow);
     assert.throws(() => checkServerWorkflow(broken));
   }

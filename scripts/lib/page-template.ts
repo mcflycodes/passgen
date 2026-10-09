@@ -11,9 +11,13 @@
 //   <!-- passgen:tagline --> … <!-- /passgen:tagline -->      kept only with a non-empty tagline
 //   <!-- passgen:style-control --> … <!-- /passgen:style-control -->  kept only with several styles
 //   <!-- passgen:style-options -->               one <option> per offered style
+//   <!-- passgen:repo-link --> … <!-- /passgen:repo-link -->          kept only with a links.repoUrl
+//   <!-- passgen:license-link --> … <!-- /passgen:license-link -->    kept only with a links.licenseUrl
+//   <!-- passgen:version -->                     the package version, from the build
 //   data-cfg-text="path"      element content: the value at that configuration path
 //   data-cfg-chars="path"     element content: the string's characters, space separated
 //   data-cfg-min|max|value="path"   that attribute, from the value at the path
+//   data-cfg-href="path"      an href attribute, from the configured link at the path
 //   data-cfg-checked="path"   `checked` when the value is true
 //   data-cfg-checked-eq="path"  `checked` when the value equals the element's value attribute
 //   data-cfg-options="path" data-cfg-selected="path"  <option>s for each character of the string
@@ -31,7 +35,18 @@ export interface PageConfig {
     readonly tagline: string;
     readonly intro: { readonly enabled: boolean; readonly headline: string; readonly text: string };
   };
+  /** The outward links, each an https URL the validator accepted or empty (decision 0005). */
+  readonly links: { readonly repoUrl: string; readonly licenseUrl: string };
 }
+
+/** What the build knows that the configuration does not. */
+export interface BuildInfo {
+  /** The version from package.json, shown in the footer. */
+  readonly version: string;
+}
+
+/** A version the footer may show: digits and dots, with an optional pre-release suffix. */
+export const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]{1,32})?$/;
 
 /** Text for an HTML text node or a double-quoted attribute value. */
 export function escapeHtml(text: string): string {
@@ -143,12 +158,17 @@ function stringAt(config: PageConfig, path: string): string {
  * The built page: markers resolved, data-cfg attributes replaced, text
  * escaped. Throws on a marker or path problem, so the build fails closed.
  */
-export function renderPage(html: string, config: PageConfig): string {
+export function renderPage(html: string, config: PageConfig, build: BuildInfo): string {
+  if (!VERSION.test(build.version))
+    throw new Error(`index.html: "${build.version}" is not a version the page can show`);
   let out = html;
   if (out.split(BOOT_MARKER).length !== 2) throw new Error(`index.html: expected exactly one ${BOOT_MARKER}`);
   out = section(out, "intro", config.text.intro.enabled);
   out = section(out, "tagline", config.text.tagline.trim() !== "");
   out = section(out, "style-control", config.style.offered.length > 1);
+  out = section(out, "repo-link", config.links.repoUrl !== "");
+  out = section(out, "license-link", config.links.licenseUrl !== "");
+  out = marker(out, "version", escapeHtml(build.version));
   const styleOptions = config.style.offered
     .map(({ id, label }) => {
       const selected = id === config.style.default ? " selected" : "";
@@ -163,6 +183,13 @@ export function renderPage(html: string, config: PageConfig): string {
     out = rewriteAttribute(out, `data-cfg-${name}`, (path) => `${name}="${escapeHtml(stringAt(config, path))}"`);
   }
   out = rewriteAttribute(out, "data-cfg-checked", (path) => (configValue(config, path) === true ? "checked" : ""));
+  // A link the validator accepted (an https URL) or nothing: an empty link
+  // has no element to carry it, since its section is left out above.
+  out = rewriteAttribute(out, "data-cfg-href", (path) => {
+    const url = stringAt(config, path);
+    if (!/^https:\/\/\S+$/.test(url)) throw new Error(`index.html: "${path}" is not an https URL`);
+    return `href="${escapeHtml(url)}"`;
+  });
   out = rewriteAttribute(out, "data-cfg-checked-eq", (path, tagText) => {
     const own = tagText.match(/\svalue="([^"]*)"/)?.[1];
     if (own === undefined) throw new Error(`index.html: data-cfg-checked-eq="${path}" needs a value attribute`);

@@ -33,7 +33,10 @@
       "text": "Open the page, copy a password, done. No account, no tracking, nothing leaves this tab."
     }
   },
-  "saveSettings": false,
+  "links": {
+    "repoUrl": "https://github.com/mcflycodes/passgen",
+    "licenseUrl": "https://github.com/mcflycodes/passgen/blob/main/LICENSE"
+  },
   "extraResults": 5,
   "password": {
     "length": {
