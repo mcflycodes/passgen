@@ -114,6 +114,7 @@ interface LiveDom {
   /** What a reader can see or hear: rendered text, title, generated content, every attribute value. */
   readable: string[];
   generatedTexts: string[];
+  untouchedInnerText: string;
   innerText: string;
   textContent: string;
   baseIsPage: boolean;
@@ -191,6 +192,7 @@ export async function collectLiveDom(page: Page): Promise<LiveDom> {
   const validated = dom.generatedTexts.flatMap((text, index) => (isGeneratedPassphrase(text) ? [index] : []));
   const rendered = await page.evaluate(
     ({ generated, texts, indexes }) => {
+      const untouchedInnerText = document.body.innerText;
       const outputs = [...document.querySelectorAll(`[${generated}]`)];
       const restore: Array<{ node: Text; value: string }> = [];
       try {
@@ -207,7 +209,7 @@ export async function collectLiveDom(page: Page): Promise<LiveDom> {
             first = false;
           }
         }
-        return { innerText: document.body.innerText, textContent: document.body.textContent ?? "" };
+        return { untouchedInnerText, innerText: document.body.innerText, textContent: document.body.textContent ?? "" };
       } finally {
         for (const { node, value } of restore) node.data = value;
       }
@@ -231,7 +233,16 @@ export function liveDomProblems(file: string, dom: LiveDom): string[] {
 /** Retain rendered adjacency, and scan every output independently with the narrow exception. */
 export function attributionProblems(dom: LiveDom): string[] {
   const outputs = dom.generatedTexts.map(generatedPassphraseInput);
-  return [dom.innerText, dom.textContent, ...outputs, ...dom.readable].flatMap((text, i) =>
-    scanText(`readable text ${i}`, stripInvisible(text)),
+  // Keep credits spanning output boundaries without reporting bare dictionary collisions.
+  const credits = scanText("untouched rendered text", stripInvisible(dom.untouchedInnerText)).filter((finding) =>
+    ["authorship credit", "credit to a tool", "co-author trailer naming a tool"].some((label) =>
+      finding.includes(`: ${label}: `),
+    ),
   );
+  return [
+    ...credits,
+    ...[dom.innerText, dom.textContent, ...outputs, ...dom.readable].flatMap((text, i) =>
+      scanText(`readable text ${i}`, stripInvisible(text)),
+    ),
+  ];
 }
