@@ -5,6 +5,8 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+- Add step-by-step deployment guides and setup instructions for your AI agent.
+
 - Passphrase separators can now use a random simple symbol for each word gap,
   with an option to keep every gap's symbol different. Number separators keep
   the same symbol on both sides. The strength estimate includes these choices.
