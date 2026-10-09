@@ -7,14 +7,28 @@ no tracking, no third-party code, and no network requests after the page loads.
 PassGen is a folder of static files. It works on any ordinary static web server, at
 any domain or subpath, with no hosting provider, CDN or domain required.
 
-**Status:** milestone M2 (interface) in progress. Both generators work on the
-page with their controls, themes and styles; the strength meter, the extra
-results and saved settings follow.
+**Status:** v1 is released, with both generators, strength estimates, extra
+results, saved settings, and five visual styles.
+
+## Deploy
+
+Download the release ZIP, `SHA256SUMS` and the ZIP checksum from
+[GitHub Releases](https://github.com/mcflycodes/passgen/releases). Verify the ZIP
+checksum, unpack into an empty staging directory, then check its files against
+`SHA256SUMS`. Promote those files into any static web root. Add the required
+security headers using the ready-made Apache, nginx or Caddy configurations in
+[`deploy/examples/`](deploy/examples/), then check the live site with
+`verify-live` and the trusted manifest.
+
+Follow the [step-by-step self-hosting guide](docs/self-hosting.md#deploy-from-a-release)
+for downloads, commands and host requirements. Maintainers can follow
+[the release procedure](docs/releasing.md).
 
 ## Requirements
 
 - Node.js 22.23.2 (see `.nvmrc`)
 - pnpm 11.15.1, pinned in `package.json` (`corepack enable` picks it up)
+- Python 3 for release packaging and its unit tests
 
 ## Getting started
 
