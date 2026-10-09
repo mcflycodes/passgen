@@ -295,19 +295,19 @@ staging paths must be outside every public root and must not already exist.
 
 10. Download its new manifest. Never check the new release against the old manifest.
 
-   ```sh
-   curl --fail --location --remote-name "https://github.com/mcflycodes/passgen/releases/download/v$VERSION/SHA256SUMS"
-   ```
+    ```sh
+    curl --fail --location --remote-name "https://github.com/mcflycodes/passgen/releases/download/v$VERSION/SHA256SUMS"
+    ```
 
 11. Back up the PassGen server config you will change. Replace these two paths
-   with your actual config and a new backup filename; repeat for each changed file.
+    with your actual config and a new backup filename; repeat for each changed file.
 
-   ```sh
-   sudo cp -a /path/to/passgen-site.conf /path/to/passgen-site.conf.previous
-   ```
+    ```sh
+    sudo cp -a /path/to/passgen-site.conf /path/to/passgen-site.conf.previous
+    ```
 
 12. Apply any config/header changes found in step 6 using this release's
-   `deploy/examples/` and your existing hostname, paths and certificates.
+    `deploy/examples/` and your existing hostname, paths and certificates.
 
 13. **Automated:** Run the new tag's installer. It verifies the downloaded assets,
     backs up the old web root again, and keeps the newest three backups.
@@ -361,6 +361,8 @@ staging paths must be outside every public root and must not already exist.
     ```
 
 21. **If SELinux is enforcing:** Reapply your existing web-content label rule.
+    Automated-path (B) users: follow C12 first if you have not yet added the
+    `semanage fcontext` rule.
 
     ```sh
     sudo restorecon -R /srv/passgen
@@ -419,8 +421,9 @@ use destination paths that do not already exist.
    sudo mv -T "/srv/passgen-backup-$PREVIOUS" /srv/passgen
    ```
 
-   **Automated fallback:** Instead of the command above, copy from the installer's
-   printed backup path. Replace the placeholder with that exact `docroot/` path.
+   **Automated fallback:** Instead of the command above, copy from the backup
+   printed by the update install (Updating step 13). Replace the placeholder with
+   that backup's exact `docroot/` path.
    This fallback is for an intact backup and unchanged root, not a refused rollback.
 
    ```sh
@@ -446,15 +449,15 @@ use destination paths that do not already exist.
 
 10. Return to the previous release's source folder.
 
-   ```sh
-   cd "../passgen-setup-$PREVIOUS"
-   ```
+    ```sh
+    cd "../passgen-setup-$PREVIOUS"
+    ```
 
 11. Verify with its saved manifest (Node 22.18+).
 
-   ```sh
-   node scripts/verify-live.ts --url https://example.com/ --manifest SHA256SUMS --release-dir /srv/passgen
-   ```
+    ```sh
+    node scripts/verify-live.ts --url https://example.com/ --manifest SHA256SUMS --release-dir /srv/passgen
+    ```
 
 See [self-hosting](docs/self-hosting.md), the [installer reference](docs/install-release.md)
 and [verification](docs/verify.md) for details.
