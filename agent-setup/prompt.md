@@ -39,7 +39,10 @@ user-confirmed values in the plan. Do not proceed without the needed answers.
    root. A verifier cannot establish origin isolation. Stop and ask if the
    requested root contains unrelated content or the origin is shared.
 
-2. **Read the actual release instructions and source.** Use the repository's
+2. **Read the actual release instructions and source at the selected tag.**
+   Resolve the chosen release to its exact `vX.Y.Z` tag first. Read every referenced
+   repository file below at that tag, not at `main`: use a checkout of the tag,
+   or replace `main` with the tag in raw-file URLs. Use the repository's
    [installer reference](../docs/install-release.md),
    [self-hosting guide](../docs/self-hosting.md),
    [verification guide](../docs/verify.md),
@@ -48,9 +51,10 @@ user-confirmed values in the plan. Do not proceed without the needed answers.
    [server examples](../deploy/examples/README.md).
    Resolve the selected release to an exact `vX.Y.Z` tag and use source and
    header files from that reviewed release. The installer has no `latest` flag.
-   Check required tools before proposing commands; private releases require
-   repository read access (authenticated `gh` can download them). If access is
-   unavailable, stop and ask for access or the three trusted release assets.
+   Check required tools before proposing commands. The repository is public;
+   anonymous `curl --fail --location --remote-name` downloads work. `gh` is an
+   optional alternative. If downloads fail, stop and ask for the three trusted
+   release assets rather than assuming credentials are required.
 
 3. **Show a concrete plan and get explicit confirmation before any change.**
    Include exact commands, destination host, release tag, web root, ownership,
