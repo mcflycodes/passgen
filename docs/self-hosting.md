@@ -108,6 +108,25 @@ mounted, omit `--release-dir`; remote verification cannot enumerate extra files.
 See [verification](verify.md) for all checks and trust limits. A release ZIP uses
 the shipped configuration; customize it by building from source instead.
 
+### Automated install
+
+On a Linux host, `scripts/install-release.sh` performs the download, checksum
+and manifest verification, backup, switch and post-install checks above in one
+command, and restores the previous web root on its own if any step after the
+backup fails:
+
+```sh
+scripts/install-release.sh --version vX.Y.Z --docroot /path/to/web/root \
+    --url https://example.com/
+```
+
+It verifies the release before anything touches the web root, keeps the last
+three backups next to it and, with `--url`, checks that the live site serves
+the installed bytes with the nine security header names present. The web
+server configuration below is still yours to do. See
+[the installer reference](install-release.md) for the options, exit codes and
+administrator notes.
+
 ## Required response headers
 
 [`security/headers.ts`](../security/headers.ts) defines the exact policy once.

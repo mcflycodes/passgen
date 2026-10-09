@@ -46,7 +46,7 @@ scripts/install-release.sh --version vX.Y.Z --docroot DIR [--repo OWNER/NAME]
 
 | Option | Meaning |
 |---|---|
-| `--version vX.Y.Z` | Required. The exact release tag. |
+| `--version vX.Y.Z` | Required. The exact release tag; releases are stable `X.Y.Z` versions only. |
 | `--docroot DIR` | Required. The directory the web server serves. Created if it does not exist. |
 | `--repo OWNER/NAME` | The GitHub repository that publishes the releases. Default: the `repository` field of the `package.json` next to the script, else the origin remote of the checkout the script sits in. A copied script outside a checkout needs this option. |
 | `--from-dir DIR` | Use `passgen-X.Y.Z.zip`, `passgen-X.Y.Z.zip.sha256` and `SHA256SUMS` from `DIR` instead of downloading. For offline installs and tests. |

@@ -157,7 +157,7 @@ parse_args() {
   done
 
   [[ -n $version ]] || die 2 "--version vX.Y.Z is required (see --help)"
-  [[ $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] ||
+  [[ $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
     die 2 "--version must be an exact tag such as v1.2.3, not '$version'"
   [[ -n $docroot ]] || die 2 "--docroot DIR is required (see --help)"
   [[ $file_mode =~ ^[0-7]{3,4}$ ]] || die 2 "--file-mode must be octal such as 0644, not '$file_mode'"

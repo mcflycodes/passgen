@@ -247,6 +247,36 @@ describe("install-release: fixtures and arguments", () => {
     );
   });
 
+  test("installs a release packaged by the real scripts/package-release.py", async () => {
+    // The packager writes no directory entries, Unix file-type bits and a two-space .sha256 line.
+    const dir = join(scratch, "packaged");
+    await mkdir(dir);
+    const packager = join(ROOT, "scripts", "package-release.py");
+    await run("python3", [
+      "-I",
+      "-B",
+      "-c",
+      [
+        "import importlib.util, sys",
+        "from pathlib import Path",
+        "spec = importlib.util.spec_from_file_location('packager', sys.argv[1])",
+        "module = importlib.util.module_from_spec(spec)",
+        "spec.loader.exec_module(module)",
+        "module.package(Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4])",
+      ].join("\n"),
+      packager,
+      join(scratch, "dist"),
+      dir,
+      "1.2.3",
+    ]);
+    await writeFile(join(dir, "SHA256SUMS"), manifestText);
+    assert.deepEqual((await readdir(dir)).sort(), ["SHA256SUMS", ZIP, `${ZIP}.sha256`]);
+    const { docroot } = await makeSite();
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", dir]);
+    assert.equal(result.code, 0, result.output);
+    assert.deepEqual(await snapshot(docroot), expectedSnapshot());
+  });
+
   test("the fixture zip is one unzip reads back to the manifest's files", async () => {
     const dir = join(scratch, "unzip-check");
     await mkdir(dir);
@@ -265,6 +295,7 @@ describe("install-release: fixtures and arguments", () => {
       ["--docroot", docroot],
       ["--version", "latest", "--docroot", docroot],
       ["--version", "1.2.3", "--docroot", docroot],
+      ["--version", "v1.2.3-rc.1", "--docroot", docroot],
       ["--version", VERSION],
       ["--version", VERSION, "--docroot", docroot, "--file-mode", "rw-r--r--"],
       ["--version", VERSION, "--docroot", docroot, "--url", "http://example.test/"],
