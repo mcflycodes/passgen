@@ -36,6 +36,20 @@ test.describe("data-generated", () => {
     expect(await page.locator("output").textContent()).toBe(phrase);
   });
 
+  for (const [prefix, label] of [
+    ["Thanks to", "credit to a tool"],
+    ["With the help of", "credit to a tool"],
+    ["Co-authored-by:", "co-author trailer naming a tool"],
+  ]) {
+    test(`catches ${prefix} directly before a valid generated passphrase`, async ({ page }) => {
+      const phrase = `${dictionaryName}-05-abacus`;
+      await page.setContent(`<main><p>${prefix} <output data-generated>${phrase}</output></p></main>`);
+      const findings = attributionProblems(await collectLiveDom(page));
+      expect(findings.some((finding) => finding.includes(`: ${label}: `))).toBe(true);
+      expect(await page.locator("output").textContent()).toBe(phrase);
+    });
+  }
+
   test("a dictionary name in a valid passphrase with normal surrounding UI passes", async ({ page }) => {
     const phrase = `${dictionaryName}-05-abacus`;
     await page.setContent(

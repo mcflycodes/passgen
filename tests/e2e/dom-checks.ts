@@ -235,7 +235,9 @@ export function attributionProblems(dom: LiveDom): string[] {
   const outputs = dom.generatedTexts.map(generatedPassphraseInput);
   // Keep credits spanning output boundaries without reporting bare dictionary collisions.
   const credits = scanText("untouched rendered text", stripInvisible(dom.untouchedInnerText)).filter((finding) =>
-    finding.includes(": authorship credit: "),
+    ["authorship credit", "credit to a tool", "co-author trailer naming a tool"].some((label) =>
+      finding.includes(`: ${label}: `),
+    ),
   );
   return [
     ...credits,
