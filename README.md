@@ -197,3 +197,12 @@ See [self-hosting](docs/self-hosting.md) for server setup and CDN settings, and
 ## License
 
 Apache-2.0. See `LICENSE` and `NOTICE`.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks and contribution guidelines.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for supported versions, private vulnerability
+reporting and the security model.
