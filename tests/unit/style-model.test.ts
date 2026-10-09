@@ -26,6 +26,10 @@ const NON_PAINT_PROPERTIES = new Set([
   "margin-left",
   "scroll-padding-top",
   "border-radius",
+  "border-start-start-radius",
+  "border-end-start-radius",
+  "border-start-end-radius",
+  "border-end-end-radius",
   "background-size",
   "background-attachment",
 ]);

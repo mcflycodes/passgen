@@ -72,13 +72,13 @@ jobs:
           retention-days: 30
 
   e2e:
-    name: End-to-end (${{ matrix.project }}, shard ${{ matrix.shard }}/2)
+    name: End-to-end (${{ matrix.project }}, shard ${{ matrix.shard }}/3)
     strategy:
       fail-fast: false
       matrix:
         # JSON syntax lets the unit-test coverage guard read this without a YAML dependency.
         project: ["chromium", "firefox", "webkit", "mobile-chrome", "mobile-safari"]
-        shard: [1, 2]
+        shard: [1, 2, 3]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     container:
@@ -105,7 +105,7 @@ jobs:
         env:
           PASSGEN_E2E_PROJECTS: ${{ matrix.project }}
           PLAYWRIGHT_SHARD: ${{ matrix.shard }}
-        run: pnpm test:e2e --shard="$PLAYWRIGHT_SHARD/2"
+        run: pnpm test:e2e --shard="$PLAYWRIGHT_SHARD/3"
       - name: Combined-gate regressions (injected fixtures through build, verify-dist and browser checks)
         if: matrix.project == 'chromium' && matrix.shard == 1
         run: pnpm test:gate

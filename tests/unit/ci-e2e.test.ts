@@ -41,7 +41,7 @@ function checkContainer(configuration: string, version: string) {
 function checkCoverage(entries: MatrixEntry[]) {
   assert.deepEqual(
     entries.map((entry) => `${entry.project}/${entry.shard}`).sort(),
-    PROJECTS.flatMap((project) => [1, 2].map((shard) => `${project.name}/${shard}`)).sort(),
+    PROJECTS.flatMap((project) => [1, 2, 3].map((shard) => `${project.name}/${shard}`)).sort(),
     "CI e2e matrix must cover every Playwright project with every shard exactly once",
   );
 }
@@ -56,7 +56,7 @@ function checkSteps(configuration: string) {
     e2eStep,
     /^ {8}env:\n {10}PASSGEN_E2E_PROJECTS: \$\{\{ matrix\.project \}\}\n {10}PLAYWRIGHT_SHARD: \$\{\{ matrix\.shard \}\}$/m,
   );
-  assert.match(e2eStep, /^ {8}run: pnpm test:e2e --shard="\$PLAYWRIGHT_SHARD\/2"$/m);
+  assert.match(e2eStep, /^ {8}run: pnpm test:e2e --shard="\$PLAYWRIGHT_SHARD\/3"$/m);
   const gateSteps = steps.filter((step) => /^ {8}run: pnpm test:gate$/m.test(step));
   assert.equal(gateSteps.length, 1, "CI must have exactly one combined-gate step");
   const gateStep = gateSteps[0];
@@ -71,19 +71,20 @@ function checkSteps(configuration: string) {
 test("CI e2e matrix covers every Playwright project and shard", () => {
   checkCoverage(matrix);
   assert.match(job, /^ {6}fail-fast: false$/m);
+  assert.match(job, /shard \$\{\{ matrix\.shard \}\}\/3/);
   checkSteps(job);
 });
 
 test("CI e2e guard rejects a missing or duplicate shard", () => {
-  for (const axis of ["[1]", "[1, 1]"]) {
+  for (const axis of ["[1]", "[1, 2]", "[1, 2, 2]"]) {
     assert.throws(
-      () => checkCoverage(readMatrix(job.replace("shard: [1, 2]", `shard: ${axis}`))),
+      () => checkCoverage(readMatrix(job.replace("shard: [1, 2, 3]", `shard: ${axis}`))),
       /must cover every Playwright project with every shard exactly once/,
     );
   }
 });
 
-test("CI e2e guard rejects running the combined gate on both shards", () => {
+test("CI e2e guard rejects running the combined gate on all shards", () => {
   assert.throws(() => checkSteps(job.replace(" && matrix.shard == 1", "")), /matrix/);
 });
 
@@ -91,10 +92,10 @@ test("CI e2e guard rejects broken project or shard environment wiring", () => {
   for (const dimension of ["project", "shard"]) {
     assert.throws(() => checkSteps(job.replace(`: \${{ matrix.${dimension} }}`, ": 1")), /PASSGEN_E2E_PROJECTS/);
   }
-  assert.throws(() => checkSteps(job.replace("$PLAYWRIGHT_SHARD/2", "1/2")), /--shard/);
+  assert.throws(() => checkSteps(job.replace("$PLAYWRIGHT_SHARD/3", "1/3")), /--shard/);
 });
 
-test("CI e2e guard rejects artifact names shared by both shards", () => {
+test("CI e2e guard rejects artifact names shared by all shards", () => {
   assert.throws(
     () => checkSteps(job.replace(`-\${{ matrix.shard }}-\${{ github.sha }}`, `-\${{ github.sha }}`)),
     /playwright-report/,
@@ -124,7 +125,7 @@ test("CI e2e container guard rejects a missing container or digest", () => {
 
 test("CI e2e coverage guard rejects a missing project", () => {
   assert.throws(
-    () => checkCoverage(matrix.slice(2)),
+    () => checkCoverage(matrix.slice(3)),
     /must cover every Playwright project with every shard exactly once/,
   );
 });

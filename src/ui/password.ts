@@ -117,7 +117,13 @@ export function mountPasswordPanel(store: SettingsStore, config: Config, deps: P
     }
   };
 
+  const previousDescriptions = new Map<Element, string | null>();
   const clearInvalid = () => {
+    for (const [field, description] of previousDescriptions) {
+      if (description === null) field.removeAttribute("aria-describedby");
+      else field.setAttribute("aria-describedby", description);
+    }
+    previousDescriptions.clear();
     for (const name of PASSWORD_TYPE_NAMES) {
       counts[name].min.removeAttribute("aria-invalid");
       counts[name].max.removeAttribute("aria-invalid");
@@ -142,6 +148,12 @@ export function mountPasswordPanel(store: SettingsStore, config: Config, deps: P
     notice.textContent = passwordErrorMessage(error);
     notice.hidden = false;
     markInvalid(error);
+    for (const field of document.querySelectorAll('#password [aria-invalid="true"]')) {
+      const description = field.getAttribute("aria-describedby");
+      previousDescriptions.set(field, description);
+      if (!(description ?? "").split(/\s+/).includes(notice.id))
+        field.setAttribute("aria-describedby", [description, notice.id].filter(Boolean).join(" "));
+    }
     deps.meter.update(null, error);
     deps.results.render(() => []);
   };
