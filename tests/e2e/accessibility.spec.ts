@@ -187,6 +187,9 @@ async function reflow(page: Page) {
   expect(clipped).toEqual([]);
 }
 
+// Every combination is one long test. CI shards them separately from the rest
+// of the suite by this tag (see .github/workflows/ci.yml), because Playwright
+// cuts the ordered test list into contiguous shards and this file sorts first.
 for (const style of STYLES) {
   for (const [theme, scheme] of [
     ["system", "light"],
@@ -195,7 +198,9 @@ for (const style of STYLES) {
     ["dark", "light"],
   ] as const) {
     for (const intro of [true, false]) {
-      test(`accessibility ${style} / ${theme} / OS ${scheme} / intro ${intro}`, async ({ page }) => {
+      test(`accessibility ${style} / ${theme} / OS ${scheme} / intro ${intro}`, { tag: "@a11y-matrix" }, async ({
+        page,
+      }) => {
         test.setTimeout(180_000);
         if (!intro) {
           const html = readFileSync(join(DIST_DIR, "index.html"), "utf8");

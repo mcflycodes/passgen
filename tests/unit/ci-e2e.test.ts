@@ -25,6 +25,13 @@ function readMatrix(configuration: string): MatrixEntry[] {
 }
 
 const matrix = readMatrix(job);
+// The long accessibility matrix sorts first in file order and Playwright cuts
+// the ordered test list into contiguous shards, so CI shards it as its own class.
+const A11Y_TAG = "@a11y-matrix";
+const E2E_COMMANDS = [
+  `pnpm test:e2e --shard="$PLAYWRIGHT_SHARD/3" --grep-invert "${A11Y_TAG}"`,
+  `pnpm test:e2e --shard="$PLAYWRIGHT_SHARD/3" --grep "${A11Y_TAG}"`,
+];
 const packageJson = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
 const playwrightVersion: string = packageJson.devDependencies["@playwright/test"];
 
@@ -48,15 +55,23 @@ function checkCoverage(entries: MatrixEntry[]) {
 
 function checkSteps(configuration: string) {
   const steps = configuration.split(/^ {6}- /m);
-  const e2eSteps = steps.filter((step) => /^ {8}run: pnpm test:e2e\b/m.test(step));
-  assert.equal(e2eSteps.length, 1, "CI must run the e2e tests exactly once per matrix job");
+  const e2eSteps = steps.filter((step) => /\bpnpm test:e2e\b/.test(step));
+  assert.equal(e2eSteps.length, 1, "CI must run the e2e tests in exactly one step per matrix job");
   const e2eStep = e2eSteps[0];
   assert.ok(e2eStep);
   assert.match(
     e2eStep,
     /^ {8}env:\n {10}PASSGEN_E2E_PROJECTS: \$\{\{ matrix\.project \}\}\n {10}PLAYWRIGHT_SHARD: \$\{\{ matrix\.shard \}\}$/m,
   );
-  assert.match(e2eStep, /^ {8}run: pnpm test:e2e --shard="\$PLAYWRIGHT_SHARD\/3"$/m);
+  const commands = e2eStep.match(/^ {8}run: \|\n((?: {10}.*\n)+)/m)?.[1];
+  assert.deepEqual(
+    commands
+      ?.split("\n")
+      .filter(Boolean)
+      .map((line) => line.trim()),
+    E2E_COMMANDS,
+    "CI must run `pnpm test:e2e --shard=...` once per test class, the accessibility matrix on its own",
+  );
   const gateSteps = steps.filter((step) => /^ {8}run: pnpm test:gate$/m.test(step));
   assert.equal(gateSteps.length, 1, "CI must have exactly one combined-gate step");
   const gateStep = gateSteps[0];
@@ -95,6 +110,23 @@ test("CI e2e guard rejects broken project or shard environment wiring", () => {
   assert.throws(() => checkSteps(job.replace("$PLAYWRIGHT_SHARD/3", "1/3")), /--shard/);
 });
 
+test("CI e2e guard rejects sharding the accessibility matrix together with the rest", () => {
+  const single = job.replace(
+    /^ {8}run: \|\n {10}pnpm test:e2e .*\n(?: {10}.*\n)*/m,
+    '        run: pnpm test:e2e --shard="$PLAYWRIGHT_SHARD/3"\n',
+  );
+  assert.notEqual(single, job);
+  assert.throws(() => checkSteps(single), /accessibility matrix/);
+  for (const command of E2E_COMMANDS) {
+    assert.throws(() => checkSteps(job.replace(`          ${command}\n`, "")), /accessibility matrix/);
+  }
+});
+
+test("the accessibility matrix carries the tag CI shards it by", () => {
+  const spec = readFileSync(new URL("../../tests/e2e/accessibility.spec.ts", import.meta.url), "utf8");
+  assert.match(spec, new RegExp(`^ *test\\(\`accessibility .*\`, \\{ tag: "${A11Y_TAG}" \\}, async`, "m"));
+});
+
 test("CI e2e guard rejects artifact names shared by all shards", () => {
   assert.throws(
     () => checkSteps(job.replace(`-\${{ matrix.shard }}-\${{ github.sha }}`, `-\${{ github.sha }}`)),
@@ -105,7 +137,7 @@ test("CI e2e guard rejects artifact names shared by all shards", () => {
 test("CI e2e uses a digest-pinned container matching the Playwright dependency", () => {
   checkContainer(job, playwrightVersion);
   assert.match(job, /^ {6}options: --init --ipc=host --user 1001$/m);
-  assert.match(job, /^ {4}timeout-minutes: 20$/m);
+  assert.match(job, /^ {4}timeout-minutes: 40$/m);
   assert.doesNotMatch(job, /playwright install|--with-deps/);
   assert.match(job, /^ {10}node-version-file: \.nvmrc$/m);
 });
