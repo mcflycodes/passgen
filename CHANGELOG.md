@@ -29,7 +29,7 @@ Versions follow Semantic Versioning.
   contrast checks and accessible controls.
 - Install a release onto a Linux web server with one command. The installer
   verifies the release against its checksums, backs up the current site and
-  restores it automatically if any check fails.
+  attempts to restore it automatically if the installation fails.
 - Download each release as a site zip with its SHA-256 manifest.
 - Start from example Apache, nginx and Caddy configurations, which CI tests
   against real servers on every change.
