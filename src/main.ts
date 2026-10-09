@@ -17,17 +17,20 @@ import { browserStorage, createSettingsStore, initialSettings, mountSaveControl 
 import { mountThemeControls } from "./ui/theme.ts";
 
 // Saved settings (R24 to R26): the store starts from the valid stored settings,
-// else the configured defaults. The Save checkbox is bound last, after the
-// panels have settled the store, so the first write is of a complete state.
+// else the configured defaults. Nothing is written unless Save or Reset is
+// pressed; Reset puts the defaults in the store and the panels show them.
 const storage = browserStorage();
-const initial = initialSettings(config, storage);
-const store = createSettingsStore(initial.settings);
+const store = createSettingsStore(initialSettings(config, storage).settings);
 mountFocusVisibility();
 const pointer = startPointerEffect();
-mountThemeControls(store, () => pointer.refresh());
-mountPasswordPanel(store, config, { meter: createMeter("pw"), results: createResultsBox("pw") });
-mountPassphrasePanel(store, config, { meter: createMeter("pp"), results: createResultsBox("pp") });
-mountSaveControl(store, config, storage, initial);
+const theme = mountThemeControls(store, () => pointer.refresh());
+const password = mountPasswordPanel(store, config, { meter: createMeter("pw"), results: createResultsBox("pw") });
+const passphrase = mountPassphrasePanel(store, config, { meter: createMeter("pp"), results: createResultsBox("pp") });
+mountSaveControl(store, config, storage, () => {
+  theme.refresh();
+  password.refresh();
+  passphrase.refresh();
+});
 
 // The end-to-end tests wait for this to prove that same-origin script runs under the CSP.
 document.documentElement.dataset.ready = "true";

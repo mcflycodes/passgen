@@ -3,9 +3,11 @@
 // the theme and style, lives in one plain, serialisable object. The panels
 // read and write it through the store; nothing else holds settings.
 //
-// Saving (R24): while "Save current settings as default" is checked, every
-// change writes a snapshot of this object to localStorage under one key, and
-// unchecking removes it at once. Nothing but settings is ever written: no
+// Saving (R24): pressing "Save as my default" writes one snapshot of this
+// object to localStorage under one key; "Reset to defaults" removes it and
+// restores the configured defaults. Nothing else ever writes: a change made
+// after saving is not saved unless Save is pressed again, so a one-off tweak
+// never becomes the default. Nothing but settings is ever written: no
 // generated value is part of this object (R25), and the only text that is
 // written is one the validator below has accepted, so whatever is in storage
 // is also loadable.
@@ -171,7 +173,8 @@ export function serializeSettings(settings: Settings, config: Config): string | 
 /**
  * The saved-settings slot in the browser's storage. No method throws, and
  * nothing is written until `write` or `remove` is called: there is no probe,
- * so a visit with saving off never touches storage at all (R24).
+ * so a visit that never presses Save or Reset never touches storage at all
+ * (R24), apart from removing a stored record that fails validation (R26).
  */
 export interface SettingsStorage {
   /** The stored text, or null when there is none. */
@@ -230,7 +233,7 @@ export function browserStorage(area: () => Storage = () => localStorage): Settin
 /** The settings the page starts with, and whether they came from storage. */
 export interface InitialSettings {
   readonly settings: Settings;
-  /** True when valid saved settings were found, so the Save checkbox starts checked. */
+  /** True when valid saved settings were found and applied. */
   readonly stored: boolean;
 }
 
@@ -248,59 +251,73 @@ export function initialSettings(config: Config, storage: SettingsStorage | null)
   return { settings: defaultSettings(config), stored: false };
 }
 
-// ---------- The Save checkbox (R24) ----------
+// ---------- The Save and Reset buttons (R24) ----------
 
-export const SAVE_HINT = "Kept in this browser only. Nothing generated is ever stored.";
+export const SAVE_HINT =
+  "Keeps both generators' settings, the theme and the style as this browser's defaults. Later changes are not saved unless you save again. Nothing generated is ever stored.";
 export const SAVE_UNAVAILABLE_HINT =
   "Saving is unavailable: this browser's local storage is disabled, full or blocked.";
+export const SAVED_STATUS = "Saved as your default.";
+export const RESET_STATUS = "Reset to defaults. Nothing is saved in this browser now.";
+export const SAVE_FAILED_STATUS = "Could not save: this browser's local storage is disabled, full or blocked.";
+export const SAVE_INVALID_STATUS = "Could not save: fix the settings marked with an error first.";
+/** How long the highlight and the status text stay (the feedback is also announced at once). */
+export const SAVE_FEEDBACK_MS = 2000;
 
 /**
- * Binds "Save current settings as default". While checked, every change of
- * the store is written; unchecking removes the stored text at once. Storage
- * is written only when the box is checked (by the visitor, or by the
- * configuration or a stored record at load), so a visit with saving off makes
- * no write: there is no probe, and a browser that refuses the first write is
- * found out then. The checkbox is then disabled, its hint says why, and any
- * record that was there is removed, since an unchecked box means no record.
- * With storage that cannot even be read, the checkbox starts that way. The
- * markup sets the initial checked state from the configuration (C1); valid
- * stored settings override it, since they exist only because it was checked.
+ * Binds "Save as my default" and "Reset to defaults". Nothing is written
+ * until Save is pressed: it writes one snapshot of the whole store, so a
+ * later change is not saved unless Save is pressed again. Reset removes the
+ * record and puts the configured defaults back in the store, then `onReset`
+ * lets the panels show them. Each outcome is shown as a short status, which
+ * a screen reader hears, and a highlight on the pressed button that fades
+ * out (or, with reduced motion, simply ends). A browser whose storage cannot
+ * be read says so in the hint from the start, and the Save button explains
+ * it again when pressed; one that refuses the write explains it then.
  */
 export function mountSaveControl(
   store: SettingsStore,
   config: Config,
   storage: SettingsStorage | null,
-  initial: InitialSettings,
+  onReset: () => void,
 ): void {
-  const checkbox = byId("save-settings", HTMLInputElement);
+  const save = byId("save-settings", HTMLButtonElement);
+  const reset = byId("reset-settings", HTMLButtonElement);
   const hint = byId("save-settings-hint", HTMLElement);
-  const unavailable = () => {
-    checkbox.checked = false;
-    checkbox.disabled = true;
-    hint.textContent = SAVE_UNAVAILABLE_HINT;
+  const status = byId("save-settings-status", HTMLElement);
+  hint.textContent = storage ? SAVE_HINT : SAVE_UNAVAILABLE_HINT;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const feedback = (button: HTMLButtonElement, message: string, ok: boolean) => {
+    clearTimeout(timer);
+    for (const b of [save, reset]) b.classList.remove("is-done");
+    // The status is replaced, not appended, so a repeated press is announced again.
+    status.textContent = "";
+    status.textContent = message;
+    status.classList.toggle("is-error", !ok);
+    if (ok) button.classList.add("is-done");
+    timer = setTimeout(() => {
+      button.classList.remove("is-done");
+      status.textContent = "";
+      status.classList.remove("is-error");
+    }, SAVE_FEEDBACK_MS);
   };
-  if (!storage) {
-    unavailable();
-    return;
-  }
-  hint.textContent = SAVE_HINT;
-  // Saving cannot continue: an unchecked box means no record, so remove any
-  // record that is there rather than leave a stale one behind.
-  const stop = () => {
-    storage.remove();
-    unavailable();
-  };
-  const persist = () => {
+  save.addEventListener("click", () => {
     const text = serializeSettings(store.current, config);
-    if (text !== null && !storage.write(text)) stop();
-  };
-  if (initial.stored) checkbox.checked = true;
-  if (checkbox.checked) persist();
-  store.subscribe(() => {
-    if (checkbox.checked) persist();
+    if (text === null) {
+      feedback(save, SAVE_INVALID_STATUS, false);
+      return;
+    }
+    if (!storage?.write(text)) {
+      hint.textContent = SAVE_UNAVAILABLE_HINT;
+      feedback(save, SAVE_FAILED_STATUS, false);
+      return;
+    }
+    feedback(save, SAVED_STATUS, true);
   });
-  checkbox.addEventListener("change", () => {
-    if (checkbox.checked) persist();
-    else storage.remove();
+  reset.addEventListener("click", () => {
+    storage?.remove();
+    store.update(defaultSettings(config));
+    onReset();
+    feedback(reset, RESET_STATUS, true);
   });
 }

@@ -5,6 +5,28 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Link to the source repository beside the Style control, and show the version
+  and an "Apache-2.0" license link in the footer. Both URLs come from the
+  configuration (`links.repoUrl`, `links.licenseUrl`), must be `https`, and
+  can be left empty to hide a link.
+
+### Changed
+
+- Saving settings is now explicit. "Save as my default" saves every setting of
+  both generators, the theme and the style once; "Reset to defaults" removes the
+  saved settings and restores the defaults. Changes made after saving are not
+  saved unless Save is pressed again. Each press shows a short confirmation,
+  announced to screen readers, and a highlight that fades out, or simply ends
+  under reduced motion. Nothing is written to the browser until Save or Reset
+  is pressed.
+
+### Removed
+
+- The "Save current settings as default" checkbox and the `saveSettings`
+  configuration key. Saved settings from 1.0.0 still load.
+
 ## [1.0.0]
 
 ### Added

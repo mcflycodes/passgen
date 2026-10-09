@@ -3,9 +3,13 @@
 // effect stops under reduced motion, without a fine pointer and in a hidden
 // tab.
 
+import { config, configuredLinks } from "../../src/config/validate.ts";
 import { collectLiveDom, liveDomProblems } from "./dom-checks.ts";
 import { expect, test } from "./fixtures.ts";
 import { chooseStyle, openPage, STYLES } from "./helpers.ts";
+
+/** The configured links, the only addresses the page may carry (decision 0005, point 5). */
+const ALLOWED_LINKS = configuredLinks(config);
 
 const POINTER_PROPS = ["--px", "--py", "--pxs", "--pys", "--pxt", "--pyt", "--pxn", "--pyn"];
 
@@ -52,7 +56,7 @@ test.describe("pointer effect", () => {
     await chooseStyle(page, "calm");
     expect(await rootProperties(page)).toEqual({});
     expect(await inlineStyleAttributes(page)).toEqual(["input", "input"]);
-    expect(liveDomProblems("index.html", await collectLiveDom(page))).toEqual([]);
+    expect(liveDomProblems("index.html", await collectLiveDom(page), ALLOWED_LINKS)).toEqual([]);
     await sweep(page);
     expect(await rootProperties(page)).toEqual({});
   });
@@ -116,7 +120,7 @@ test.describe("pointer effect", () => {
       document.documentElement.style.removeProperty("--fx-rest-y");
     });
     await sweep(page);
-    expect(liveDomProblems("index.html", await collectLiveDom(page))).toEqual([]);
+    expect(liveDomProblems("index.html", await collectLiveDom(page), ALLOWED_LINKS)).toEqual([]);
   });
 
   for (const style of STYLES) {
@@ -126,7 +130,7 @@ test.describe("pointer effect", () => {
       await sweep(page);
       await page.mouse.move(640, 360);
       await page.waitForTimeout(100);
-      expect(liveDomProblems("index.html", await collectLiveDom(page))).toEqual([]);
+      expect(liveDomProblems("index.html", await collectLiveDom(page), ALLOWED_LINKS)).toEqual([]);
       // Only <html> (pointer) and the range inputs (slider fill) may carry inline style.
       expect(await inlineStyleAttributes(page)).toEqual(expect.arrayContaining(["input", "input"]));
       for (const tag of await inlineStyleAttributes(page)) expect(["html", "input"]).toContain(tag);

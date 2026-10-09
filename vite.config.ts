@@ -4,7 +4,7 @@ import { defineConfig, type Plugin } from "vite";
 import { type BootScript, compileBootScript } from "./scripts/lib/boot-script.ts";
 import { parseConfigJson } from "./scripts/lib/config-json.ts";
 import { checkHtmlSinks } from "./scripts/lib/html-sink-scan.ts";
-import { insertBootScript, renderPage } from "./scripts/lib/page-template.ts";
+import { type BuildInfo, insertBootScript, renderPage } from "./scripts/lib/page-template.ts";
 import { assertStyles, styleSheet } from "./scripts/lib/style-checks.ts";
 import { checkWordlist } from "./scripts/lib/wordlist.ts";
 import { metaCsp } from "./security/headers.ts";
@@ -47,6 +47,7 @@ const DEV_BOOT_PATH = "/__passgen/boot.js";
 function passgenPagePlugins(): Plugin[] {
   let config: Config;
   let boot: BootScript;
+  let build: BuildInfo;
   return [
     {
       name: "passgen-page",
@@ -58,6 +59,12 @@ function passgenPagePlugins(): Plugin[] {
         validateConfig(shipped);
         config = shipped;
         assertStyles(resolved.root, config.style);
+        // The footer shows the version of this checkout's package.json (the
+        // repository's, not the root's: the gate tests build copies elsewhere).
+        const pkg: unknown = JSON.parse(readFileSync(join(import.meta.dirname, "package.json"), "utf8"));
+        const version = (pkg as { version?: unknown }).version;
+        if (typeof version !== "string") throw new Error("package.json has no version");
+        build = { version };
         boot = await compileBootScript(resolved.root, {
           theme: config.theme,
           style: config.style.default,
@@ -76,7 +83,7 @@ function passgenPagePlugins(): Plugin[] {
       transformIndexHtml: {
         order: "pre",
         handler(html) {
-          return renderPage(html, config);
+          return renderPage(html, config, build);
         },
       },
       generateBundle() {

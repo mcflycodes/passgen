@@ -32,11 +32,11 @@ const schema: Schema = {
   theme: "string",
   style: { default: "string", offered: [{ id: "string", label: "string" }] },
   text: { tagline: "string", intro: { enabled: "boolean", headline: "string", text: "string" } },
-  // Whether "Save current settings as default" starts checked when nothing
-  // is stored (R24, C1). `true` makes saving a per-visit default: unchecking
-  // removes the stored record, which is the only record there is, so the
-  // next visit starts saving again. An opt-out is not preserved.
-  saveSettings: "boolean",
+  // The page's two outward links (decision 0005, point 5): the source
+  // repository in the header and the license in the footer. Each is an
+  // https URL, or empty to leave that link out. They are the only addresses
+  // the build may carry; `configuredLinks` tells the host-name checks so.
+  links: { repoUrl: "string", licenseUrl: "string" },
   extraResults: "number",
   password: {
     length: range,
@@ -83,6 +83,33 @@ export const TEXT_LIMITS = { tagline: 80, headline: 60, text: 240, styleLabel: 2
 
 /** A style id names its folder under src/styles/ and its `data-style` value (R4a, C1). */
 export const STYLE_ID = /^[a-z][a-z0-9-]{0,31}$/;
+
+/** The longest configured link, in UTF-16 code units. */
+export const LINK_LIMIT = 200;
+
+/**
+ * An outward link the page may carry: empty, or an https URL with a host and
+ * no credentials, written exactly as the URL parser serialises it, so what
+ * the build inserts is what a browser will use. Anything else fails.
+ */
+function link(value: string, path: string): void {
+  if (value === "") return;
+  if (value.length > LINK_LIMIT) fail(path, `must be at most ${LINK_LIMIT} characters`);
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    fail(path, "must be an https URL or empty");
+  }
+  if (url.protocol !== "https:" || url.hostname === "") fail(path, "must be an https URL or empty");
+  if (url.username !== "" || url.password !== "") fail(path, "must not carry credentials");
+  if (url.href !== value) fail(path, "must be written in its normalised form");
+}
+
+/** The non-empty configured links, the only addresses the build may carry (decision 0005). */
+export function configuredLinks(config: Pick<Config, "links">): readonly string[] {
+  return [config.links.repoUrl, config.links.licenseUrl].filter((url) => url !== "");
+}
 
 /** Plain text for the page: no control characters, no line or paragraph separators. */
 function plainText(value: string, cap: number, path: string): void {
@@ -172,6 +199,8 @@ export function validateConfig(value: unknown): asserts value is Config {
   plainText(c.text.intro.text, TEXT_LIMITS.text, "text.intro.text");
   if (c.text.intro.enabled && (!c.text.intro.headline.trim() || !c.text.intro.text.trim()))
     fail("text.intro", "an enabled intro needs a headline and a paragraph");
+  link(c.links.repoUrl, "links.repoUrl");
+  link(c.links.licenseUrl, "links.licenseUrl");
   integer(c.extraResults, 0, 20, "extraResults");
   bounds(c.password.length, 4, 128, "password.length");
   bounds(c.passphrase.words, 2, 12, "passphrase.words");

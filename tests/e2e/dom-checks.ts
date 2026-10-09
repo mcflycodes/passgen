@@ -76,27 +76,35 @@ export const FORBIDDEN_ELEMENTS = ["base", "embed", "frame", "iframe", "object",
  * Problems in the page's static content: the shipped HTML parsed by the
  * browser's DOMParser (no scripts run), with character references decoded.
  * Host names are judged in every text node, comment and attribute value
- * outside [data-generated]; a style attribute anywhere in the shipped HTML
- * is refused outright (the live page may only carry the CSSOM-set
- * properties in INLINE_STYLE_ALLOWED). Needs a page without the app's CSP
- * (Trusted Types blocks DOMParser there), so it parses on about:blank.
+ * outside [data-generated]; a configured link (decision 0005, point 5) is
+ * allowed only as the href of an <a>, exactly as configured. A style
+ * attribute anywhere in the shipped HTML is refused outright (the live page
+ * may only carry the CSSOM-set properties in INLINE_STYLE_ALLOWED). Needs a
+ * page without the app's CSP (Trusted Types blocks DOMParser there), so it
+ * parses on about:blank.
  */
-export async function staticHostnameProblems(page: Page, file: string, html: string): Promise<string[]> {
+export async function staticHostnameProblems(
+  page: Page,
+  file: string,
+  html: string,
+  allowed: readonly string[] = [],
+): Promise<string[]> {
   await page.goto("about:blank");
   const { texts, styled } = await page.evaluate(
     ({ source, generated }) => {
       const doc = new DOMParser().parseFromString(source, "text/html");
-      const out: string[] = [];
+      const out: Array<{ text: string; link: boolean }> = [];
       const styled: string[] = [];
       const skip = (node: Node | null) =>
         (node instanceof Element ? node : node?.parentElement)?.closest(`[${generated}]`);
       const walker = doc.createTreeWalker(doc.documentElement, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT);
       for (let node = walker.nextNode(); node; node = walker.nextNode())
-        if (!skip(node)) out.push(node.nodeValue ?? "");
+        if (!skip(node)) out.push({ text: node.nodeValue ?? "", link: false });
       for (const el of doc.querySelectorAll("*")) {
         if (el.hasAttribute("style")) styled.push(el.localName);
         if (skip(el)) continue;
-        for (const attr of el.attributes) out.push(attr.value);
+        for (const attr of el.attributes)
+          out.push({ text: attr.value, link: el.localName === "a" && attr.name === "href" });
       }
       return { texts: out, styled };
     },
@@ -104,7 +112,9 @@ export async function staticHostnameProblems(page: Page, file: string, html: str
   );
   return [
     ...styled.map((name) => `static content: style attribute on <${name}>`),
-    ...texts.flatMap((text) => findHostnames(file, text).map((f) => `static content: ${f.problem}`)),
+    ...texts.flatMap(({ text, link }) =>
+      findHostnames(file, text, true, link ? allowed : []).map((f) => `static content: ${f.problem}`),
+    ),
   ];
 }
 
@@ -219,11 +229,16 @@ export async function collectLiveDom(page: Page): Promise<LiveDom> {
   return { ...dom, ...rendered };
 }
 
-/** Markup, URL and host-name problems in URL-bearing attributes of the live DOM. */
-export function liveDomProblems(file: string, dom: LiveDom): string[] {
+/**
+ * Markup, URL and host-name problems in URL-bearing attributes of the live
+ * DOM. A configured link (decision 0005, point 5) may be the href of an <a>,
+ * exactly as configured; on any other element or attribute it is a problem.
+ */
+export function liveDomProblems(file: string, dom: LiveDom, allowed: readonly string[] = []): string[] {
   const problems = [...dom.problems];
   if (!dom.baseIsPage) problems.push("document base URL differs from the page URL");
   for (const { element, name, value } of dom.urlAttributes) {
+    if (element === "a" && name === "href" && allowed.includes(value)) continue;
     if (resolveWithinDist(file, value) === null) problems.push(`${name}="${value}" on <${element}> leaves the build`);
     for (const f of findHostnames(file, value)) problems.push(`${name} on <${element}>: ${f.problem}`);
   }

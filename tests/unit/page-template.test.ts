@@ -13,10 +13,11 @@ import config from "../../src/config/config.json" with { type: "json" };
 
 const ROOT = join(import.meta.dirname, "../..");
 const INDEX = readFileSync(join(ROOT, "index.html"), "utf8");
-const page = (edit: (c: typeof config) => void = () => {}) => {
+const BUILD = { version: "1.2.3" };
+const page = (edit: (c: typeof config) => void = () => {}, build = BUILD) => {
   const copy = structuredClone(config);
   edit(copy);
-  return insertBootScript(renderPage(INDEX, copy), "./assets/boot-x.js");
+  return insertBootScript(renderPage(INDEX, copy, build), "./assets/boot-x.js");
 };
 
 describe("escaping", () => {
@@ -50,6 +51,7 @@ describe("the shipped index.html", () => {
     assert.match(html, /<option value="-" selected>- hyphen<\/option>/);
     assert.match(html, /<option value="\?">\? question mark<\/option>/);
     assert.match(html, /<script src="\.\/assets\/boot-x\.js"><\/script>/);
+    assert.match(html, /<span class="foot-version">v1\.2\.3<\/span>/);
     assert.doesNotMatch(html, /data-cfg-/);
     assert.doesNotMatch(html, /passgen:(?!csp)/);
     assert.match(html, /<!-- passgen:csp -->/, "the CSP placeholder is left for its own plugin");
@@ -88,6 +90,69 @@ describe("the shipped index.html", () => {
     assert.doesNotMatch(html, /Style</);
   });
 
+  test("renders the configured links as plain anchors with rel=noopener noreferrer", () => {
+    const html = page();
+    assert.match(
+      html,
+      /<a class="top-link" id="repo-link" rel="noopener noreferrer" aria-label="PassGen on GitHub" href="https:\/\/github\.com\/mcflycodes\/passgen">GitHub<\/a>/,
+    );
+    assert.match(
+      html,
+      /<a class="foot-link" id="license-link" rel="noopener noreferrer" aria-label="Apache-2\.0 license" href="https:\/\/github\.com\/mcflycodes\/passgen\/blob\/main\/LICENSE">Apache-2\.0<\/a>/,
+    );
+    assert.doesNotMatch(html, /target=/);
+    assert.equal(html.match(/<a\b/g)?.length, 2, "no other anchors");
+  });
+
+  test("leaves each link out when its URL is empty, with its separator", () => {
+    const noRepo = page((c) => {
+      c.links.repoUrl = "";
+    });
+    assert.doesNotMatch(noRepo, /id="repo-link"/);
+    assert.doesNotMatch(noRepo, /GitHub/);
+    assert.match(noRepo, /id="license-link"/);
+    const noLicense = page((c) => {
+      c.links.licenseUrl = "";
+    });
+    assert.doesNotMatch(noLicense, /id="license-link"/);
+    assert.doesNotMatch(noLicense, /foot-sep/);
+    assert.match(noLicense, /id="repo-link"/);
+    const none = page((c) => {
+      c.links.repoUrl = "";
+      c.links.licenseUrl = "";
+    });
+    assert.doesNotMatch(none, /<a\b/);
+    assert.doesNotMatch(none, /https?:/);
+    assert.match(none, /<span class="foot-version">v1\.2\.3<\/span>\s*<\/p>/);
+  });
+
+  test("escapes a link's characters and refuses anything but an https URL in an href", () => {
+    const html = page((c) => {
+      c.links.repoUrl = 'https://example.invalid/a"b&c';
+    });
+    assert.match(html, /href="https:\/\/example\.invalid\/a&quot;b&amp;c"/);
+    for (const url of ["javascript:alert(1)", "http://example.invalid/", "./LICENSE", "https://"]) {
+      assert.throws(
+        () =>
+          page((c) => {
+            c.links.licenseUrl = url;
+          }),
+        /is not an https URL/,
+        url,
+      );
+    }
+  });
+
+  test("refuses a version the footer cannot show", () => {
+    for (const version of ["", "1.2", "v1.2.3", "1.2.3 beta", "1.2.3-<b>", "1.2.3.4"]) {
+      assert.throws(() => page(() => {}, { version }), /not a version the page can show/, JSON.stringify(version));
+    }
+    assert.match(
+      page(() => {}, { version: "2.0.0-rc.1" }),
+      /v2\.0\.0-rc\.1/,
+    );
+  });
+
   test("checks the configured default theme", () => {
     assert.match(
       page((c) => {
@@ -103,7 +168,7 @@ describe("the shipped index.html", () => {
 });
 
 describe("template errors fail closed", () => {
-  const render = (html: string) => renderPage(html, config);
+  const render = (html: string) => renderPage(html, config, BUILD);
   test("a path that names nothing", () => {
     assert.throws(
       () => render(INDEX.replace('data-cfg-text="text.tagline"', 'data-cfg-text="text.nope"')),
@@ -119,6 +184,9 @@ describe("template errors fail closed", () => {
   test("a duplicated or missing section marker", () => {
     assert.throws(() => render(INDEX.replace("<!-- /passgen:intro -->", "")), /exactly one <!-- passgen:intro -->/);
     assert.throws(() => render(`${INDEX}<!-- passgen:intro -->`), /exactly one/);
+  });
+  test("a missing version marker", () => {
+    assert.throws(() => render(INDEX.replace("<!-- passgen:version -->", "")), /exactly one <!-- passgen:version -->/);
   });
   test("a missing boot marker", () => {
     assert.throws(() => render(INDEX.replace("<!-- passgen:boot -->", "")), /passgen:boot/);

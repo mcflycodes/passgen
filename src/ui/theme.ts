@@ -17,33 +17,45 @@ function isTheme(value: string | undefined): value is Theme {
   return (THEMES as readonly string[]).includes(value as string);
 }
 
-export function mountThemeControls(store: SettingsStore, onStyleChange: (style: string) => void): void {
-  const root = document.documentElement;
-  const { theme, style } = store.current;
-  root.dataset.theme = theme;
-  root.dataset.style = style;
+/** The mounted controls; `refresh` shows the store's theme and style after something else changed them (Reset). */
+export interface ThemeControls {
+  refresh(): void;
+}
 
+export function mountThemeControls(store: SettingsStore, onStyleChange: (style: string) => void): ThemeControls {
+  const root = document.documentElement;
   const radios = [...document.querySelectorAll<HTMLInputElement>('input[name="theme"]')];
+  // Absent when the configuration offers one style (C1).
+  const select = document.getElementById("style");
+  const styleSelect = select instanceof HTMLSelectElement ? select : null;
+  const offered = styleSelect ? [...styleSelect.options].map((option) => option.value) : [];
+
+  const refresh = () => {
+    const { theme, style } = store.current;
+    const styleChanged = root.dataset.style !== style;
+    root.dataset.theme = theme;
+    root.dataset.style = style;
+    for (const radio of radios) radio.checked = radio.value === theme;
+    if (styleSelect && offered.includes(style)) styleSelect.value = style;
+    if (styleChanged) onStyleChange(style);
+  };
+  root.dataset.theme = store.current.theme;
+  root.dataset.style = store.current.style;
+  refresh();
+
   for (const radio of radios) {
-    radio.checked = radio.value === theme;
     radio.addEventListener("change", () => {
       if (!radio.checked || !isTheme(radio.value)) return;
       root.dataset.theme = radio.value;
       store.update({ theme: radio.value });
     });
   }
-
-  // Absent when the configuration offers one style (C1).
-  const select = document.getElementById("style");
-  if (select instanceof HTMLSelectElement) {
-    const offered = [...select.options].map((option) => option.value);
-    if (offered.includes(style)) select.value = style;
-    select.addEventListener("change", () => {
-      const chosen = select.value;
-      if (!offered.includes(chosen)) return;
-      root.dataset.style = chosen;
-      store.update({ style: chosen });
-      onStyleChange(chosen);
-    });
-  }
+  styleSelect?.addEventListener("change", () => {
+    const chosen = styleSelect.value;
+    if (!offered.includes(chosen)) return;
+    root.dataset.style = chosen;
+    store.update({ style: chosen });
+    onStyleChange(chosen);
+  });
+  return { refresh };
 }

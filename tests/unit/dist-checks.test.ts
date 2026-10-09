@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import { EXAMPLE_TOOLS } from "../../scripts/lib/attribution-patterns.ts";
 import {
+  blankAllowedLinks,
   checkCss,
   checkFile,
   checkHtml,
@@ -109,6 +110,65 @@ describe("HTML structural rule", () => {
       assert.ok(flagged(checkHtml("index.html", html)), label);
     });
   }
+});
+
+describe("configured links (decision 0005, point 5)", () => {
+  const LINK = "https://forge.example/passgen";
+  const OTHER = "https://forge.example/passgen-fork";
+  const allowed = [LINK];
+
+  test("blanks a link only where it stands whole: the entire text, or quoted", () => {
+    assert.equal(blankAllowedLinks(LINK, allowed), "");
+    assert.equal(blankAllowedLinks(`href="${LINK}"`, allowed), `href=${" ".repeat(LINK.length + 2)}`);
+    assert.equal(blankAllowedLinks(`x='${LINK}'`, allowed), `x=${" ".repeat(LINK.length + 2)}`);
+    assert.equal(blankAllowedLinks(`x=\`${LINK}\``, allowed), `x=${" ".repeat(LINK.length + 2)}`);
+    for (const text of [`see ${LINK}`, `${LINK}/x`, `"${LINK}/x"`, `"${OTHER}"`, `"${LINK} "`]) {
+      assert.equal(blankAllowedLinks(text, allowed), text, text);
+    }
+    assert.equal(blankAllowedLinks(LINK, []), LINK);
+    assert.equal(blankAllowedLinks(LINK, [""]), LINK);
+  });
+
+  test("an anchor to a configured link passes the HTML check; the same link anywhere else does not", () => {
+    const anchor = page("", `<a href="${LINK}" rel="noopener noreferrer">Source</a>`);
+    assert.deepEqual(checkHtml("index.html", anchor, allowed), []);
+    assert.ok(flagged(checkHtml("index.html", anchor)), "nothing is exempt without the list");
+    for (const [label, body] of [
+      ["another link", `<a href="${OTHER}">x</a>`],
+      ["the link with something added", `<a href="${LINK}?x">x</a>`],
+      ["the link as text", `<p>${LINK}</p>`],
+      ["the link in a comment", `<!-- ${LINK} -->`],
+      ["the link in a single-quoted attribute of a text", `<p title='${LINK}'>${OTHER}</p>`],
+    ] as const) {
+      assert.ok(flagged(checkHtml("index.html", page("", body), allowed)), label);
+    }
+  });
+
+  test("a configured link passes the JavaScript check as a whole string literal and nowhere else", () => {
+    assert.deepEqual(checkJs("a.js", `const c={repoUrl:"${LINK}",licenseUrl:""};`, allowed), []);
+    assert.deepEqual(checkJs("a.js", `const u='${LINK}';`, allowed), []);
+    assert.deepEqual(checkJs("a.js", `const c={repoUrl:\`${LINK}\`,x:1};`, allowed), [], "minified template form");
+    assert.ok(flagged(checkJs("a.js", `const u="${LINK}";`)), "nothing is exempt without the list");
+    for (const [label, js] of [
+      ["another link", `const u="${OTHER}";`],
+      ["the link with a path added", `const u="${LINK}/releases";`],
+      ["the link in a comment", `x=1; // ${LINK}`],
+      ["the link in a template with a substitution", `const u=\`${LINK}\${x}\`;`],
+      ["the link as a module specifier", `import "${LINK}";`],
+    ] as const) {
+      assert.ok(flagged(checkJs("a.js", js, allowed)), label);
+    }
+  });
+
+  test("CSS gets no exemption", () => {
+    assert.ok(flagged(checkFile("a.css", `a::after{content:"${LINK}"}`, allowed)));
+  });
+
+  test("checkFile passes the list on for HTML and JavaScript only", () => {
+    assert.deepEqual(checkFile("index.html", page("", `<a href="${LINK}">x</a>`), allowed), []);
+    assert.deepEqual(checkFile("a.js", `const u="${LINK}";`, allowed), []);
+    assert.ok(flagged(checkFile("notes.txt", `"${LINK}"`, allowed)));
+  });
 });
 
 describe("JavaScript check (oxc)", () => {
