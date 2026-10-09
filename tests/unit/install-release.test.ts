@@ -311,13 +311,21 @@ async function listen(server: Server): Promise<string> {
   return `http://127.0.0.1:${address.port}/`;
 }
 
-/** Whether this machine can run `unshare` with these flags as an unprivileged user. */
-async function canUnshare(flags: readonly string[] = ["-rm"]): Promise<boolean> {
+/**
+ * Whether this machine can run `unshare` with these flags as an unprivileged user and then run
+ * `probe` inside. Some systems (Ubuntu's AppArmor userns restriction) create the namespace but
+ * grant no capabilities in it, so the probe should use the capability a test needs.
+ */
+async function canUnshare(flags: readonly string[] = ["-rm"], probe?: string): Promise<boolean> {
+  const dir = await mkdtemp(join(scratch, "unshare-probe-"));
   try {
-    await run("unshare", [...flags, "true"]);
+    // By default, prove that mounting works there.
+    await run("unshare", [...flags, bash, "-c", probe ?? `mount -t tmpfs passgen-probe ${q(dir)}`]);
     return true;
   } catch {
     return false;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 }
 
@@ -1463,7 +1471,7 @@ describe("install-release: bind mounts and mounts inside the docroot (exit 4, no
 
 describe("install-release: trust and writers", () => {
   test("never trusts the overflow UID implicitly inside a user namespace", async (t) => {
-    if (!(await canUnshare(["-r"]))) return t.skip("needs unprivileged user namespaces");
+    if (!(await canUnshare(["-r"], "true"))) return t.skip("needs unprivileged user namespaces");
     const { docroot } = await makeSite();
     const before = await snapshot(docroot);
     const result = await runScript("unshare", [
@@ -1506,8 +1514,15 @@ describe("install-release: trust and writers", () => {
 
   test("running as root, refuses a docroot directory owned by another user unless it is the --owner user", async (t) => {
     const flags = ["-r", "--map-auto"];
-    if (!(await canUnshare(flags)))
-      return t.skip("needs a user namespace with subordinate IDs (newuidmap, /etc/subuid)");
+    const probe = join(scratch, `chown-probe-${siteCount}`);
+    await writeFile(probe, "");
+    const usable = await canUnshare(flags, `chown 65534 ${q(probe)} && rm -f ${q(probe)}`);
+    await rm(probe, { force: true });
+    if (!usable) {
+      return t.skip(
+        "needs a user namespace with subordinate IDs (newuidmap, /etc/subuid) and the capability to chown in it",
+      );
+    }
     // Inside the namespace uid 65534 ("nobody") is a real, mapped user. The files it ends up
     // owning belong to a subordinate ID outside, so the site is removed from inside as well.
     const { parent, docroot } = await makeSite();
@@ -1554,7 +1569,9 @@ describe("install-release: trust and writers", () => {
   });
 
   test("running as root, installs read-only modes 0555 and 0444", async (t) => {
-    if (!(await canUnshare(["-r"]))) return t.skip("needs unprivileged user namespaces");
+    // Root there must be able to write into a 0500 directory it owns.
+    const rootProbe = `d=$(mktemp -d ${q(join(scratch, "dac-probe-XXXXXX"))}) && chmod 0500 "$d" && : >"$d/x" && rm -r "$d"`;
+    if (!(await canUnshare(["-r"], rootProbe))) return t.skip("needs unprivileged user namespaces with capabilities");
     const { docroot } = await makeSite();
     try {
       const result = await installInNamespace(
