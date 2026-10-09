@@ -111,6 +111,22 @@ caching, method refusal, hidden/map paths, directories and 404s, then runs
 Caddy's automatic HTTP redirect is checked too. Apache and nginx deliberately
 leave the redirect listener to the operator; CI reports that unsupported probe.
 
+The harness gives Apache inherited directory listing and conflicting response
+headers, and nginx `autoindex on` and conflicting http-level `add_header`
+defaults. nginx replaces an inherited header list when a child declares its own.
+Before probing PassGen, a separate control vhost must return a directory listing,
+`X-Frame-Options: SAMEORIGIN` and `Referrer-Policy: unsafe-url`. CI logs first
+confirm the hostile control is active, then confirm the example overrides it.
+Caddy has no inherited browse setting: `file_server browse` belongs to a site's
+handler route. Adding it to PassGen would alter or shadow the shipped example,
+so CI reports that inherited-baseline test as unsupported for Caddy.
+
+Dependabot does not update the server digests stored in workflow environment
+variables. To refresh them, resolve the current manifest/index digest from Docker
+Hub for each official tag (`httpd:2.4`, `nginx:stable`, `caddy:2`), replace its
+`@sha256:…` value in `.github/workflows/ci.yml`, and open a reviewed PR. Require
+the workflow guard and all three real-server checks to pass before merging.
+
 Run the additional curl probes against any deployment (the manifest must include
 the built favicon and fingerprinted assets):
 

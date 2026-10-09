@@ -33,6 +33,20 @@ export function checkSecurity(raw: string, statuses: number[], cache?: string) {
   assert.doesNotMatch(response.body, /<(?:title|h1)[^>]*>\s*(?:Index of|Directory listing)/i);
 }
 
+export function checkFileResponse(raw: string, path: string) {
+  checkSecurity(raw, [200], path.startsWith("assets/") ? "public, max-age=31536000, immutable" : "no-cache");
+}
+
+// The control vhost deliberately inherits the hostile defaults outside PassGen's scope.
+export function checkHostileBaseline(raw: string) {
+  const response = parseResponse(raw);
+  assert.equal(response.status, 200, "Hostile control directory must be served");
+  assert.deepEqual(response.headers.get("x-frame-options"), ["SAMEORIGIN"]);
+  assert.deepEqual(response.headers.get("referrer-policy"), ["unsafe-url"]);
+  assert.match(response.body, /<(?:title|h1)[^>]*>\s*(?:Index of|Directory listing)/i);
+  assert.match(response.body, /baseline-marker\.txt/);
+}
+
 export async function probeServer(options: {
   url: string;
   manifest: string;
@@ -65,12 +79,7 @@ export async function probeServer(options: {
     "Manifest must cover favicon",
   );
   for (const path of ["", ...files.keys()]) {
-    const cache = path.startsWith("assets/")
-      ? "public, max-age=31536000, immutable"
-      : path === "" || path === "index.html"
-        ? "no-cache"
-        : undefined;
-    for (const method of ["GET", "HEAD"]) checkSecurity(await request(path, method), [200], cache);
+    for (const method of ["GET", "HEAD"]) checkFileResponse(await request(path, method), path);
     console.log(`PASS GET/HEAD headers and cache: ${path || "/"}`);
   }
   checkSecurity(await request("passgen-ci-missing"), [404], "no-cache");

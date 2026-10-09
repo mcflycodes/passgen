@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { checkSecurity, parseResponse } from "../../scripts/lib/server-probes.ts";
+import {
+  checkFileResponse,
+  checkHostileBaseline,
+  checkSecurity,
+  parseResponse,
+} from "../../scripts/lib/server-probes.ts";
 import { SECURITY_HEADERS } from "../../security/headers.ts";
 
 function response(extra = "", status = 200, body = "") {
@@ -34,4 +39,28 @@ test("probes reject wrong status, caching, duplicate cache headers and listings"
   assert.throws(() => checkSecurity(response("Cache-Control: no-cache\r\n"), [200], "no-cache"), /Cache-Control/);
   assert.throws(() => checkSecurity(response("", 403, "<title>Index of /assets</title>"), [403]));
   assert.throws(() => parseResponse("invalid"), /Missing HTTP status/);
+});
+
+test("every non-asset file, including favicon, must have no-cache", () => {
+  const immutable = response().replace("Cache-Control: no-cache", "Cache-Control: public, max-age=31536000, immutable");
+  for (const path of ["", "index.html", "favicon.svg", "manifest.webmanifest"]) {
+    checkFileResponse(response(), path);
+    assert.throws(() => checkFileResponse(immutable, path), /Cache-Control/);
+  }
+  checkFileResponse(immutable, "assets/app-12345678.js");
+  assert.throws(() => checkFileResponse(response(), "assets/app-12345678.js"), /Cache-Control/);
+});
+
+test("hostile baseline control must prove conflicting headers and directory listing are active", () => {
+  const control =
+    "HTTP/1.1 200 OK\r\nX-Frame-Options: SAMEORIGIN\r\nReferrer-Policy: unsafe-url\r\n\r\n<title>Index of /listing/</title><a>baseline-marker.txt</a>";
+  checkHostileBaseline(control);
+  for (const broken of [
+    control.replace("200 OK", "403 Forbidden"),
+    control.replace("SAMEORIGIN", "DENY"),
+    control.replace("unsafe-url", "no-referrer"),
+    control.replace("Index of", "Contents"),
+    control.replace("baseline-marker.txt", "nothing"),
+  ])
+    assert.throws(() => checkHostileBaseline(broken));
 });
