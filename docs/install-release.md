@@ -41,7 +41,7 @@ The script checks for its tools up front and exits 3 naming any that is missing.
 ```sh
 scripts/install-release.sh --version vX.Y.Z --docroot DIR [--repo OWNER/NAME]
     [--from-dir DIR] [--file-mode 0644] [--dir-mode 0755]
-    [--owner USER[:GROUP]] [--backup-dir DIR] [--url https://site/] [--dry-run]
+    [--owner USER[:GROUP]] [--backup-dir DIR] [--url https://example.com/] [--dry-run]
 ```
 
 | Option | Meaning |
@@ -54,7 +54,7 @@ scripts/install-release.sh --version vX.Y.Z --docroot DIR [--repo OWNER/NAME]
 | `--dir-mode MODE` | Mode for the docroot and every directory in it. Default `0755`. |
 | `--owner USER[:GROUP]` | Owner and group for the docroot and everything in it, applied after the files are in place. Default: unchanged. |
 | `--backup-dir DIR` | Where backups go. Default: a sibling of the docroot named `.<docroot-name>-backups`. |
-| `--url https://site/` | After installing, fetch every released file from the live site and compare it with the release, and check that `index.html` carries the nine security headers. |
+| `--url https://example.com/` | After installing, fetch every released file from the live site and compare it with the release, and check that `index.html` carries the nine security headers. |
 | `--local-http` | Allow a plain `http://` `--url` on `127.0.0.1`, `localhost` or `[::1]`. For local tests only. |
 | `--dry-run` | Download and verify the release, then print every install action without changing the docroot or the backups. |
 | `-h`, `--help` | Print the usage text from the top of the script. |

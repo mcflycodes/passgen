@@ -10,7 +10,7 @@
 # Usage:
 #   install-release.sh --version vX.Y.Z --docroot DIR [--repo OWNER/NAME]
 #       [--from-dir DIR] [--file-mode 0644] [--dir-mode 0755]
-#       [--owner USER[:GROUP]] [--backup-dir DIR] [--url https://site/] [--dry-run]
+#       [--owner USER[:GROUP]] [--backup-dir DIR] [--url https://example.com/] [--dry-run]
 #
 # Required:
 #   --version vX.Y.Z      The exact release tag to install. There is no "latest".
@@ -30,7 +30,7 @@
 #   --backup-dir DIR      Where backups go, one subdirectory per run, named by
 #                         UTC timestamp. Default: a sibling of the docroot named
 #                         .<docroot-name>-backups. The newest 3 are kept.
-#   --url https://site/   After installing, fetch every released file from this
+#   --url https://example.com/   After installing, fetch every released file from this
 #                         URL, compare it with the release and check that
 #                         index.html carries the nine security headers (names
 #                         only; scripts/verify-live.ts checks the values).
