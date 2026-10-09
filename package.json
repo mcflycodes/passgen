@@ -17,6 +17,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "screenshots": "node scripts/screenshots.ts",
     "serve": "node scripts/serve.ts",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "lint": "biome ci .",
