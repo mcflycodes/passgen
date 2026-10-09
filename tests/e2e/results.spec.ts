@@ -79,8 +79,8 @@ for (const [prefix, kind] of [
 
 test("invalid settings clear extras and copy feedback, recovery produces fresh results", async ({ page, context }) => {
   if (test.info().project.name.includes("chrom")) await context.grantPermissions(["clipboard-write"]);
-  await page.clock.install();
-  await page.clock.pauseAt(new Date());
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-02T00:00:00Z"));
   await openPage(page);
   await page.locator("#pw-copy").click();
   await expect(page.locator("#pw-copy")).toHaveText("Copied");
@@ -143,8 +143,8 @@ for (const mode of ["unavailable", "rejected"] as const) {
 }
 
 test("late clipboard response cannot mark a replacement result as copied", async ({ page }) => {
-  await page.clock.install();
-  await page.clock.pauseAt(new Date());
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-02T00:00:00Z"));
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "clipboard", {
       value: {
@@ -251,8 +251,8 @@ test("generation failure clears both panels without retaining extra values", asy
 });
 
 test("replaced extra results release feedback, listeners and pending copy requests", async ({ page }) => {
-  await page.clock.install();
-  await page.clock.pauseAt(new Date());
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-02T00:00:00Z"));
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "clipboard", {
       value: {
