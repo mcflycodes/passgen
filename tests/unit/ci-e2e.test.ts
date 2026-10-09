@@ -168,3 +168,45 @@ test("CI e2e coverage guard rejects an unknown project", () => {
     /must cover every Playwright project with every shard exactly once/,
   );
 });
+
+function checkReleaseWorkflow(configuration: string) {
+  assert.match(configuration, /^permissions: \{\}$/m);
+  const jobs = (configuration.split("jobs:\n")[1] ?? "").split(/^ {2}(?=[\w-]+:\n)/m).slice(1);
+  assert.equal(jobs.length, 2);
+  assert.match(jobs[0] ?? "", /^validate:\n/);
+  assert.match(jobs[0] ?? "", /permissions:\n {6}contents: read\n {6}actions: read\n/);
+  assert.match(jobs[1] ?? "", /^publish:\n {4}needs: validate\n/);
+  assert.match(jobs[1] ?? "", /permissions:\n {6}contents: write\n {4}steps:/);
+  assert.equal((configuration.match(/contents: write/g) ?? []).length, 1);
+  assert.doesNotMatch(configuration, /cache:|actions\/cache@|secrets\.|write-all|read-all|test:e2e/);
+  for (const action of configuration.matchAll(/uses: (\S+)/g)) {
+    assert.match(action[1] ?? "", /@[a-f0-9]{40}$/);
+  }
+  assert.match(configuration, /pnpm install --frozen-lockfile --ignore-scripts/);
+  assert.match(configuration, /ref: \$\{\{ needs\.validate\.outputs\.commit \}\}/);
+  assert.match(configuration, /run: node scripts\/check-release\.ts/);
+  assert.match(configuration, /node scripts\/release-notes\.ts/);
+  assert.match(configuration, /gh release create .*--verify-tag.*--notes-file/);
+  assert.doesNotMatch(configuration, /--draft|--prerelease/);
+  for (const run of configuration.matchAll(/run:.*(?:\n {10}.*)*/g)) assert.doesNotMatch(run[0], /\$\{\{/);
+}
+
+const releaseWorkflow = read(".github/workflows/release.yml");
+function read(path: string) {
+  return readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+}
+
+test("release workflow pins actions, limits permissions and builds without cache", () => {
+  checkReleaseWorkflow(releaseWorkflow);
+});
+
+test("release workflow guard rejects broken pins, permissions, caching and input interpolation", () => {
+  for (const broken of [
+    releaseWorkflow.replace(/@[a-f0-9]{40}/, "@main"),
+    releaseWorkflow.replace("permissions: {}", "permissions: write-all"),
+    releaseWorkflow.replace("contents: read", "contents: write"),
+    releaseWorkflow.replace("node-version-file: .nvmrc", "node-version-file: .nvmrc\n          cache: pnpm"),
+    releaseWorkflow.replace("run: node scripts/check-release.ts", `run: echo \${{ github.ref_name }}`),
+  ])
+    assert.throws(() => checkReleaseWorkflow(broken));
+});

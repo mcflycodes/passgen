@@ -51,6 +51,62 @@ is not a filesystem sandbox. Remove old files instead of overlaying releases.
 Use HTTPS with a valid certificate, arrange renewal, and permanently redirect
 HTTP to HTTPS.
 
+## Deploy from a release
+
+Choose a reviewed tag and download all three assets from its GitHub Release into
+a working directory outside the web root. While the repository is private,
+authenticate `gh` with a GitHub account that has repository read access:
+
+```sh
+gh release download vX.Y.Z --repo mcflycodes/passgen \
+  --pattern 'passgen-X.Y.Z.zip' --pattern 'passgen-X.Y.Z.zip.sha256' \
+  --pattern SHA256SUMS
+```
+
+Once the repository is public, plain `curl` works instead:
+
+```sh
+curl --fail --location --remote-name https://github.com/mcflycodes/passgen/releases/download/vX.Y.Z/passgen-X.Y.Z.zip
+curl --fail --location --remote-name https://github.com/mcflycodes/passgen/releases/download/vX.Y.Z/passgen-X.Y.Z.zip.sha256
+curl --fail --location --remote-name https://github.com/mcflycodes/passgen/releases/download/vX.Y.Z/SHA256SUMS
+```
+
+Replace `X.Y.Z` throughout with the selected version. Verify the ZIP before
+unpacking it into a fresh staging directory, then verify every extracted file:
+
+```sh
+sha256sum -c passgen-X.Y.Z.zip.sha256
+mkdir payload
+unzip passgen-X.Y.Z.zip -d payload
+(cd payload && sha256sum -c ../SHA256SUMS)
+```
+
+Every checksum must report `OK`. On macOS use `shasum -a 256 -c`. The archive
+contains the site's files directly at its root. Keep both checksum files outside
+the public root and obtain them separately from the deployed site.
+
+Configure the dedicated static host using the required headers below and the
+ready-made [Apache, nginx and Caddy examples](../deploy/examples/README.md).
+Move the verified staging directory into a new release directory, give the
+server read-only access, and switch the web root to it atomically where your
+host supports that. Do not overlay an existing release. Retain the previous
+verified directory so switching back rolls back the deployment.
+
+Check out source from the same reviewed tag to run its verifier with the pinned
+Node version (`.nvmrc`); installing dependencies is unnecessary for this script.
+Replace the example URL and paths with your deployment and trusted manifest:
+
+```sh
+node scripts/verify-live.ts --url https://example.com/tools/passgen/ \
+  --manifest /path/to/trusted/SHA256SUMS --release-dir /srv/passgen
+```
+
+This checks live bytes and headers as well as the complete local file set,
+rejecting extra files and symlinks. If the release directory is not locally
+mounted, omit `--release-dir`; remote verification cannot enumerate extra files.
+See [verification](verify.md) for all checks and trust limits. A release ZIP uses
+the shipped configuration; customize it by building from source instead.
+
 ## Required response headers
 
 [`security/headers.ts`](../security/headers.ts) defines the exact policy once.

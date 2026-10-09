@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      commit: ${{ steps.validate.outputs.commit }}
+      version: ${{ steps.validate.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Validate tag, ancestry and successful CI on this commit
+        id: validate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-release.ts
+
+  publish:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ needs.validate.outputs.commit }}
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Install from the lockfile, install scripts blocked
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Fast release gates and build
+        run: |
+          pnpm deps:check
+          pnpm attribution:check
+          pnpm html-sinks:check
+          pnpm typecheck
+          pnpm lint
+          pnpm test:unit
+          pnpm headers:check
+          pnpm styles:check
+          pnpm build
+          pnpm verify:dist
+          pnpm manifest
+      - name: Package and check release notes
+        run: |
+          python3 scripts/package-release.py
+          node scripts/release-notes.ts
+      - name: Publish release and verified assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          RELEASE_COMMIT: ${{ needs.validate.outputs.commit }}
+        run: |
+          test "$(git rev-parse "refs/tags/v$RELEASE_VERSION^{commit}")" = "$RELEASE_COMMIT"
+          gh release create "v$RELEASE_VERSION" --verify-tag --title "PassGen $RELEASE_VERSION" --notes-file release/notes.md "release/passgen-$RELEASE_VERSION.zip" release/SHA256SUMS "release/passgen-$RELEASE_VERSION.zip.sha256"
