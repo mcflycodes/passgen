@@ -287,11 +287,15 @@ for (const style of STYLES) {
         for (const input of await page.locator("input, select").all()) {
           await expect(input).toHaveAccessibleName(/.+/);
         }
-        expect(
-          await page.evaluate(
-            () => document.getAnimations().filter((animation) => animation.playState === "running").length,
+        expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+        const transitionDurations = await page.locator(".btn").evaluateAll((buttons) =>
+          buttons.flatMap((button) =>
+            getComputedStyle(button)
+              .transitionDuration.split(",")
+              .map((value) => value.trim()),
           ),
-        ).toBe(0);
+        );
+        for (const duration of transitionDurations) expect(duration).toBe("0s");
         // 200% of the 1280x800 desktop viewport is 640x400 CSS pixels.
         // Also exercise 320 CSS px, independently of the project's device.
         const original = page.viewportSize();

@@ -414,7 +414,7 @@ test.describe("saved settings", () => {
       await expect(status(page)).toHaveAttribute("role", "status");
       await expect(status(page)).toHaveAttribute("aria-live", "polite");
       await expect(status(page)).toHaveAttribute("aria-atomic", "true");
-      // Count only the highlight fade; clicking can also start hover/focus transitions.
+      // Count only the highlight fade, excluding the is-done background and border-colour transitions.
       const animated = await save(page).evaluate(
         (el) =>
           el
@@ -423,7 +423,7 @@ test.describe("saved settings", () => {
               (animation) =>
                 animation instanceof CSSAnimation &&
                 animation.animationName === "save-ring" &&
-                animation.playState === "running",
+                (animation.playState === "running" || animation.playState === "finished"),
             ).length,
       );
       expect(animated).toBe(1);
@@ -450,29 +450,25 @@ test.describe("saved settings", () => {
       await page.emulateMedia({ reducedMotion: "reduce" });
       await openPage(page);
       await page.emulateMedia({ reducedMotion: "reduce" });
+      const transitionDurations = await page.locator(".btn").evaluateAll((buttons) =>
+        buttons.flatMap((button) =>
+          getComputedStyle(button)
+            .transitionDuration.split(",")
+            .map((value) => value.trim()),
+        ),
+      );
+      for (const duration of transitionDurations) expect(duration).toBe("0s");
       await save(page).click();
       await expect(save(page)).toHaveClass(/is-done/);
       await expect(status(page)).toHaveText(SAVED_STATUS);
-      expect(
-        await page.evaluate(
-          () => document.getAnimations().filter((animation) => animation.playState === "running").length,
-        ),
-      ).toBe(0);
+      expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
       expect(await save(page).evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
       await expect(save(page)).not.toHaveClass(/is-done/, { timeout: SAVE_FEEDBACK_MS * 3 });
-      expect(
-        await page.evaluate(
-          () => document.getAnimations().filter((animation) => animation.playState === "running").length,
-        ),
-      ).toBe(0);
+      expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
       await reset(page).click();
       await expect(reset(page)).toHaveClass(/is-done/);
       await expect(status(page)).toHaveText(RESET_STATUS);
-      expect(
-        await page.evaluate(
-          () => document.getAnimations().filter((animation) => animation.playState === "running").length,
-        ),
-      ).toBe(0);
+      expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
       await expectQuiet(page, watched);
     });
 
