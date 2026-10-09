@@ -411,7 +411,7 @@ check_private_dir() {
   local uid mode
   read -r uid mode < <(stat -c '%u %a' -- "$1")
   ((uid == EUID)) || die 4 "the $2 $1 is owned by uid $uid, not by uid $EUID, which runs this script"
-  [[ $mode == 700 ]] || die 4 "the $2 $1 has mode $mode; it must be 0700 (chmod 0700 $1)"
+  [[ $mode == 700 ]] || die 4 "the $2 $1 has mode $mode; it must be 0700 (chmod 00700 $1)"
 }
 
 # has_default_acl DIR: whether directories made in DIR escape umask 077, which
@@ -435,7 +435,9 @@ prepare_backup_root() {
   local created=0 problem=''
   if [[ ! -e $backup_root ]]; then
     mkdir -- "$backup_root" || die 4 "could not create the backup directory $backup_root"
-    chmod 0700 -- "$backup_root"
+    # A setgid parent passes its setgid bit on, and GNU chmod keeps a
+    # directory's setgid bit unless the mode has five digits.
+    chmod 00700 -- "$backup_root"
     created=1
     if command -v setfacl >/dev/null 2>&1; then
       # It may have inherited ACL entries from its parent's default ACL.
@@ -817,6 +819,7 @@ take_backup() {
     ((seq < n)) || n=$seq
   done
   printf -v backup '%s/%s-%06d' "$backup_root" "$ts" $((n + 1))
+  # Its parent was checked to be exactly 0700, so it cannot inherit setgid.
   mkdir -m 0700 -- "$backup" || die 4 "could not create the backup directory $backup"
   # The copy goes one level down, so the docroot's own mode and owner land on
   # $backup/docroot and the backup directory itself stays private.

@@ -1380,6 +1380,22 @@ describe("install-release: private backups (exit 4 when refused)", () => {
     }
   });
 
+  test("works under a setgid parent, whose bit new directories inherit", async () => {
+    // GNU chmod 0700 keeps a directory's setgid bit, so a new backup directory under a
+    // 2755 parent stayed 2700 and the installer refused its own directory.
+    for (const existing of [true, false]) {
+      const { parent, docroot, backups } = await makeSite();
+      if (!existing) await rm(docroot, { recursive: true });
+      await chmod(parent, 0o2755);
+      const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir]);
+      assert.equal(result.code, 0, `existing docroot ${existing}: ${result.output}`);
+      assert.equal((await stat(backups)).mode & 0o7777, 0o700);
+      assert.equal((await stat(reportedBackup(result.output))).mode & 0o7777, 0o700);
+      assert.deepEqual(await snapshot(docroot), expectedSnapshot(), "a docroot created here loses the setgid bit too");
+      assert.deepEqual(await entries(parent), [".htdocs-backups", "htdocs"], "staging is removed");
+    }
+  });
+
   test("refuses an existing backup directory with a default ACL", async () => {
     const { docroot, backups } = await makeSite();
     await mkdir(backups, { mode: 0o700 });
@@ -1599,6 +1615,27 @@ describe("install-release: trust and writers", () => {
 });
 
 describe("install-release: rotation that cannot list the backups (exit 0, with a warning)", () => {
+  test("warns when the backup names cannot be sorted, and keeps the verified install", async () => {
+    const { docroot, backups } = await makeSite();
+    const realSort = (await run("bash", ["-c", "command -v sort"])).stdout.trim();
+    // Fails only for the rotation's input: a list of backup names. Every other sort passes through.
+    const env = await shim("sort", [
+      `input=$(mktemp ${q(join(scratch, "sort-input-XXXXXX"))}) || exit 2`,
+      'cat >"$input"',
+      "if grep -qxE '[0-9]{8}T[0-9]{6}Z-[0-9]{6}' \"$input\"; then",
+      '  rm -f "$input"; echo "sort: write failed: No space left on device" >&2; exit 2',
+      "fi",
+      `${q(realSort)} "$@" <"$input"`,
+      'rc=$?; rm -f "$input"; exit $rc',
+    ]);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir], env);
+    assert.equal(result.code, 0, result.output);
+    assert.match(result.output, /could not sort the backups in /);
+    assert.match(result.output, /backup rotation did not finish .* the install itself succeeded/);
+    assert.deepEqual(await snapshot(docroot), expectedSnapshot());
+    assert.equal((await entries(backups)).length, 1);
+  });
+
   test("warns when the backups cannot be listed, and keeps the verified install", async () => {
     const { docroot, backups } = await makeSite();
     const realFind = (await run("bash", ["-c", "command -v find"])).stdout.trim();

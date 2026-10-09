@@ -28,8 +28,9 @@ such a setup is cheap to detect, the script refuses; the rest is listed under
 [What it cannot detect](#what-it-cannot-detect).
 
 A web server account that can write the web root is not supported: the script
-refuses such a docroot (see [Trusted directories](#trusted-directories)). Give
-the server read access only.
+refuses such a docroot (see [Trusted directories](#trusted-directories)) unless
+you name that account with `--owner`, which makes it trusted. Give the server
+read access only.
 
 ## What a release contains
 
@@ -220,9 +221,17 @@ and its writes and send them somewhere else. So, as OpenSSH does with
 root runs the script, because alice could rename `www`. Move the docroot, or
 run the script as the owner of the directories above it.
 
-A docroot the web server can write, for example one owned by `www-data`, or
-group-writable for it, is refused. To fix it, hand the tree to root (or to the
-user running the script) and give the server read access only:
+A docroot the web server can write is refused when the server's access comes
+from group or other write bits, or from an ACL. A tree owned by the web server
+account, such as `www-data`, is refused too, unless you pass `--owner www-data`.
+`--owner` names an account the script trusts as much as root: it accepts
+directories that account owns, and gives it the whole installed tree. That is a
+deliberate choice, and a discouraged one. The account can then change what the
+site serves at any time, and anyone who compromises the web server, through a
+bug in it or in anything else that runs as that account, can deface the site or
+race a later install. The installer cannot tell such a takeover from a normal
+deployment. The recommended setup keeps the tree owned by root (or by the user
+running the script) and gives the server read access only:
 
 ```sh
 sudo chown -R root:www-data /srv/passgen
@@ -263,6 +272,13 @@ on) before they are compared.
   on, and mounts inside the docroot go unnoticed.
 - **Aliases of a docroot that does not exist yet** cannot be compared by
   identity; the name checks still apply.
+- **A bind mount of only part of the docroot.** If root bind-mounts a directory
+  inside the docroot, such as `assets`, somewhere else, and that place is then
+  used as the staging directory, backup directory or `$TMPDIR`, the identity
+  check does not see it: it compares the docroot itself, not each directory
+  inside it, and the new mount point is outside the docroot, so mountinfo does
+  not flag it either. Such a mount is root's own setup and outside the threat
+  model.
 - **Root's own setup.** A mount created by root while the script runs, or a
   `--trust-owner` UID that turns out to belong to someone else, is outside the
   threat model.
