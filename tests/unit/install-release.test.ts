@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import {
   chmod,
   cp,
@@ -192,9 +192,9 @@ after(async () => {
   await rm(scratch, { recursive: true, force: true });
 });
 
-async function runScript(command: string, args: string[], env: Record<string, string> = {}) {
+async function runScript(command: string, args: string[], env: Record<string, string> = {}, cwd?: string) {
   try {
-    const { stdout, stderr } = await run(command, args, { env: { ...process.env, ...env } });
+    const { stdout, stderr } = await run(command, args, { env: { ...process.env, ...env }, cwd });
     return { code: 0, output: stdout + stderr };
   } catch (err) {
     const e = err as { code: number; stdout: string; stderr: string };
@@ -202,7 +202,17 @@ async function runScript(command: string, args: string[], env: Record<string, st
   }
 }
 
-const install = (args: string[], env: Record<string, string> = {}) => runScript(bash, [SCRIPT, ...args], env);
+/**
+ * In a user namespace (such as `unshare -r`, which the gates use), root's directories show as the
+ * kernel's overflow ID, which the installer only trusts when told to.
+ */
+const OVERFLOW_UID = readFileSync("/proc/sys/kernel/overflowuid", "utf8").trim();
+const IN_USER_NAMESPACE = !/^\s*0\s+0\s+4294967295\s*$/.test(readFileSync("/proc/self/uid_map", "utf8"));
+const TRUST = IN_USER_NAMESPACE ? ["--trust-owner", OVERFLOW_UID] : [];
+const IS_ROOT = process.getuid?.() === 0;
+
+const install = (args: string[], env: Record<string, string> = {}, cwd?: string) =>
+  runScript(bash, [SCRIPT, ...TRUST, ...args], env, cwd);
 
 let binCount = 0;
 
@@ -278,9 +288,9 @@ async function entries(dir: string): Promise<string[]> {
   }
 }
 
-/** The backup directory the installer reports in its last line. */
+/** The backup directory the installer reports in its last line; the copy is in its docroot/. */
 function reportedBackup(output: string): string {
-  const path = output.match(/; backup in (.+)$/m)?.[1];
+  const path = output.match(/; backup in (.+)\/docroot$/m)?.[1];
   assert.ok(path, `no backup reported in:\n${output}`);
   return path;
 }
@@ -301,30 +311,79 @@ async function listen(server: Server): Promise<string> {
   return `http://127.0.0.1:${address.port}/`;
 }
 
-/** Whether this machine can make an unprivileged user and mount namespace. */
-async function canUnshareMounts(): Promise<boolean> {
+/** Whether this machine can run `unshare` with these flags as an unprivileged user. */
+async function canUnshare(flags: readonly string[] = ["-rm"]): Promise<boolean> {
   try {
-    await run("unshare", ["-rm", "true"]);
+    await run("unshare", [...flags, "true"]);
     return true;
   } catch {
     return false;
   }
 }
 
-/** Runs the installer in a new mount namespace with a tmpfs mounted on `mountPoint`. */
-function installWithTmpfs(mountPoint: string, args: string[]) {
+/**
+ * Runs bash `setup` in new namespaces (`unshare` with `flags`, as root there), then the installer
+ * with `args`. Root's directories show there as the overflow ID, so the installer is told to trust it.
+ */
+function installInNamespace(setup: string, args: readonly string[], flags: readonly string[] = ["-rm"]) {
   return runScript("unshare", [
-    "-rm",
+    ...flags,
     bash,
     "-c",
-    'mount -t tmpfs -o mode=0755 passgen-test "$1" && shift && exec "$@"',
-    "mount-tmpfs",
-    mountPoint,
+    `${setup}\nexec "$@"`,
+    "in-namespace",
     bash,
     SCRIPT,
+    "--trust-owner",
+    OVERFLOW_UID,
     ...args,
   ]);
 }
+
+/** Runs the installer in a new mount namespace with a tmpfs mounted on `mountPoint`. */
+function installWithTmpfs(mountPoint: string, args: string[]) {
+  return installInNamespace(`mount -t tmpfs -o mode=0755 passgen-test ${q(mountPoint)} || exit 99`, args);
+}
+
+/** ACL entry tags, as the kernel stores them in system.posix_acl_* attributes. */
+const ACL = { userObj: 0x01, user: 0x02, groupObj: 0x04, group: 0x08, mask: 0x10, other: 0x20 } as const;
+const UNNAMED = 0xffffffff;
+
+/** Sets a default ACL on `dir` without the acl tools: [tag, permissions, id] in tag order. */
+async function setDefaultAcl(dir: string, acl: ReadonlyArray<readonly [number, number, number]>) {
+  await run("python3", [
+    "-I",
+    "-c",
+    [
+      "import os, struct, sys",
+      "entries = [tuple(int(x) for x in e.split(',')) for e in sys.argv[2:]]",
+      "value = struct.pack('<I', 2) + b''.join(struct.pack('<HHI', *e) for e in entries)",
+      "os.setxattr(sys.argv[1], 'system.posix_acl_default', value)",
+    ].join("\n"),
+    dir,
+    ...acl.map((entry) => entry.join(",")),
+  ]);
+}
+
+/** Whether `path` carries a default ACL. */
+async function hasDefaultAcl(path: string): Promise<boolean> {
+  const { stdout } = await run("python3", [
+    "-I",
+    "-c",
+    [
+      "import os, sys",
+      "try:",
+      "    os.getxattr(sys.argv[1], 'system.posix_acl_default')",
+      "    print('yes')",
+      "except OSError:",
+      "    print('no')",
+    ].join("\n"),
+    path,
+  ]);
+  return stdout.trim() === "yes";
+}
+
+const hasTool = async (name: string) => (await runScript("bash", ["-c", `command -v ${name}`])).code === 0;
 
 describe("install-release: fixtures and arguments", () => {
   test("the security header names match security/headers.ts", async () => {
@@ -396,7 +455,14 @@ describe("install-release: fixtures and arguments", () => {
       // Modes that would lock the installer out of its own files.
       ["--version", VERSION, "--docroot", docroot, "--dir-mode", "0000"],
       ["--version", VERSION, "--docroot", docroot, "--dir-mode", "0644"],
-      ["--version", VERSION, "--docroot", docroot, "--dir-mode", "0500"],
+      // Root can manage a 0500 tree; anyone else needs owner write.
+      ...(IS_ROOT ? [] : [["--version", VERSION, "--docroot", docroot, "--dir-mode", "0500"]]),
+      // A docroot others can write is not supported.
+      ["--version", VERSION, "--docroot", docroot, "--dir-mode", "0775"],
+      ["--version", VERSION, "--docroot", docroot, "--dir-mode", "0757"],
+      ["--version", VERSION, "--docroot", docroot, "--trust-owner", "nobody"],
+      ["--version", VERSION, "--docroot", docroot, "--trust-owner", "-1"],
+      ["--version", VERSION, "--docroot", docroot, "--owner", "no-such-user-passgen"],
       ["--version", VERSION, "--docroot", docroot, "--file-mode", "0000"],
       ["--version", VERSION, "--docroot", docroot, "--file-mode", "0200"],
       ["--version", VERSION, "--docroot", docroot, "--url", "http://example.test/"],
@@ -479,8 +545,11 @@ describe("install-release: happy paths", () => {
     const backupNames = await entries(backups);
     assert.equal(backupNames.length, 1);
     assert.match(backupNames[0] as string, BACKUP_NAME);
-    assert.equal(reportedBackup(result.output), join(backups, backupNames[0] as string));
-    assert.deepEqual(await snapshot(join(backups, backupNames[0] as string)), before);
+    const backup = join(backups, backupNames[0] as string);
+    assert.equal(reportedBackup(result.output), backup);
+    assert.equal((await stat(backup)).mode & 0o7777, 0o700, "each backup directory is private too");
+    assert.deepEqual(await entries(backup), ["docroot"]);
+    assert.deepEqual(await snapshot(join(backup, "docroot")), before);
     assert.deepEqual(await entries(parent), [".htdocs-backups", "htdocs"], "no staging directory is left behind");
     assert.match(result.output, /Installed v1\.2\.3 into/);
   });
@@ -577,7 +646,7 @@ describe("install-release: happy paths", () => {
   test("--backup-dir elsewhere, and unrelated entries in it survive rotation", async () => {
     const { docroot } = await makeSite();
     const backupRoot = join(scratch, "backups-elsewhere");
-    await mkdir(join(backupRoot, "keep-me"), { recursive: true });
+    await mkdir(join(backupRoot, "keep-me"), { recursive: true, mode: 0o700 });
     await writeFile(join(backupRoot, "notes.txt"), "not a backup");
     for (let i = 0; i < 4; i++) {
       await writeFile(join(docroot, "index.html"), `run ${i}`);
@@ -614,7 +683,7 @@ describe("install-release: happy paths", () => {
     assert.equal(result.code, 0, result.output);
     const current = `${FROZEN_SECOND}-000010`;
     assert.equal(reportedBackup(result.output), join(backups, current));
-    assert.deepEqual(await snapshot(join(backups, current)), before, "the backup just taken is kept");
+    assert.deepEqual(await snapshot(join(backups, current, "docroot")), before, "the backup just taken is kept");
     assert.deepEqual(
       await entries(backups),
       [...legacy, `${FROZEN_SECOND}-000008`, `${FROZEN_SECOND}-000009`, current].sort(),
@@ -631,7 +700,7 @@ describe("install-release: happy paths", () => {
     const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir]);
     assert.equal(result.code, 0, result.output);
     const current = reportedBackup(result.output);
-    assert.deepEqual(await snapshot(current), before);
+    assert.deepEqual(await snapshot(join(current, "docroot")), before);
     assert.deepEqual(await entries(backups), [current.slice(backups.length + 1), ...future.slice(1)].sort());
   });
 
@@ -648,7 +717,7 @@ describe("install-release: happy paths", () => {
     const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir], env);
     assert.equal(result.code, 0, result.output);
     assert.match(result.output, /cannot remove '.*20000101T000000Z-000001'/);
-    assert.match(result.output, /could not remove every old backup .* the install itself succeeded/);
+    assert.match(result.output, /backup rotation did not finish .* the install itself succeeded/);
     assert.doesNotMatch(result.output, /restoring the backup/);
     assert.deepEqual(await snapshot(docroot), expectedSnapshot());
     assert.deepEqual(await entries(backups), [...old, reportedBackup(result.output).slice(backups.length + 1)].sort());
@@ -860,7 +929,7 @@ describe("install-release: refused paths (exit 4, nothing changed)", () => {
     for (const [args, expected] of [
       [["--backup-dir", join(open, "backups")], /on the path to the backup directory, is writable by other users/],
       [["--backup-dir", join(open, "private", "backups")], /on the path to the backup directory, is writable/],
-      [["--backup-dir", shared], /the backup directory .* is writable by other users \(mode 770\); make it 0700/],
+      [["--backup-dir", shared], /the backup directory .* has mode 770; it must be 0700/],
       [["--staging-dir", open], /on the path to the staging directory, is writable by other users/],
       [["--staging-dir", join(open, "private")], /on the path to the staging directory, is writable/],
     ] as const) {
@@ -940,7 +1009,7 @@ describe("install-release: refused paths (exit 4, nothing changed)", () => {
   });
 
   test("refuses --staging-dir on another filesystem than the docroot", async (t) => {
-    if (!(await canUnshareMounts())) return t.skip("needs unprivileged user and mount namespaces");
+    if (!(await canUnshare())) return t.skip("needs unprivileged user and mount namespaces");
     const { docroot } = await makeSite();
     const before = await snapshot(docroot);
     const staging = join(scratch, `tmpfs-staging-${siteCount}`);
@@ -961,7 +1030,7 @@ describe("install-release: refused paths (exit 4, nothing changed)", () => {
   });
 
   test("refuses a docroot that is a mount point when staging would be on another filesystem", async (t) => {
-    if (!(await canUnshareMounts())) return t.skip("needs unprivileged user and mount namespaces");
+    if (!(await canUnshare())) return t.skip("needs unprivileged user and mount namespaces");
     const { parent, docroot } = await makeSite();
     const result = await installWithTmpfs(docroot, [
       "--version",
@@ -1181,7 +1250,7 @@ describe("install-release: rollback (exit 6, or 7 when it is refused)", () => {
       "rc=$?",
       // During the install, rewrite the backup's index.html, then make the post-install check fail.
       'if [[ " $* " == *--exclude=/index.html* ]]; then',
-      `  for f in ${q(backups)}/*/index.html; do printf tampered > "$f"; done`,
+      `  for f in ${q(backups)}/*/docroot/index.html; do printf tampered > "$f"; done`,
       "fi",
       `if [[ " $* " == *" --delete "* && ! -e ${q(marker)} ]]; then`,
       `  echo rogue > ${q(join(docroot, "rogue.txt"))}`,
@@ -1198,5 +1267,336 @@ describe("install-release: rollback (exit 6, or 7 when it is refused)", () => {
       "the tampered bytes were not installed",
     );
     assert.equal(await readFile(join(docroot, "index.html"), "utf8"), DIST[0]?.[1]);
+  });
+});
+
+describe("install-release: resolved paths (exit 4, nothing changed)", () => {
+  test("refuses --docroot . from a working directory whose name ends in a newline", async () => {
+    // $(realpath .) would drop the newline and name the sibling "www".
+    const parent = join(scratch, `cwd-newline-${siteCount++}`);
+    const www = join(parent, "www");
+    await mkdir(www, { recursive: true });
+    await writeFile(join(www, "index.html"), "the sibling site");
+    await mkdir(join(parent, "www\n"));
+    const before = await snapshot(www);
+    const result = await install(["--version", VERSION, "--docroot", ".", "--from-dir", releaseDir], {}, `${www}\n`);
+    assert.equal(result.code, 4, result.output);
+    assert.match(result.output, /the docroot resolves to \$'.*\/www\\n', which contains a control character/);
+    assert.deepEqual(await snapshot(www), before);
+    assert.deepEqual(await entries(join(parent, "www\n")), []);
+    assert.deepEqual(await entries(parent), ["www", "www\n"]);
+  });
+
+  test("refuses backup, staging and TMPDIR paths whose symbolic links resolve to a name with a control character", async () => {
+    const { parent, docroot } = await makeSite();
+    const before = await snapshot(docroot);
+    // Siblings the stripped names would select, each private so they would otherwise pass.
+    for (const name of ["victim", "stage", "tmp"]) {
+      await mkdir(join(parent, name), { mode: 0o700 });
+      await mkdir(join(parent, `${name}\n`), { mode: 0o700 });
+      await writeFile(join(parent, name, "keep.txt"), name);
+      await symlink(join(parent, `${name}\n`), join(parent, `${name}-link`));
+    }
+    const snapshots = async () =>
+      Promise.all(["victim", "stage", "tmp", "victim\n", "stage\n", "tmp\n"].map((n) => snapshot(join(parent, n))));
+    const siblings = await snapshots();
+    for (const [args, env, label] of [
+      [["--backup-dir", join(parent, "victim-link")], {}, "backup directory"],
+      [["--staging-dir", join(parent, "stage-link")], {}, "staging directory"],
+      [["--dry-run"], { TMPDIR: join(parent, "tmp-link") }, "TMPDIR"],
+    ] as const) {
+      const result = await install(
+        ["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir, ...args],
+        env,
+      );
+      assert.equal(result.code, 4, `${label}: ${result.output}`);
+      assert.match(result.output, new RegExp(`the ${label} resolves to .*control character`));
+    }
+    assert.deepEqual(await snapshot(docroot), before);
+    assert.deepEqual(await snapshots(), siblings);
+  });
+});
+
+describe("install-release: private backups (exit 4 when refused)", () => {
+  test("refuses an existing backup directory that is not mode 0700", async () => {
+    const { docroot, backups } = await makeSite();
+    await mkdir(backups, { mode: 0o755 });
+    const before = await snapshot(docroot);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir]);
+    assert.equal(result.code, 4, result.output);
+    assert.match(result.output, /the backup directory .* has mode 755; it must be 0700/);
+    assert.deepEqual(await snapshot(docroot), before);
+    assert.deepEqual(await entries(backups), []);
+  });
+
+  test("refuses a backup directory whose parent does not exist, rather than creating it", async () => {
+    const { docroot } = await makeSite();
+    const missing = join(scratch, `missing-${siteCount}`);
+    const result = await install([
+      "--version",
+      VERSION,
+      "--docroot",
+      docroot,
+      "--from-dir",
+      releaseDir,
+      "--backup-dir",
+      join(missing, "backups"),
+    ]);
+    assert.equal(result.code, 4, result.output);
+    assert.match(result.output, /the backup directory's parent .* does not exist/);
+    assert.equal(existsSync(missing), false);
+  });
+
+  test("a permissive default ACL on the parent cannot produce a backup directory other than 0700", async () => {
+    const { parent, docroot, backups } = await makeSite();
+    // Everything created in the parent would get rwx for owner, group and others, whatever the umask.
+    await setDefaultAcl(parent, [
+      [ACL.userObj, 7, UNNAMED],
+      [ACL.groupObj, 7, UNNAMED],
+      [ACL.other, 7, UNNAMED],
+    ]);
+    const before = await snapshot(docroot);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir]);
+    if (await hasTool("setfacl")) {
+      // The installer strips the inherited ACL and goes ahead.
+      assert.equal(result.code, 0, result.output);
+      assert.equal((await stat(backups)).mode & 0o7777, 0o700);
+      assert.equal(await hasDefaultAcl(backups), false);
+      assert.equal((await stat(reportedBackup(result.output))).mode & 0o7777, 0o700);
+    } else {
+      // Without setfacl it cannot strip the ACL, so it refuses and removes what it made.
+      assert.equal(result.code, 4, result.output);
+      assert.match(result.output, /would inherit ACL entries from the default ACL of .*setfacl -k/);
+      assert.equal(existsSync(backups), false);
+      assert.deepEqual(await snapshot(docroot), before);
+    }
+  });
+
+  test("refuses an existing backup directory with a default ACL", async () => {
+    const { docroot, backups } = await makeSite();
+    await mkdir(backups, { mode: 0o700 });
+    await setDefaultAcl(backups, [
+      [ACL.userObj, 7, UNNAMED],
+      [ACL.groupObj, 5, UNNAMED],
+      [ACL.other, 5, UNNAMED],
+    ]);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir]);
+    assert.equal(result.code, 4, result.output);
+    assert.match(result.output, /the backup directory .* has (a default ACL|ACL entries)/);
+    assert.deepEqual(await entries(backups), []);
+  });
+});
+
+describe("install-release: bind mounts and mounts inside the docroot (exit 4, nothing written)", () => {
+  // Each case runs in its own user and mount namespace, where bind mounts need no privilege.
+  // `alias` is a bind mount of the docroot; `env` is exported before the installer runs.
+  interface AliasCase {
+    readonly args: readonly string[];
+    readonly env?: string;
+  }
+  const cases: ReadonlyArray<readonly [string, (alias: string) => AliasCase, RegExp]> = [
+    [
+      "a dry run whose TMPDIR reaches the docroot through a bind mount",
+      (alias) => ({ args: ["--dry-run"], env: `TMPDIR=${q(join(alias, "assets"))}` }),
+      /the TMPDIR .* is inside the docroot: .*alias is the docroot under another name/,
+    ],
+    [
+      "a staging directory reached through a bind mount of the docroot",
+      (alias) => ({ args: ["--staging-dir", join(alias, "assets")] }),
+      /the staging directory .* is inside the docroot: .*alias is the docroot under another name/,
+    ],
+    [
+      "a backup directory reached through a bind mount of the docroot",
+      (alias) => ({ args: ["--backup-dir", join(alias, "backups")] }),
+      /the backup directory .* is inside the docroot: .*alias is the docroot under another name/,
+    ],
+  ];
+
+  for (const [label, build, expected] of cases) {
+    test(`refuses ${label}`, async (t) => {
+      if (!(await canUnshare())) return t.skip("needs unprivileged user and mount namespaces");
+      const { parent, docroot } = await makeSite();
+      const alias = join(parent, "alias");
+      await mkdir(alias);
+      const before = [await snapshot(docroot), await ctimes(docroot)];
+      const { args, env } = build(alias);
+      const setup = [`mount --bind ${q(docroot)} ${q(alias)} || exit 99`, env ? `export ${env}` : ""].join("\n");
+      const result = await installInNamespace(setup, [
+        "--version",
+        VERSION,
+        "--docroot",
+        docroot,
+        "--from-dir",
+        releaseDir,
+        ...args,
+      ]);
+      assert.equal(result.code, 4, result.output);
+      assert.match(result.output, expected);
+      assert.deepEqual([await snapshot(docroot), await ctimes(docroot)], before, "nothing in the docroot changed");
+      assert.deepEqual(await entries(alias), []);
+    });
+  }
+
+  test("refuses an outside directory mounted inside the docroot, including a name mountinfo escapes", async (t) => {
+    if (!(await canUnshare())) return t.skip("needs unprivileged user and mount namespaces");
+    const { parent, docroot } = await makeSite();
+    const outside = join(parent, "outside");
+    await mkdir(outside);
+    await writeFile(join(outside, "precious.txt"), "not part of the site");
+    // "my assets" appears in mountinfo as my\040assets.
+    await mkdir(join(docroot, "my assets"));
+    const before = [await snapshot(docroot), await snapshot(outside)];
+    const result = await installInNamespace(`mount --bind ${q(outside)} ${q(join(docroot, "my assets"))} || exit 99`, [
+      "--version",
+      VERSION,
+      "--docroot",
+      docroot,
+      "--from-dir",
+      releaseDir,
+    ]);
+    assert.equal(result.code, 4, result.output);
+    assert.match(result.output, /\/htdocs\/my assets is a mount point inside the docroot/);
+    assert.deepEqual([await snapshot(docroot), await snapshot(outside)], before);
+    assert.deepEqual(await entries(parent), ["htdocs", "outside"], "no staging or backup directory was created");
+  });
+});
+
+describe("install-release: trust and writers", () => {
+  test("never trusts the overflow UID implicitly inside a user namespace", async (t) => {
+    if (!(await canUnshare(["-r"]))) return t.skip("needs unprivileged user namespaces");
+    const { docroot } = await makeSite();
+    const before = await snapshot(docroot);
+    const result = await runScript("unshare", [
+      "-r",
+      bash,
+      SCRIPT,
+      "--version",
+      VERSION,
+      "--docroot",
+      docroot,
+      "--from-dir",
+      releaseDir,
+    ]);
+    assert.equal(result.code, 4, result.output);
+    assert.match(
+      result.output,
+      new RegExp(`is owned by uid ${OVERFLOW_UID}; only root, uid 0, .* or a --trust-owner UID`),
+    );
+    assert.deepEqual(await snapshot(docroot), before);
+  });
+
+  test("refuses a docroot with a directory group or others can write", async () => {
+    const { docroot, backups } = await makeSite();
+    for (const [dir, mode] of [
+      [join(docroot, "old-dir"), 0o775],
+      [docroot, 0o757],
+    ] as const) {
+      const site = (await stat(dir)).mode & 0o7777;
+      await chmod(dir, mode);
+      const before = await snapshot(docroot);
+      const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir]);
+      assert.equal(result.code, 4, result.output);
+      assert.match(result.output, /directories (group or others|users other than root) can write to\. A web server/);
+      assert.match(result.output, new RegExp(`\\(mode 0${mode.toString(8)}, `));
+      assert.deepEqual(await snapshot(docroot), before);
+      await chmod(dir, site);
+    }
+    assert.deepEqual(await entries(backups), []);
+  });
+
+  test("running as root, refuses a docroot directory owned by another user unless it is the --owner user", async (t) => {
+    const flags = ["-r", "--map-auto"];
+    if (!(await canUnshare(flags)))
+      return t.skip("needs a user namespace with subordinate IDs (newuidmap, /etc/subuid)");
+    // Inside the namespace uid 65534 ("nobody") is a real, mapped user. The files it ends up
+    // owning belong to a subordinate ID outside, so the site is removed from inside as well.
+    const { parent, docroot } = await makeSite();
+    const installCommand = (extra: string) =>
+      `${q(bash)} ${q(SCRIPT)} --trust-owner ${OVERFLOW_UID} --version ${VERSION} --docroot ${q(docroot)} --from-dir ${q(releaseDir)} ${extra}; echo "exit=$?"`;
+    const result = await runScript("unshare", [
+      ...flags,
+      bash,
+      "-c",
+      [
+        `chown -R 65534 ${q(join(docroot, "old-dir"))} || exit 99`,
+        installCommand(""),
+        installCommand("--owner nobody"),
+        `stat -c 'owner=%u' ${q(join(docroot, "index.html"))}`,
+        `rm -rf ${q(parent)}`,
+      ].join("\n"),
+    ]);
+    const exits = [...result.output.matchAll(/^exit=(\d+)$/gm)].map((m) => m[1]);
+    assert.deepEqual(exits, ["4", "0"], result.output);
+    assert.match(
+      result.output,
+      /directories users other than root can write to[\s\S]*old-dir \(mode 0755, owner nobody\)/,
+    );
+    assert.match(result.output, /^owner=65534$/m);
+  });
+
+  test("refuses a docroot directory whose default ACL lets another group write", async (t) => {
+    if (!(await hasTool("getfacl")))
+      return t.skip("getfacl (acl) is not installed; mode bits alone cannot show a default ACL");
+    const { docroot } = await makeSite();
+    const gid = process.getgid?.() as number;
+    await setDefaultAcl(join(docroot, "assets"), [
+      [ACL.userObj, 7, UNNAMED],
+      [ACL.groupObj, 5, UNNAMED],
+      [ACL.group, 7, gid],
+      [ACL.mask, 7, UNNAMED],
+      [ACL.other, 5, UNNAMED],
+    ]);
+    const before = await snapshot(docroot);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir]);
+    assert.equal(result.code, 4, result.output);
+    assert.match(result.output, /can write to[\s\S]*assets \(ACL default:group:/);
+    assert.deepEqual(await snapshot(docroot), before);
+  });
+
+  test("running as root, installs read-only modes 0555 and 0444", async (t) => {
+    if (!(await canUnshare(["-r"]))) return t.skip("needs unprivileged user namespaces");
+    const { docroot } = await makeSite();
+    try {
+      const result = await installInNamespace(
+        "",
+        [
+          "--version",
+          VERSION,
+          "--docroot",
+          docroot,
+          "--from-dir",
+          releaseDir,
+          "--dir-mode",
+          "0555",
+          "--file-mode",
+          "0444",
+        ],
+        ["-r"],
+      );
+      assert.equal(result.code, 0, result.output);
+      assert.deepEqual(await snapshot(docroot), expectedSnapshot("444", "555"));
+    } finally {
+      await run("chmod", ["-R", "u+w", docroot]);
+    }
+  });
+});
+
+describe("install-release: rotation that cannot list the backups (exit 0, with a warning)", () => {
+  test("warns when the backups cannot be listed, and keeps the verified install", async () => {
+    const { docroot, backups } = await makeSite();
+    const realFind = (await run("bash", ["-c", "command -v find"])).stdout.trim();
+    const env = await shim("find", [
+      'if [[ " $* " == *" -regextype "* ]]; then',
+      `  echo "find: '${backups}': Input/output error" >&2`,
+      "  exit 1",
+      "fi",
+      `exec ${q(realFind)} "$@"`,
+    ]);
+    const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", releaseDir], env);
+    assert.equal(result.code, 0, result.output);
+    assert.match(result.output, /could not list the backups in /);
+    assert.match(result.output, /backup rotation did not finish .* the install itself succeeded/);
+    assert.deepEqual(await snapshot(docroot), expectedSnapshot());
+    assert.equal((await entries(backups)).length, 1);
   });
 });
