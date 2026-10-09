@@ -26,8 +26,9 @@ export function createResultsBox(prefix: "pw" | "pp"): ResultsBox {
         output.className = "value";
         output.id = `${prefix}-extra-${index + 1}`;
         output.dataset.generated = "";
+        output.tabIndex = -1;
         output.setAttribute("aria-live", "off");
-        output.setAttribute("role", "note");
+        output.setAttribute("role", "group");
         output.setAttribute("aria-label", `Generated ${kind} result ${index + 1}`);
         output.textContent = value;
         const button = document.createElement("button");

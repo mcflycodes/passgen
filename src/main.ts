@@ -7,6 +7,7 @@
 import "./styles.css";
 import "virtual:passgen-styles";
 import { config } from "./config/validate.ts";
+import { mountFocusVisibility } from "./ui/focus.ts";
 import { createMeter } from "./ui/meter.ts";
 import { mountPassphrasePanel } from "./ui/passphrase.ts";
 import { mountPasswordPanel } from "./ui/password.ts";
@@ -21,6 +22,7 @@ import { mountThemeControls } from "./ui/theme.ts";
 const storage = browserStorage();
 const initial = initialSettings(config, storage);
 const store = createSettingsStore(initial.settings);
+mountFocusVisibility();
 const pointer = startPointerEffect();
 mountThemeControls(store, () => pointer.refresh());
 mountPasswordPanel(store, config, { meter: createMeter("pw"), results: createResultsBox("pw") });

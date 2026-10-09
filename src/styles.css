@@ -33,8 +33,8 @@
 }
 html {
   -webkit-text-size-adjust: 100%;
-  /* Keep focused and scrolled-to controls clear of the sticky header. */
-  scroll-padding-top: calc(var(--header-h) + 16px);
+  /* Leave breathing room when scrolling a focused control into view. */
+  scroll-padding-top: 16px;
 }
 body {
   margin: 0;
@@ -95,11 +95,18 @@ legend {
 .nowrap {
   white-space: nowrap;
 }
-[hidden],
-.more[hidden],
-.notice[hidden],
-.tagline[hidden] {
+:root [hidden] {
   display: none;
+}
+/* Keep the entire focus outline visible when an engine scrolls the control
+   box to a viewport edge: 2px offset + up to 3px ring + 3px breathing room.
+   Apply before focus scrolling, including the hidden inputs with drawn proxies. */
+button,
+input,
+select,
+summary,
+[tabindex] {
+  scroll-margin-block: 8px;
 }
 :focus-visible {
   outline: 2px solid var(--focus);
@@ -221,10 +228,10 @@ legend {
 
 /* ---------- Header ---------- */
 .top {
-  position: sticky;
+  position: relative;
   top: 0;
   z-index: 10;
-  height: var(--header-h);
+  min-height: var(--header-h);
   display: flex;
   align-items: center;
   gap: 16px;
@@ -284,14 +291,13 @@ legend {
   display: inline-flex;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  overflow: hidden;
 }
 .theme-control label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 64px;
-  height: 34px;
+  min-height: 34px;
   padding: 0 12px;
   font-family: var(--mono);
   font-size: 12px;
@@ -303,6 +309,12 @@ legend {
 }
 .theme-control label:first-of-type {
   border-left: 0;
+  border-start-start-radius: calc(var(--radius-sm) - 1px);
+  border-end-start-radius: calc(var(--radius-sm) - 1px);
+}
+.theme-control label:last-of-type {
+  border-start-end-radius: calc(var(--radius-sm) - 1px);
+  border-end-end-radius: calc(var(--radius-sm) - 1px);
 }
 .theme-control input:checked + label {
   background: var(--accent);
@@ -310,10 +322,24 @@ legend {
 }
 .theme-control input:focus-visible + label {
   outline: 2px solid var(--focus);
-  outline-offset: -3px;
+  outline-offset: 2px;
 }
 .theme-control label:hover {
   color: var(--text);
+}
+.theme-control input:checked + label:hover {
+  color: var(--on-accent);
+}
+
+/* The single-row header can stay available without covering focused controls.
+   Narrow and short (including zoomed) viewports keep it in normal flow. */
+@media (min-width: 900px) and (min-height: 500px) {
+  .top {
+    position: sticky;
+  }
+  html {
+    scroll-padding-top: calc(var(--header-h) + 16px);
+  }
 }
 
 /* ---------- Intro band (R4d) ---------- */
@@ -390,8 +416,8 @@ main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: var(--control-h);
-  padding: 0 16px;
+  min-height: var(--control-h);
+  padding: 2px 16px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   background: transparent;
@@ -446,9 +472,9 @@ main {
   align-items: center;
   justify-content: center;
   min-width: 58px;
-  height: 28px;
-  padding: 0 9px;
-  border: 0;
+  min-height: 28px;
+  padding: 2px 9px;
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   background: var(--chip);
   color: var(--text);
@@ -500,7 +526,7 @@ main {
   height: 6px;
 }
 .meter-bar .seg {
-  background: var(--line);
+  background: var(--line-strong);
   border-radius: var(--radius-sm);
 }
 /* Level L lights segments 1..L+1. Each lit segment keeps its own ramp colour
@@ -576,6 +602,7 @@ input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   flex: 1 1 auto;
+  min-width: 0;
   height: 24px;
   margin: 0;
   background: transparent;
@@ -611,21 +638,10 @@ input[type="range"]::-moz-range-thumb {
   border-radius: var(--thumb-radius);
   box-shadow: 0 0 0 1px var(--accent);
 }
-input[type="range"]:focus-visible {
-  outline: none;
-}
-input[type="range"]:focus-visible::-webkit-slider-thumb {
-  outline: 2px solid var(--focus);
-  outline-offset: 3px;
-}
-input[type="range"]:focus-visible::-moz-range-thumb {
-  outline: 2px solid var(--focus);
-  outline-offset: 3px;
-}
 
 input[type="number"],
 select {
-  height: var(--control-h);
+  min-height: var(--control-h);
   padding: 0 10px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
@@ -654,7 +670,7 @@ select {
   max-width: 100%;
 }
 .style-control select {
-  height: 34px;
+  min-height: 34px;
   min-width: 7em;
 }
 .minmax {
@@ -687,14 +703,15 @@ select {
   cursor: pointer;
   font-size: 15px;
   line-height: 1.4;
+  min-height: 24px;
 }
 /* The real checkbox sits invisibly over the drawn box, so a click or tap lands on it directly. */
 .check input {
   position: absolute;
-  top: 2px;
+  top: 0;
   left: 0;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   margin: 0;
   opacity: 0;
   cursor: pointer;
@@ -732,7 +749,7 @@ select {
   opacity: 1;
 }
 .check input:focus-visible + .box {
-  outline: 2px solid var(--focus);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 .check-text code {
@@ -768,7 +785,7 @@ select {
 }
 .counts input[type="number"] {
   width: 4.4em;
-  height: calc(var(--control-h) - 6px);
+  min-height: calc(var(--control-h) - 6px);
 }
 /* ---------- More results ---------- */
 .more {
@@ -862,7 +879,7 @@ select {
   .theme-control label {
     min-width: 0;
     padding: 0 10px;
-    height: 36px;
+    min-height: 36px;
   }
   .style-label {
     position: absolute;

@@ -136,6 +136,7 @@ export const WINDOW_ALLOWLIST: readonly string[] = [
   "scrollY",
   "innerWidth",
   "innerHeight",
+  "visualViewport",
   "getComputedStyle",
   "isSecureContext",
   "devicePixelRatio",

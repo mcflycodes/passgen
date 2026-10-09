@@ -232,3 +232,39 @@ test.describe("password", () => {
     await expect(notice).toContainText("A 4-character password cannot hold the 5 characters");
   });
 });
+
+test("invalid fields preserve pre-existing descriptions through repeated errors and recovery", async ({ page }) => {
+  await openPage(page);
+  await page.evaluate(() => {
+    const hint = document.createElement("p");
+    hint.id = "count-hint";
+    hint.textContent = "Choose the minimum number of lowercase letters.";
+    document.querySelector("#password .controls")?.append(hint);
+    document.getElementById("pw-lowercase-min")?.setAttribute("aria-describedby", "count-hint");
+    document.getElementById("pw-length-number")?.setAttribute("aria-describedby", "pw-types-label");
+    document.getElementById("pw-numbers-min")?.setAttribute("aria-describedby", "");
+  });
+  const minimum = page.locator("#pw-lowercase-min");
+  const length = page.locator("#pw-length-number");
+  // A valid render must not clear descriptions on untouched fields.
+  await page.locator("#pw-regen").click();
+  await expect(minimum).toHaveAttribute("aria-describedby", "count-hint");
+  await expect(length).toHaveAttribute("aria-describedby", "pw-types-label");
+  for (const invalid of [21, 22]) {
+    await setNumber(minimum, invalid);
+    await expect(minimum).toHaveAttribute("aria-describedby", "count-hint pw-notice");
+    await expect(minimum).toHaveAccessibleDescription(/Choose the minimum.*Min must be/);
+  }
+  await setNumber(minimum, 1);
+  await expect(minimum).toHaveAttribute("aria-describedby", "count-hint");
+  await expect(minimum).not.toHaveAttribute("aria-invalid");
+  // A sum of minimums above the length marks both the length and count fields.
+  await setNumber(minimum, 18);
+  await expect(length).toHaveAttribute("aria-describedby", "pw-types-label pw-notice");
+  await expect(page.locator("#pw-numbers-min")).toHaveAttribute("aria-describedby", "pw-notice");
+  await expect(page.locator("#pw-uppercase-min")).toHaveAttribute("aria-describedby", "pw-notice");
+  await setNumber(minimum, 1);
+  await expect(length).toHaveAttribute("aria-describedby", "pw-types-label");
+  await expect(page.locator("#pw-numbers-min")).toHaveAttribute("aria-describedby", "");
+  await expect(page.locator("#pw-uppercase-min")).not.toHaveAttribute("aria-describedby");
+});

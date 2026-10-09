@@ -16,10 +16,10 @@ test("all generated values are excluded from page translation and live announcem
     expect(await value.evaluate((element) => (element as HTMLElement).translate)).toBe(false);
     expect(await value.evaluate((element) => element.closest('[translate="no"]') !== null)).toBe(true);
     await expect(value).toHaveAttribute("aria-live", "off");
-    await expect(value).toHaveRole("note");
+    await expect(value).toHaveRole("group");
     await expect(value).toHaveAccessibleName((await value.getAttribute("aria-label")) ?? "");
     const tree = await value.ariaSnapshot();
-    expect(tree).toMatch(/^- note "Generated (password|passphrase)/);
+    expect(tree).toMatch(/^- group "Generated (password|passphrase)/);
     expect(tree).not.toMatch(/^- (status|alert|log)\b/m);
     expect(
       await value.evaluate((element) =>
@@ -119,7 +119,7 @@ test("slow-hash digest limits bound the displayed estimates and disclose the cap
   }
 });
 
-test("generated value notes preserve names and associations and pass axe", async ({ page }) => {
+test("generated value groups preserve names and associations and pass axe", async ({ page }) => {
   await openPage(page);
   for (const prefix of ["pw", "pp"]) {
     expect(

@@ -55,7 +55,8 @@
           </header>
 
           <div class="result">
-            <output class="value" id="pw-value" for="pw-length pw-lowercase pw-uppercase pw-numbers pw-simple pw-complex pw-lookalikes" data-generated role="note" aria-live="off" aria-label="Generated password"></output>
+            <!-- biome-ignore lint/a11y/useSemanticElements: output preserves its control associations; group replaces its implicit live status without announcing secrets. -->
+            <output class="value" id="pw-value" for="pw-length pw-lowercase pw-uppercase pw-numbers pw-simple pw-complex pw-lookalikes" data-generated tabindex="-1" role="group" aria-live="off" aria-label="Generated password"></output>
             <div class="result-actions">
               <button type="button" class="btn btn-primary" id="pw-copy" aria-label="Copy main password">Copy</button>
               <button type="button" class="btn" id="pw-regen">Regenerate</button>
@@ -153,7 +154,8 @@
           </header>
 
           <div class="result">
-            <output class="value" id="pp-value" for="pp-words pp-min-length pp-max-length pp-number pp-symbol pp-symbol-char pp-capitalize" data-generated role="note" aria-live="off" aria-label="Generated passphrase"></output>
+            <!-- biome-ignore lint/a11y/useSemanticElements: output preserves its control associations; group replaces its implicit live status without announcing secrets. -->
+            <output class="value" id="pp-value" for="pp-words pp-min-length pp-max-length pp-number pp-symbol pp-symbol-char pp-capitalize" data-generated tabindex="-1" role="group" aria-live="off" aria-label="Generated passphrase"></output>
             <div class="result-actions">
               <button type="button" class="btn btn-primary" id="pp-copy" aria-label="Copy main passphrase">Copy</button>
               <button type="button" class="btn" id="pp-regen">Regenerate</button>
@@ -196,8 +198,8 @@
             <fieldset class="control-row" aria-labelledby="pp-length-label">
               <div class="control-label" id="pp-length-label">Word length <span class="hint"><span data-cfg-text="passphrase.wordLength.min"></span> to <span data-cfg-text="passphrase.wordLength.max"></span> letters</span></div>
               <div class="control-input minmax">
-                <label class="inline-field"><span aria-hidden="true">Min</span><input type="number" id="pp-min-length" inputmode="numeric" data-cfg-min="passphrase.wordLength.min" data-cfg-max="passphrase.wordLength.max" data-cfg-value="passphrase.wordLength.defaultMin" aria-label="Shortest word length"></label>
-                <label class="inline-field"><span aria-hidden="true">Max</span><input type="number" id="pp-max-length" inputmode="numeric" data-cfg-min="passphrase.wordLength.min" data-cfg-max="passphrase.wordLength.max" data-cfg-value="passphrase.wordLength.defaultMax" aria-label="Longest word length"></label>
+                <label class="inline-field"><span aria-hidden="true">Min</span><input type="number" id="pp-min-length" inputmode="numeric" data-cfg-min="passphrase.wordLength.min" data-cfg-max="passphrase.wordLength.max" data-cfg-value="passphrase.wordLength.defaultMin" aria-label="Min word length"></label>
+                <label class="inline-field"><span aria-hidden="true">Max</span><input type="number" id="pp-max-length" inputmode="numeric" data-cfg-min="passphrase.wordLength.min" data-cfg-max="passphrase.wordLength.max" data-cfg-value="passphrase.wordLength.defaultMax" aria-label="Max word length"></label>
               </div>
             </fieldset>
 
