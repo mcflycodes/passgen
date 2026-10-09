@@ -21,8 +21,13 @@ We welcome reports about:
 - Storage leaks, especially generated passwords or passphrases.
 - Build or release integrity.
 
-A host's own server or CDN misconfiguration, compromised browsers or extensions,
-and attackers with physical access are outside this project's scope.
+Outside this project's scope:
+
+- A host's own server or CDN misconfiguration.
+- Compromised browsers, extensions or operating systems.
+- Attackers with physical access or someone watching the screen.
+- Clipboard history or managers accessing values after copy.
+- A self-hosted copy someone modified.
 
 ## Security model
 
@@ -37,15 +42,18 @@ scripts; response headers supply additional protections, including framing
 denial. See [self-hosting](docs/self-hosting.md) for the required headers and
 the limits of a host that cannot set them.
 
-The build-time hostname/URL scanners only see literal text. A host assembled at
-runtime would not be seen. The CSP is the primary control against data being
+The host-name checks (`pnpm verify:dist` on the build and the browser checks on
+the rendered page) only see literal text. A host assembled at runtime would not
+be seen. The CSP is the primary control against data being
 sent; the scanners are a secondary check, not proof that code cannot send data.
 
 The site must be served on its own origin, with no unrelated pages or scripts.
 A subpath alone does not isolate it: other same-origin code could read generated
 values and saved settings, and the CSP trusts scripts from that entire origin.
 
-Reproducible builds use reviewed source, configuration, the lockfile and pinned
-tool versions. Each build produces `dist-manifest/SHA256SUMS` for comparison with
-deployed files. A separately trusted manifest checks integrity, not whether the
-source or host is trustworthy. See [verification](docs/verify.md).
+To check a deployment, rebuild from the reviewed source with the same
+configuration, lockfile and pinned tool versions, or keep the manifest from the
+reviewed build. `pnpm manifest` writes `dist-manifest/SHA256SUMS` for comparison
+with deployed files; a different toolchain or configuration can change the bytes.
+A separately trusted manifest checks integrity, not whether the source or host
+is trustworthy. See [verification](docs/verify.md).

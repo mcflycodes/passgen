@@ -36,6 +36,7 @@ the browsers and system libraries, then run `pnpm check` with
 Playwright container image, including its digest, in
 [the CI workflow](.github/workflows/ci.yml), using the pinned Node and pnpm
 versions and a frozen-lockfile install there too.
+CI runs the pinned image with `--user 1001 --ipc=host --init` and installs Node via `setup-node`.
 
 ## Branches and pull requests
 
@@ -50,7 +51,7 @@ such as `docs(styles): clarify token rules`. Types are `feat`, `fix`, `docs`,
 
 ## Conventions
 
-Follow [AGENTS.md](AGENTS.md), including these rules:
+[AGENTS.md](AGENTS.md) has the full rule list. Key conventions:
 
 - No tool, AI, model or vendor attribution in commits, pull request text, code,
   docs or the site, including co-author trailers. CI enforces this.
