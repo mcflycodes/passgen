@@ -57,18 +57,20 @@ Use its own hostname so other pages cannot read generated passwords.
 
 ### Update
 
-Run from the same parent folder on Linux. This replaces the whole site, including
-old hashed assets, and keeps the previous folder for rollback. Stop on errors;
-move any existing `passgen-previous` backup elsewhere before the next update.
-Allow a brief interruption while the folders switch; review release notes for
-config/header changes.
+Run from the same parent folder on Linux (this uses GNU `mv -T`; on macOS follow
+the [self-hosting guide](docs/self-hosting.md)). This replaces the whole site,
+including old hashed assets, and keeps the previous folder for rollback. Stop on
+errors. Before the next update, move any `passgen-previous` backup elsewhere; if
+a run stops partway, delete `./passgen-next` before retrying. Allow a brief
+interruption while the folders switch; review release notes for config/header
+changes. With SELinux enforcing, relabel afterwards as described in the guide.
 
 ```sh
+test ! -e ./passgen-previous && test ! -L ./passgen-previous &&
+test -d ./passgen && test ! -L ./passgen &&
 curl --fail --location --output passgen.zip https://github.com/mcflycodes/passgen/releases/latest/download/passgen.zip &&
 mkdir ./passgen-next &&
 unzip -DD passgen.zip -d ./passgen-next &&
-test ! -e ./passgen-previous && test ! -L ./passgen-previous &&
-test -d ./passgen && test ! -L ./passgen &&
 mv -T ./passgen ./passgen-previous &&
 mv -T ./passgen-next ./passgen
 ```
