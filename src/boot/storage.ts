@@ -13,10 +13,10 @@ import type { StoredLimits } from "./stored-settings.ts";
  * with a new schema never reads an old build's data, and the stored text
  * carries it again, so a copied or edited value cannot pretend to be new.
  */
-export const SETTINGS_STORAGE_KEY = "passgen:settings:v3";
+export const SETTINGS_STORAGE_KEY = "passgen:settings:v4";
 
 /** The `version` the stored text must carry. Raise it with the key when the settings' shape changes. */
-export const SETTINGS_SCHEMA_VERSION = 3;
+export const SETTINGS_SCHEMA_VERSION = 4;
 
 /**
  * The longest stored text that is read at all, in UTF-16 code units. A valid

@@ -71,7 +71,7 @@ test("new options save, restore and reset; old v2 records are discarded and clea
   await page.locator("#save-settings").click();
   expect(await page.evaluate(() => localStorage.getItem("passgen:settings:v2"))).toBeNull();
   const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) as string), SETTINGS_STORAGE_KEY);
-  expect(saved.version).toBe(3);
+  expect(saved.version).toBe(4);
   expect(saved.settings.passphrase).toMatchObject({ symbolPosition: "after", numberDigits: 1, capitalize: "every" });
   await page.reload();
   await expect(page.locator("#pp-symbol-position")).toHaveValue("after");
@@ -85,3 +85,57 @@ test("new options save, restore and reset; old v2 records are discarded and clea
   await expect(page.locator("#pp-symbol-char")).toHaveValue("random");
   expect(await page.evaluate((key) => localStorage.getItem(key), SETTINGS_STORAGE_KEY)).toBeNull();
 });
+
+test("separator look-alikes filter the dropdown, fall back, save and reset", async ({ page }) => {
+  await openPage(page);
+  const checkbox = page.locator("#pp-lookalikes");
+  const dropdown = page.locator("#pp-symbol-char");
+  await expect(checkbox).not.toBeChecked();
+  await dropdown.selectOption("!");
+  await checkbox.check();
+  await expect(dropdown).toHaveValue("-");
+  await page.locator("#save-settings").click();
+  const fixed = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) as string), SETTINGS_STORAGE_KEY);
+  expect(fixed.settings.passphrase).toMatchObject({ excludeLookAlikes: true, separatorSymbol: "-" });
+  await page.reload();
+  await expect(checkbox).toBeChecked();
+  await expect(dropdown).toHaveValue("-");
+  expect(
+    await dropdown.locator("option").evaluateAll((options) => options.map((option) => option.getAttribute("value"))),
+  ).toEqual([..."@#$^*-?", "random", "random-unique"]);
+  await dropdown.selectOption("random-unique");
+  await page.locator("#pp-symbol-position").selectOption("both");
+  await expect(page.locator("#pp-unique-note")).toBeVisible();
+  await page.evaluate(() => localStorage.setItem("passgen:settings:v3", '{"version":3,"settings":{}}'));
+  await page.locator("#save-settings").click();
+  expect(await page.evaluate(() => localStorage.getItem("passgen:settings:v3"))).toBeNull();
+  await page.reload();
+  await expect(checkbox).toBeChecked();
+  await expect(dropdown.locator('option[value="!"]')).toHaveCount(0);
+  await checkbox.uncheck();
+  await expect(dropdown.locator('option[value="!"]')).toHaveCount(1);
+  await checkbox.check();
+  await page.locator("#reset-settings").click();
+  await expect(checkbox).not.toBeChecked();
+  await expect(dropdown).toHaveValue("random");
+  await expect(dropdown.locator('option[value="!"]')).toHaveCount(1);
+});
+
+// Keep each mode/position within its own test budget: WebKit's normal click
+// actionability checks make 45 regenerations too slow for one 30-second test.
+for (const mode of ["-", "random", "random-unique"]) {
+  for (const position of ["both", "before", "after"]) {
+    test(`separator look-alikes filter generated output: ${mode}, ${position}`, async ({ page }) => {
+      await openPage(page);
+      await page.locator("#pp-lookalikes").check();
+      await page.locator("#pp-symbol-char").selectOption(mode);
+      await page.locator("#pp-symbol-position").selectOption(position);
+      for (let i = 0; i < 5; i++) {
+        await page.locator("#pp-regen").click();
+        const value = await resultText(page, "pp-value");
+        expect(value).not.toMatch(/[!()._]/);
+        expect(value.match(/[^a-zA-Z0-9]/g)?.every((symbol) => "@#$^*-?".includes(symbol))).toBe(true);
+      }
+    });
+  }
+}

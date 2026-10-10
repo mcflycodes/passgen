@@ -212,9 +212,11 @@ export function browserStorage(area: () => Storage = () => localStorage): Settin
   };
   // Remove only this app's obsolete schema, never unrelated browser data.
   const removeLegacy = (): boolean => {
-    for (const key of ["passgen:settings:v1", "passgen:settings:v2"])
+    for (const key of ["passgen:settings:v1", "passgen:settings:v2", "passgen:settings:v3"])
       if (storage.getItem(key) !== null) storage.removeItem(key);
-    return ["passgen:settings:v1", "passgen:settings:v2"].every((key) => storage.getItem(key) === null);
+    return ["passgen:settings:v1", "passgen:settings:v2", "passgen:settings:v3"].every(
+      (key) => storage.getItem(key) === null,
+    );
   };
   return {
     read,

@@ -72,7 +72,7 @@ class NeedChoice extends Error {
 }
 
 /** Enumerate every actual decision and its probability, with two words and tiny alphabets. */
-test("all options have exact entropy and uniform output probabilities on small wordlists", async () => {
+async function checkSmallWordlists(filteredOnly: boolean) {
   const dir = await mkdtemp(join(tmpdir(), "passgen-options-v3-"));
   try {
     const core = join(import.meta.dirname, "../../src/core");
@@ -85,10 +85,14 @@ test("all options have exact entropy and uniform output probabilities on small w
       export function pick(values: any[], source: any) { return values[randomInt(values.length, source)]; }
     `,
     );
-    for (const alphabet of ["!@", "!@#"]) {
+    for (const alphabet of filteredOnly ? ["!@#", "!@#$"] : ["!@", "!@#"]) {
       const fixtureConfig = {
         ...config,
         password: { ...config.password, characters: { ...config.password.characters, simple: alphabet } },
+        passphrase: {
+          ...config.passphrase,
+          separator: { ...config.passphrase.separator, lookAlikes: "!", defaultFixedSymbol: "@" },
+        },
       };
       const phraseCode = (await readFile(join(core, "passphrase.ts"), "utf8"))
         .replace('import { config } from "../config/validate.ts";', `const config = ${JSON.stringify(fixtureConfig)};`)
@@ -135,21 +139,48 @@ test("all options have exact entropy and uniform output probabilities on small w
         assert.equal(leaves, outputs.size);
         for (const probability of outputs.values()) assert.ok(Math.abs(probability * outputs.size - 1) < 1e-10);
       };
-      for (const separatorSymbol of ["!", "random", "random-unique"])
-        for (const symbolPosition of ["both", "before", "after"] as const)
-          for (const numberDigits of [1, 2, 3])
-            for (const capitalize of ["off", "random", "every"] as const) {
-              // Exercise rounds across a gap with an odd alphabet, separately below.
-              const options = {
+      if (!filteredOnly)
+        for (const separatorSymbol of ["!", "random", "random-unique"])
+          for (const symbolPosition of ["both", "before", "after"] as const)
+            for (const numberDigits of [1, 2, 3])
+              for (const capitalize of ["off", "random", "every"] as const) {
+                // Exercise rounds across a gap with an odd alphabet, separately below.
+                const options = {
+                  ...defaultPassphraseOptions,
+                  words: 2,
+                  separatorSymbol,
+                  symbolPosition,
+                  numberDigits,
+                  capitalize,
+                };
+                checkDistribution(options);
+              }
+      if (filteredOnly) {
+        for (const separatorSymbol of ["!", "@", "random", "random-unique"])
+          for (const symbolPosition of ["both", "before", "after"] as const)
+            for (const number of [false, true])
+              checkDistribution({
                 ...defaultPassphraseOptions,
                 words: 2,
+                numberDigits: 1,
+                excludeLookAlikes: true,
                 separatorSymbol,
                 symbolPosition,
-                numberDigits,
-                capitalize,
-              };
-              checkDistribution(options);
-            }
+                number,
+              });
+        const filtered = {
+          ...defaultPassphraseOptions,
+          words: 4,
+          number: false,
+          excludeLookAlikes: true,
+          separatorSymbol: "random-unique",
+        };
+        assert.equal(entropy.passphraseEntropy(filtered).count, 16n * bruteSymbols(alphabet.length - 1, 3, 1));
+        checkDistribution(filtered);
+        const both = { ...filtered, words: 3, number: true, numberDigits: 1 };
+        assert.equal(entropy.passphraseEntropy(both).count, 8n * 100n * bruteSymbols(alphabet.length - 1, 2, 2));
+        checkDistribution(both);
+      }
       const options = {
         ...defaultPassphraseOptions,
         words: 4,
@@ -158,12 +189,17 @@ test("all options have exact entropy and uniform output probabilities on small w
         separatorSymbol: "random-unique",
       };
       assert.equal(entropy.passphraseEntropy(options).count, 16n * 1000n * bruteSymbols(alphabet.length, 3, 2));
-      checkDistribution(options);
+      if (!filteredOnly) checkDistribution(options);
     }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
-});
+}
+
+test("all options have exact entropy and uniform output probabilities on small wordlists", () =>
+  checkSmallWordlists(false));
+test("filtered options have exact entropy and uniform output probabilities on small wordlists", () =>
+  checkSmallWordlists(true));
 
 test("positions, digit lengths and capitalization have exact factors and byte lengths", () => {
   for (const number of [false, true])

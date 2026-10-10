@@ -65,6 +65,7 @@ export interface StoredSettings {
     readonly maxWordLength: number;
     readonly number: boolean;
     readonly symbol: boolean;
+    readonly excludeLookAlikes: boolean;
     readonly separatorSymbol: string;
     readonly numberDigits: number;
     readonly symbolPosition: "both" | "before" | "after";
@@ -167,6 +168,7 @@ function storedPassphrase(value: unknown, limits: StoredLimits): StoredSettings[
     "maxWordLength",
     "number",
     "symbol",
+    "excludeLookAlikes",
     "separatorSymbol",
     "capitalize",
     "numberDigits",
@@ -178,6 +180,7 @@ function storedPassphrase(value: unknown, limits: StoredLimits): StoredSettings[
   const maxWordLength = p.maxWordLength;
   const number = p.number;
   const symbol = p.symbol;
+  const excludeLookAlikes = p.excludeLookAlikes;
   const separatorSymbol = p.separatorSymbol;
   const capitalize = p.capitalize;
   const numberDigits = p.numberDigits;
@@ -188,7 +191,7 @@ function storedPassphrase(value: unknown, limits: StoredLimits): StoredSettings[
   if (!storedInteger(words, limits.words.min, limits.words.max)) return null;
   if (!storedInteger(minWordLength, limits.wordLength.min, limits.wordLength.max)) return null;
   if (!storedInteger(maxWordLength, minWordLength, limits.wordLength.max)) return null;
-  if (!storedBoolean(number) || !storedBoolean(symbol)) return null;
+  if (!storedBoolean(number) || !storedBoolean(symbol) || !storedBoolean(excludeLookAlikes)) return null;
   if (typeof separatorSymbol !== "string") return null;
   if (
     !["random", "random-unique"].includes(separatorSymbol) &&
@@ -201,6 +204,7 @@ function storedPassphrase(value: unknown, limits: StoredLimits): StoredSettings[
     maxWordLength,
     number,
     symbol,
+    excludeLookAlikes,
     separatorSymbol,
     capitalize,
     numberDigits,

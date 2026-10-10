@@ -55,6 +55,9 @@ const schema: Schema = {
       number: "boolean",
       symbol: "boolean",
       defaultSymbol: "string",
+      defaultFixedSymbol: "string",
+      excludeLookAlikes: "boolean",
+      lookAlikes: "string",
       numberDigits: range,
       symbolPosition: "string",
     },
@@ -279,6 +282,16 @@ export function validateConfig(value: unknown): asserts value is Config {
   if (valid < 1n << BigInt(strongBits))
     fail("password.length.default", "defaults must provide at least 80 bits and meet the configured Strong threshold");
   const s = c.passphrase.separator;
+  unique(s.lookAlikes, "passphrase.separator.lookAlikes");
+  for (const char of s.lookAlikes)
+    if (!c.password.characters.simple.includes(char))
+      fail("passphrase.separator.lookAlikes", "exclusion must belong to simple symbols");
+  const filteredSymbols = [...c.password.characters.simple].filter((char) => !s.lookAlikes.includes(char));
+  if (filteredSymbols.length < 2)
+    fail("passphrase.separator.lookAlikes", "unique mode needs at least two remaining symbols");
+  if (s.defaultFixedSymbol.length !== 1 || !filteredSymbols.includes(s.defaultFixedSymbol))
+    fail("passphrase.separator.defaultFixedSymbol", "must be a remaining simple symbol");
+  const symbolCount = s.excludeLookAlikes ? filteredSymbols.length : c.password.characters.simple.length;
   if (c.password.characters.simple.length < 2)
     fail("password.characters.simple", "unique mode needs at least two symbols");
   if (
@@ -301,8 +314,8 @@ export function validateConfig(value: unknown): asserts value is Config {
     const slots = symbolSlots(s);
     symbolBits =
       s.defaultSymbol === "random-unique"
-        ? Math.log2(Number(uniqueSymbolCount(c.password.characters.simple.length, gaps, slots)))
-        : gaps * slots * Math.log2(c.password.characters.simple.length);
+        ? Math.log2(Number(uniqueSymbolCount(symbolCount, gaps, slots)))
+        : gaps * slots * Math.log2(symbolCount);
   }
   const bits =
     symbolBits +

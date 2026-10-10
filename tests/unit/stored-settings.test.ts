@@ -87,6 +87,7 @@ function generate(r: ReturnType<typeof rng>): unknown {
     maxWordLength: r.chance(0.9) && typeof minWord === "number" ? int(minWord, limits.wordLength.max) : int(3, 9),
     number: bool(),
     symbol: bool(),
+    excludeLookAlikes: bool(),
     separatorSymbol: r.chance(0.95)
       ? r.pick([...limits.separators, "random", "random-unique"])
       : r.pick(["", "--", "<", "a", 5, null]),
