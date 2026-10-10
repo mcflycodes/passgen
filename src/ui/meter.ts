@@ -19,6 +19,7 @@ import {
 } from "../core/passphrase.ts";
 import { PasswordError, type PasswordPlan } from "../core/password.ts";
 import { byId } from "./dom.ts";
+import { reserveText } from "./reserved-text.ts";
 
 export type MeterInput =
   | { readonly kind: "password"; readonly plan: PasswordPlan }
@@ -156,6 +157,39 @@ export function createMeter(prefix: "pw" | "pp"): Meter {
   const quantum = byId(`${prefix}-quantum`, HTMLElement);
   const future = byId(`${prefix}-future`, HTMLElement);
   const announcement = byId(`${prefix}-meter-status`, HTMLElement);
+  // Conservative display exemplars reserve space at the actual font and width,
+  // including when details are open. These are sizing text, never estimates.
+  const duration = "888,888 × 10^888 years";
+  const attacks = config.meter.attacks;
+  const fastAssumptions = `${attacks.fast.gpus} high-end GPUs, ${attacks.fast.hash}, ${attacks.fast.guessesPerSecond.toLocaleString("en-US")} guesses/second; half the keyspace on average.`;
+  const capNote = ` NTLM search capped at its ${NTLM_BITS}-bit digest.`;
+  reserveText(band, ["Invalid settings. Adjust the settings to rate strength."]);
+  reserveText(headline, [`Average offline crack time (NTLM): ${duration}.`]);
+  reserveText(scenarios, [
+    `bcrypt cost ${attacks.bcrypt.cost}: ${duration} on average; ${attacks.bcrypt.guessesPerSecond.toLocaleString("en-US")} guesses/second across ${attacks.bcrypt.gpus} GPUs (extrapolated). bcrypt uses the first 72 bytes; conservative prefix entropy bound. bcrypt search capped at its ${BCRYPT_BITS}-bit digest.`,
+    `Argon2id (${attacks.argon2id.parameters}): ${duration} on average; ${attacks.argon2id.guessesPerSecond.toLocaleString("en-US")} guesses/second across ${attacks.argon2id.gpus} GPUs (ideal scaling). Argon2id search capped at its ${8 * attacks.argon2id.tagBytes}-bit digest.`,
+    `Online chance of success: 8.8 × 10^-888% with ${attacks.online.attempts} distinct guesses. Assumed lockout: ${attacks.online.lockout}.`,
+    `${fastAssumptions}${capNote}`,
+    "Estimates assume the attacker knows the generator's settings and wordlist. Hash rates and real attack conditions vary.",
+  ]);
+  if (prefix === "pw") {
+    reserveText(byId("pw-notice", HTMLElement), [
+      "Don't start with a symbol is skipped: these settings require only symbols.",
+    ]);
+  }
+  if (prefix === "pp") {
+    reserveText(warning, [
+      `This word-length range shrinks the pool to 8,888 words and provides less than ${config.meter.passphraseWarningBits} bits with these settings. Widen the range, add words or turn on number separators.`,
+    ]);
+    reserveText(byId("pp-unique-note", HTMLElement), [
+      "All symbols are used before repeating; repeats are spread evenly.",
+    ]);
+  }
+  if (config.meter.quantum.future.enabled) {
+    reserveText(future, [
+      `Hypothetical future fault-tolerant quantum estimate: ${duration}. ${config.meter.quantum.future.assumptions}; ${config.meter.quantum.future.processors} processors; (π/4) × sqrt(keyspace/processors) sequential iterations. This is a model, not demonstrated hardware performance. Target: NTLM.${capNote}`,
+    ]);
+  }
   quantum.textContent = config.meter.quantum.current;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -188,10 +222,9 @@ export function createMeter(prefix: "pw" | "pp"): Meter {
       bits.textContent = formatBits(reading.bits);
       warning.textContent = reading.warning;
       warning.hidden = !reading.warning;
-      const attacks = config.meter.attacks;
       if (input === null) return;
       const fastBits = digestBits(reading.bits);
-      const fastNote = reading.bits > NTLM_BITS ? ` NTLM search capped at its ${NTLM_BITS}-bit digest.` : "";
+      const fastNote = reading.bits > NTLM_BITS ? capNote : "";
       const bcryptBits =
         input.kind === "password" ? bcryptPasswordBits(input.plan) : bcryptPassphraseBits(input.options);
       const truncated =
@@ -205,11 +238,12 @@ export function createMeter(prefix: "pw" | "pp"): Meter {
       const argon2idBits = digestBits(reading.bits, argon2idDigestBits);
       const argon2idNote =
         reading.bits > argon2idDigestBits ? ` Argon2id search capped at its ${argon2idDigestBits}-bit digest.` : "";
-      headline.textContent = `Average offline crack time: ${crackTime(fastBits, attacks.fast.guessesPerSecond)}. ${attacks.fast.gpus} high-end GPUs, ${attacks.fast.hash}, ${attacks.fast.guessesPerSecond.toLocaleString("en-US")} guesses/second; half the keyspace on average.${fastNote}`;
+      headline.textContent = `Average offline crack time (NTLM): ${crackTime(fastBits, attacks.fast.guessesPerSecond)}.`;
       const lines = [
         `bcrypt cost ${attacks.bcrypt.cost}: ${crackTime(bcryptBits, attacks.bcrypt.guessesPerSecond)} on average; ${attacks.bcrypt.guessesPerSecond.toLocaleString("en-US")} guesses/second across ${attacks.bcrypt.gpus} GPUs (extrapolated).${bcryptNote}`,
         `Argon2id (${attacks.argon2id.parameters}): ${crackTime(argon2idBits, attacks.argon2id.guessesPerSecond)} on average; ${attacks.argon2id.guessesPerSecond.toLocaleString("en-US")} guesses/second across ${attacks.argon2id.gpus} GPUs (ideal scaling).${argon2idNote}`,
         `Online chance of success: ${onlineChance(reading.bits, attacks.online.attempts)} with ${attacks.online.attempts} distinct guesses. Assumed lockout: ${attacks.online.lockout}.`,
+        `${fastAssumptions}${fastNote}`,
         "Estimates assume the attacker knows the generator's settings and wordlist. Hash rates and real attack conditions vary.",
       ];
       for (const line of lines) {
@@ -223,7 +257,7 @@ export function createMeter(prefix: "pw" | "pp"): Meter {
         future.hidden = false;
       }
       announce(
-        `New ${prefix === "pw" ? "password" : "passphrase"} generated. ${rating.label}, ${bits.textContent}. ${reading.warning}`,
+        `New ${prefix === "pw" ? "password" : "passphrase"} generated. ${rating.label}, ${bits.textContent}.${fastNote} ${reading.warning}`,
       );
     },
   };

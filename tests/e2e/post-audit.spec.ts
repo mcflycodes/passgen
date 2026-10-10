@@ -59,7 +59,7 @@ test("hash caps affect offline time only, with accurate notices", async ({ page 
   for (const name of ["uppercase", "numbers", "simple"]) await page.locator(`#pw-${name}`).uncheck();
   await setNumber(page.locator("#pw-length-number"), 128);
   await expect(page.locator("#pw-headline")).toContainText(crackTime(128, config.meter.attacks.fast.guessesPerSecond));
-  await expect(page.locator("#pw-headline")).toContainText("128-bit digest");
+  await expect(page.locator("#pw-scenarios")).toContainText("128-bit digest");
   expect(Number.parseFloat(await page.locator("#pw-bits").innerText())).toBeGreaterThan(600);
   await page.locator("#pw-meter summary").click();
   await expect(page.locator("#pw-scenarios")).toContainText(

@@ -20,7 +20,8 @@ test("default text equivalents, six coloured segments and attack assumptions", a
     .locator("#pw-meter .seg")
     .evaluateAll((segments) => segments.map((el) => getComputedStyle(el).backgroundColor));
   expect(new Set(colors).size).toBe(6);
-  await expect(page.locator("#pw-headline")).toContainText("8 high-end GPUs, NTLM");
+  await expect(page.locator("#pw-headline")).toContainText("Average offline crack time (NTLM)");
+  await expect(page.locator("#pw-scenarios")).toContainText("8 high-end GPUs, NTLM");
   await page.locator("#pw-meter summary").click();
   await expect(page.locator("#pw-scenarios")).toContainText("bcrypt cost 12");
   await expect(page.locator("#pw-scenarios")).toContainText(config.meter.attacks.argon2id.parameters);

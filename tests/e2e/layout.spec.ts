@@ -4,7 +4,7 @@
 
 import { config } from "../../src/config/validate.ts";
 import { expect, test } from "./fixtures.ts";
-import { openPage } from "./helpers.ts";
+import { chooseStyle, openPage, STYLES } from "./helpers.ts";
 
 test.describe("page shell", () => {
   test("shows the PassGen name, the configured tagline and intro", async ({ page }) => {
@@ -100,3 +100,37 @@ test.describe("page shell", () => {
     await expect(page.locator("#pw-lowercase-chars")).toHaveText("a–z");
   });
 });
+
+for (const style of STYLES) {
+  test(`intro paragraph fits wide screens and wraps on mobile / ${style}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openPage(page);
+    await chooseStyle(page, style);
+    const paragraph = page.locator(".lede");
+    const lines = () =>
+      paragraph.evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return range.getClientRects().length;
+      });
+    await expect(paragraph).toHaveText(config.text.intro.text);
+    expect(await lines()).toBe(1);
+    await page.setViewportSize({ width: 393, height: 852 });
+    expect(await lines()).toBeGreaterThan(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(393);
+  });
+
+  test(`intro can stay disabled with the wider paragraph cap / ${style}`, async ({ page }) => {
+    await page.route("**/", async (route) => {
+      const response = await route.fetch();
+      const body = (await response.text()).replace(/<section class="intro"[^>]*>[\s\S]*?<\/section>/, "");
+      await route.fulfill({ response, body });
+    });
+    await openPage(page);
+    await chooseStyle(page, style);
+    await expect(page.locator(".intro")).toHaveCount(0);
+    await expect(page.locator("#pw-value")).not.toBeEmpty();
+    await expect(page.locator("#pp-value")).not.toBeEmpty();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(page.viewportSize()?.width);
+  });
+}
