@@ -5,6 +5,11 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- The header repository link is an accessible GitHub mark icon.
+- Style and theme controls match the header tagline typography in every style.
+
 ## [1.2.0] - 2026-10-09
 
 ### Added

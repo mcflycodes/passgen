@@ -108,3 +108,28 @@ for (const style of STYLES) {
     });
   });
 }
+
+for (const style of STYLES) {
+  for (const theme of ["light", "dark"] as const) {
+    test(`header typography matches the tagline: ${style}/${theme}`, async ({ page }) => {
+      await openPage(page);
+      await chooseStyle(page, style);
+      await chooseTheme(page, theme);
+      const typography = await page
+        .locator(".tagline, .style-label, #style, .theme-control label")
+        .evaluateAll((elements) =>
+          elements.map((element) => {
+            const css = getComputedStyle(element);
+            return {
+              family: css.fontFamily,
+              weight: css.fontWeight,
+              transform: css.textTransform,
+              spacing: css.letterSpacing,
+            };
+          }),
+        );
+      expect(typography).toHaveLength(6);
+      for (const control of typography.slice(1)) expect(control).toEqual(typography[0]);
+    });
+  }
+}

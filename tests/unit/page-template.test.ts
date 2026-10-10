@@ -105,7 +105,7 @@ describe("the shipped index.html", () => {
     const html = page();
     assert.match(
       html,
-      /<a class="top-link" id="repo-link" rel="noopener noreferrer" aria-label="PassGen on GitHub" href="https:\/\/github\.com\/mcflycodes\/passgen">GitHub<\/a>/,
+      /<a class="top-link" id="repo-link" rel="noopener noreferrer" aria-label="GitHub" title="GitHub" href="https:\/\/github\.com\/mcflycodes\/passgen">\s*<svg[^>]*>[\s\S]*?<\/svg>\s*<\/a>/,
     );
     assert.match(
       html,

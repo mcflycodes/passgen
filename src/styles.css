@@ -263,8 +263,13 @@ summary,
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--muted);
+}
+.tagline,
+.style-control,
+.theme-control label {
   font-family: var(--tagline-font, var(--sans));
   font-size: var(--tagline-size, 13px);
+  font-weight: 400;
   letter-spacing: var(--tagline-track, 0);
   text-transform: var(--tagline-case, none);
 }
@@ -281,32 +286,24 @@ summary,
 }
 .style-label {
   color: var(--muted);
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
-/* Header link (decision 0005, point 5): the configured repository, as quiet
-   text beside the Style control, underlined so it reads as a link. --text-2
-   is checked against every colour the header can show. */
+/* The repository mark uses the same checked header colour as other controls. */
 .top-link {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 24px;
   min-height: 24px;
-  padding: 0 4px;
+  padding: 4px;
   color: var(--text-2);
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
   border-radius: var(--radius-sm);
 }
+.top-link svg {
+  flex-shrink: 0;
+}
 .top-link:hover {
-  text-decoration-thickness: 2px;
+  color: var(--text);
 }
 
 .theme-control {
@@ -321,9 +318,6 @@ summary,
   min-width: 64px;
   min-height: 34px;
   padding: 0 12px;
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
   color: var(--text-2);
   cursor: pointer;
   user-select: none;
@@ -692,6 +686,9 @@ select {
   max-width: 100%;
 }
 .style-control select {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
   min-height: 34px;
   min-width: 7em;
 }
