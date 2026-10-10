@@ -200,6 +200,10 @@ function checkReleaseWorkflow(configuration: string) {
   assert.match(publish, /test "\$type" = commit/);
   assert.match(publish, /test "\$sha" = "\$RELEASE_COMMIT"/);
   assert.match(publish, /gh release create .*--repo "\$GITHUB_REPOSITORY".*--verify-tag.*--notes-file/);
+  assert.match(
+    publish,
+    /gh release create .*"release\/passgen-\$RELEASE_VERSION\.zip" release\/SHA256SUMS "release\/passgen-\$RELEASE_VERSION\.zip\.sha256" release\/passgen\.zip release\/passgen\.zip\.sha256/,
+  );
   assert.equal((configuration.match(/contents: write/g) ?? []).length, 1);
   assert.doesNotMatch(configuration, /cache:|actions\/cache@|secrets\.|write-all|read-all|test:e2e/);
   for (const action of configuration.matchAll(/uses: (\S+)/g)) {
@@ -227,6 +231,7 @@ test("release workflow pins actions, limits permissions and builds without cache
 test("release workflow guard rejects broken pins, permissions, caching and input interpolation", () => {
   for (const broken of [
     releaseWorkflow.replace(/@[a-f0-9]{40}/, "@main"),
+    releaseWorkflow.replace(" release/passgen.zip release/passgen.zip.sha256", ""),
     releaseWorkflow.replace("permissions: {}", "permissions: write-all"),
     releaseWorkflow.replace("contents: read", "contents: write"),
     releaseWorkflow.replace("node-version-file: .nvmrc", "node-version-file: .nvmrc\n          cache: pnpm"),

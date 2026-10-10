@@ -73,8 +73,8 @@ user-confirmed values in the plan. Do not proceed without the needed answers.
    retain the previous payload/deployment and settings using the host's supported
    rollback workflow. Do not publish source, `.git`, backups, manifests or tools.
 
-5. **Download and verify the release. Always verify checksums.** Obtain all three
-   assets from the selected trusted release: `passgen-X.Y.Z.zip`,
+5. **Download and verify the release. Always verify checksums.** Obtain the three
+   versioned assets from the selected trusted release: `passgen-X.Y.Z.zip`,
    `passgen-X.Y.Z.zip.sha256` and `SHA256SUMS`. Keep them outside the web root.
    Verify the ZIP before extracting, then check the extracted files against the
    manifest; all results must say `OK`. On Linux the commands are:
@@ -92,8 +92,10 @@ user-confirmed values in the plan. Do not proceed without the needed answers.
    rollback; never fetch it from the deployed site as proof of that site's
    integrity. The Linux installer performs ZIP, safe-entry, exact file-set and
    manifest verification itself; use its `--from-dir` option for the downloaded
-   assets. These checks are mandatory for you, even where the human guide marks
-   them optional. A checksum mismatch means stop without deploying.
+   assets. Stable `passgen.zip` aliases are for the short manual path; keep using
+   versioned assets here. These checks are mandatory for you, even where the
+   human guide omits them or marks them optional. A checksum mismatch means stop
+   without deploying.
 
 6. **Install using the path supported by the answers.** With shell access on
    Linux, prefer `scripts/install-release.sh`, using its actual flags:
