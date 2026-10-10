@@ -1,6 +1,6 @@
 {
   "name": "passgen",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "A client-side-only password and passphrase generator that runs on any static host.",
   "license": "Apache-2.0",

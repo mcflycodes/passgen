@@ -5,6 +5,8 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-10
+
 ### Added
 
 - Passphrases can exclude look-alike separator symbols while keeping words and numbers unchanged.
@@ -13,6 +15,7 @@ Versions follow Semantic Versioning.
 
 - The header repository link is an accessible GitHub mark icon.
 - Style and theme controls match the header tagline typography in every style.
+- Saved settings use a new schema; settings saved by 1.2.0 are ignored on load and removed on save or reset.
 
 ## [1.2.0] - 2026-10-09
 
