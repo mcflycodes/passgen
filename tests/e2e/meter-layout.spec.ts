@@ -19,6 +19,19 @@ async function position(page: Page, prefix: "pw" | "pp") {
   }, prefix);
 }
 
+// DOMRect arithmetic can vary below a pixel as Firefox changes scroll position.
+// Keep the same half-pixel limit for heights, page positions and relative offsets.
+function expectStablePosition(actual: number | number[], expected: number | number[], label: string) {
+  const received = typeof actual === "number" ? [actual] : actual;
+  const baseline = typeof expected === "number" ? [expected] : expected;
+  expect(received, `${label}: measurement count`).toHaveLength(baseline.length);
+  for (const [index, value] of received.entries()) {
+    const original = baseline[index];
+    if (original === undefined) throw new Error(`${label}: missing baseline measurement ${index}`);
+    expect(Math.abs(value - original), `${label}[${index}]: movement in pixels`).toBeLessThanOrEqual(0.5);
+  }
+}
+
 for (const style of STYLES) {
   for (const theme of style === "calm" ? (["light", "dark"] as const) : (["light"] as const)) {
     for (const prefix of ["pw", "pp"] as const) {
@@ -39,9 +52,9 @@ for (const style of STYLES) {
           const bands = new Set<string>();
           const check = async (label: string, absolute?: number[]) => {
             const current = await position(page, prefix);
-            expect(current.height, `${label}: meter height`).toBe(initial.height);
-            expect(current.relative, `${label}: offsets from meter bottom`).toEqual(initial.relative);
-            if (absolute) expect(current.absolute, `${label}: page positions`).toEqual(absolute);
+            expectStablePosition(current.height, initial.height, `${label}: meter height`);
+            expectStablePosition(current.relative, initial.relative, `${label}: offsets from meter bottom`);
+            if (absolute) expectStablePosition(current.absolute, absolute, `${label}: page positions`);
             bands.add((await page.locator(`#${prefix}-band`).textContent()) ?? "");
           };
           if (prefix === "pw") {
@@ -174,9 +187,10 @@ for (const width of [320, 900, 2400]) {
       for (const value of prefix === "pw" ? [4, 18, 20, 128] : [2, 5, 12]) {
         await setRange(range, value);
         const current = await position(page, prefix);
-        expect(current.height).toBe(initial.height);
-        expect(current.relative).toEqual(initial.relative);
-        if (value <= (prefix === "pw" ? 20 : 5)) expect(current.absolute).toEqual(initial.absolute);
+        expectStablePosition(current.height, initial.height, `${prefix}/${value}: meter height`);
+        expectStablePosition(current.relative, initial.relative, `${prefix}/${value}: offsets from meter bottom`);
+        if (value <= (prefix === "pw" ? 20 : 5))
+          expectStablePosition(current.absolute, initial.absolute, `${prefix}/${value}: page positions`);
       }
     }
   });
@@ -199,8 +213,8 @@ test("enabled future estimates reserve their changing text", async ({ page }) =>
     for (const value of prefix === "pw" ? [4, 18, 20, 128] : [2, 5, 12]) {
       await setRange(page.locator(prefix === "pw" ? "#pw-length" : "#pp-words"), value);
       const current = await position(page, prefix);
-      expect(current.height).toBe(initial.height);
-      expect(current.relative).toEqual(initial.relative);
+      expectStablePosition(current.height, initial.height, `${prefix}/${value}: meter height`);
+      expectStablePosition(current.relative, initial.relative, `${prefix}/${value}: offsets from meter bottom`);
     }
   }
 });
