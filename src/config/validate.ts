@@ -1,4 +1,5 @@
 import { countPasswords, defaultOptions, PasswordError, planPassword } from "../core/password.ts";
+import { symbolSlots, uniqueSymbolCount } from "../core/separators.ts";
 import { MAX_WORD_LENGTH, MIN_WORD_LENGTH, WORDS } from "../core/wordlist.ts";
 import shipped from "./config.json" with { type: "json" };
 
@@ -54,11 +55,10 @@ const schema: Schema = {
       number: "boolean",
       symbol: "boolean",
       defaultSymbol: "string",
-      numberMin: "number",
-      numberMax: "number",
-      numberDigits: "number",
+      numberDigits: range,
+      symbolPosition: "string",
     },
-    capitalize: "boolean",
+    capitalize: "string",
   },
   meter: {
     bands: [{ minBits: "number", label: "string" }],
@@ -279,28 +279,36 @@ export function validateConfig(value: unknown): asserts value is Config {
   if (valid < 1n << BigInt(strongBits))
     fail("password.length.default", "defaults must provide at least 80 bits and meet the configured Strong threshold");
   const s = c.passphrase.separator;
-  if (c.passphrase.words.max - 1 > c.password.characters.simple.length)
-    fail("passphrase.words.max", "unique separators require at least one simple symbol per word gap");
+  if (c.password.characters.simple.length < 2)
+    fail("password.characters.simple", "unique mode needs at least two symbols");
   if (
     !["random", "random-unique"].includes(s.defaultSymbol) &&
     (s.defaultSymbol.length !== 1 || !c.password.characters.simple.includes(s.defaultSymbol))
   )
     fail("passphrase.separator.defaultSymbol", "must be one simple symbol or a random mode");
-  if (s.numberMin !== 0 || s.numberMax !== 99 || s.numberDigits !== 2)
-    fail("passphrase.separator", "requires two-digit numbers 00–99");
+  if (s.numberDigits.min !== 1 || s.numberDigits.max !== 3)
+    fail("passphrase.separator.numberDigits", "requires bounds 1–3");
+  integer(s.numberDigits.default, 1, 3, "passphrase.separator.numberDigits.default");
+  if (!["both", "before", "after"].includes(s.symbolPosition))
+    fail("passphrase.separator.symbolPosition", "requires both, before or after");
+  if (!["off", "random", "every"].includes(c.passphrase.capitalize))
+    fail("passphrase.capitalize", "requires off, random or every");
   const filteredCount = WORDS.filter((word) => word.length >= w.defaultMin && word.length <= w.defaultMax).length;
   if (!filteredCount) fail("passphrase.wordLength", "default filter is empty");
   const gaps = c.passphrase.words.default - 1;
   let symbolBits = 0;
   if (s.symbol && ["random", "random-unique"].includes(s.defaultSymbol)) {
-    for (let i = 0; i < gaps; i += 1)
-      symbolBits += Math.log2(c.password.characters.simple.length - (s.defaultSymbol === "random-unique" ? i : 0));
+    const slots = symbolSlots(s);
+    symbolBits =
+      s.defaultSymbol === "random-unique"
+        ? Math.log2(Number(uniqueSymbolCount(c.password.characters.simple.length, gaps, slots)))
+        : gaps * slots * Math.log2(c.password.characters.simple.length);
   }
   const bits =
     symbolBits +
     c.passphrase.words.default * Math.log2(filteredCount) +
-    (s.number ? (c.passphrase.words.default - 1) * Math.log2(100) : 0) +
-    (c.passphrase.capitalize ? c.passphrase.words.default : 0);
+    (s.number ? (c.passphrase.words.default - 1) * s.numberDigits.default * Math.log2(10) : 0) +
+    (c.passphrase.capitalize === "random" ? c.passphrase.words.default : 0);
   if (bits < strongBits)
     fail("passphrase.words.default", "defaults must provide at least 80 bits and meet the configured Strong threshold");
   const fast = c.meter.attacks.fast;

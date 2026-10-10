@@ -1,5 +1,5 @@
 // Pearson chi-square at approximate alpha 1e-9, with >=100 expected samples
-// per cell. Fifteen assertions give an approximate false failure rate <=1.5e-8.
+// per cell. Nineteen assertions give an approximate false failure rate <=1.9e-8.
 // Real Web Crypto is injected in batches; deterministic sources cover exact
 // draw order and rejection paths in passphrase.test.ts. This detects gross
 // selection bias, not arbitrarily small deviations from uniformity.
@@ -22,7 +22,14 @@ test("word choice is uniform over a real length-filtered list (alpha 1e-9)", () 
   const counts = new Array<number>(pool.length).fill(0);
   const samples = pool.length * 100;
   const source = bufferedWebCrypto(webCrypto);
-  const options = { ...defaultPassphraseOptions, words: 2, minWordLength: 9, maxWordLength: 9, number: false };
+  const options = {
+    ...defaultPassphraseOptions,
+    separatorSymbol: "-",
+    words: 2,
+    minWordLength: 9,
+    maxWordLength: 9,
+    number: false,
+  };
   for (let i = 0; i < samples / 2; i++)
     for (const word of generatePassphrase(options, source).split("-")) {
       const index = indexes.get(word);
@@ -31,23 +38,34 @@ test("word choice is uniform over a real length-filtered list (alpha 1e-9)", () 
     }
   uniform(counts, samples);
 });
-test("both separator digit positions are uniform (alpha 1e-9)", () => {
-  const counts = [new Array<number>(10).fill(0), new Array<number>(10).fill(0)];
+test("every digit slot is uniform for all number lengths (alpha 1e-9)", () => {
   const source = bufferedWebCrypto(webCrypto);
   const samples = 10_000;
-  for (let i = 0; i < samples; i++) {
-    const separator = generatePassphrase({ ...defaultPassphraseOptions, words: 2 }, source).split("-")[1] as string;
-    for (let digit = 0; digit < 2; digit++) {
-      const row = counts[digit] as number[];
-      const value = Number(separator[digit]);
-      row[value] = (row[value] as number) + 1;
+  for (const numberDigits of [1, 2, 3]) {
+    const counts = Array.from({ length: numberDigits }, () => new Array<number>(10).fill(0));
+    for (let i = 0; i < samples; i++) {
+      const separator = generatePassphrase(
+        { ...defaultPassphraseOptions, separatorSymbol: "-", words: 2, numberDigits },
+        source,
+      ).split("-")[1] as string;
+      for (let digit = 0; digit < numberDigits; digit++) {
+        const row = counts[digit] as number[];
+        const value = Number(separator[digit]);
+        row[value] = (row[value] as number) + 1;
+      }
     }
+    for (const row of counts) uniform(row, samples);
   }
-  for (const row of counts) uniform(row, samples);
 });
 
 test("capitalization is uniform at every word position (alpha 1e-9)", () => {
-  const options = { ...defaultPassphraseOptions, words: 12, number: false, capitalize: true };
+  const options = {
+    ...defaultPassphraseOptions,
+    separatorSymbol: "-",
+    words: 12,
+    number: false,
+    capitalize: "random" as const,
+  };
   const counts = Array.from({ length: options.words }, () => [0, 0]);
   const source = bufferedWebCrypto(webCrypto);
   const samples = 10_000;

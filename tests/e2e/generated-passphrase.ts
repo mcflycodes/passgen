@@ -32,16 +32,21 @@ export function isGeneratedPassphrase(text: string): boolean {
   const gaps = segments.filter((_, index) => index % 2 === 1);
   if (
     isWords(words) &&
-    [false, true].some((numbered) =>
-      gaps.every((gap) =>
-        numbered
-          ? gap.length === 4 &&
-            symbols.includes(gap[0] as string) &&
-            gap[0] === gap[3] &&
-            /^[0-9]{2}$/.test(gap.slice(1, 3))
-          : gap.length === 1 && symbols.includes(gap),
-      ),
-    )
+    (gaps.every((gap) => gap.length === 1 && symbols.includes(gap)) ||
+      [1, 2, 3].some((digits) =>
+        ["both", "before", "after", "none"].some((position) =>
+          gaps.every((gap) => {
+            const before = position === "both" || position === "before" ? 1 : 0;
+            const after = position === "both" || position === "after" ? 1 : 0;
+            return (
+              gap.length === digits + before + after &&
+              (!before || symbols.includes(gap[0] as string)) &&
+              (!after || symbols.includes(gap.at(-1) as string)) &&
+              /^[0-9]+$/.test(gap.slice(before, before + digits))
+            );
+          }),
+        ),
+      ))
   )
     valid = true;
   for (const symbol of symbols) {
@@ -56,7 +61,7 @@ export function isGeneratedPassphrase(text: string): boolean {
     )
       valid = true;
   }
-  const numbered = text.split(/[0-9]{2}/);
+  const numbered = text.split(/[0-9]{1,3}/);
   if (isWords(numbered)) valid = true;
   return valid;
 }

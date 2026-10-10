@@ -64,7 +64,7 @@ try {
         // This deterministic source exists only in the screenshot browser context.
         // Never use these documentation sample values as real passwords.
         await context.addInitScript(() => {
-          let seed = 0xc0ffee;
+          let seed = 0xc0fff5;
           Object.defineProperty(crypto, "getRandomValues", {
             value: (array: Uint32Array) => {
               for (let i = 0; i < array.length; i += 1) {

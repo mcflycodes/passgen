@@ -12,6 +12,7 @@ import {
   PassphraseOptionsError,
 } from "../core/passphrase.ts";
 import { RandomUnavailableError } from "../core/random.ts";
+import { symbolSlots } from "../core/separators.ts";
 import { bindCopy } from "./copy.ts";
 import { bindRangePair, byId, integerValue } from "./dom.ts";
 import type { Meter } from "./meter.ts";
@@ -45,7 +46,10 @@ export function mountPassphrasePanel(store: SettingsStore, config: Config, deps:
   const useNumber = byId("pp-number", HTMLInputElement);
   const useSymbol = byId("pp-symbol", HTMLInputElement);
   const symbol = byId("pp-symbol-char", HTMLSelectElement);
-  const capitalize = byId("pp-capitalize", HTMLInputElement);
+  const capitalize = byId("pp-capitalize", HTMLSelectElement);
+  const digits = byId("pp-number-digits", HTMLSelectElement);
+  const position = byId("pp-symbol-position", HTMLSelectElement);
+  const uniqueNote = byId("pp-unique-note", HTMLElement);
   const bounds = config.passphrase.wordLength;
 
   const options = (): PassphraseOptions => store.current.passphrase;
@@ -54,7 +58,14 @@ export function mountPassphrasePanel(store: SettingsStore, config: Config, deps:
   const reflect = (o: PassphraseOptions) => {
     useNumber.checked = o.number;
     useSymbol.checked = o.symbol;
-    capitalize.checked = o.capitalize;
+    capitalize.value = o.capitalize;
+    digits.value = String(o.numberDigits);
+    digits.disabled = !o.number;
+    position.value = o.symbolPosition;
+    position.disabled = !o.number || !o.symbol;
+    uniqueNote.hidden = !(
+      o.separatorSymbol === "random-unique" && symbolSlots(o) * (o.words - 1) > config.password.characters.simple.length
+    );
     symbol.value = o.separatorSymbol;
     symbol.disabled = !o.symbol;
     minLength.value = String(o.minWordLength);
@@ -120,7 +131,15 @@ export function mountPassphrasePanel(store: SettingsStore, config: Config, deps:
     render();
   });
   capitalize.addEventListener("change", () => {
-    set({ ...options(), capitalize: capitalize.checked });
+    set({ ...options(), capitalize: capitalize.value as PassphraseOptions["capitalize"] });
+    render();
+  });
+  digits.addEventListener("change", () => {
+    set({ ...options(), numberDigits: Number(digits.value) });
+    render();
+  });
+  position.addEventListener("change", () => {
+    set({ ...options(), symbolPosition: position.value as PassphraseOptions["symbolPosition"] });
     render();
   });
   regenerate.addEventListener("click", render);

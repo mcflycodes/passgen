@@ -90,7 +90,9 @@ function generate(r: ReturnType<typeof rng>): unknown {
     separatorSymbol: r.chance(0.95)
       ? r.pick([...limits.separators, "random", "random-unique"])
       : r.pick(["", "--", "<", "a", 5, null]),
-    capitalize: bool(),
+    capitalize: r.pick(["off", "random", "every"]),
+    numberDigits: r.pick([1, 2, 3]),
+    symbolPosition: r.pick(["both", "before", "after"]),
   };
   const settings: Json = {
     theme: r.chance(0.95) ? r.pick(limits.themes) : r.pick(["Dark", "sepia", "", 1, null]),

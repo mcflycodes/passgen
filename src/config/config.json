@@ -26,7 +26,7 @@
     ]
   },
   "text": {
-    "tagline": "Password generator · Runs entirely in your browser",
+    "tagline": "Password generator \u00b7 Runs entirely in your browser",
     "intro": {
       "enabled": true,
       "headline": "Strong by default.",
@@ -95,12 +95,15 @@
     "separator": {
       "number": true,
       "symbol": true,
-      "defaultSymbol": "-",
-      "numberMin": 0,
-      "numberMax": 99,
-      "numberDigits": 2
+      "defaultSymbol": "random",
+      "numberDigits": {
+        "min": 1,
+        "max": 3,
+        "default": 2
+      },
+      "symbolPosition": "both"
     },
-    "capitalize": false
+    "capitalize": "off"
   },
   "meter": {
     "bands": [

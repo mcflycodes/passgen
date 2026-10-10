@@ -190,16 +190,16 @@ test("new options round-trip with strict shared settings validation", () => {
   const record = JSON.parse(text);
   record.settings.passphrase.separatorSymbol = "random-unique";
   record.settings.passphrase.words = 12;
-  assert.equal(readStoredSettings(record, { ...storedLimits(config), separators: "!@" }), null);
+  assert.ok(readStoredSettings(record, { ...storedLimits(config), separators: "!@" }));
 });
 
-test("config validates the boolean default and rejects infeasible unique separators", () => {
+test("config validates the boolean default and allows repeated rounds for unique separators", () => {
   const copy = structuredClone(config);
   Object.assign(copy.password, { dontStartWithSymbol: "true" });
   assert.throws(() => validateConfig(copy), /dontStartWithSymbol/);
   const short = structuredClone(config);
   short.password.characters.simple = "!@#$*()-";
-  assert.throws(() => validateConfig(short), /unique separators/);
+  validateConfig(short);
   short.passphrase.words.max = 9;
   validateConfig(short);
   for (const defaultSymbol of ["random", "random-unique"]) {
@@ -303,7 +303,7 @@ test("exhaustive decision trees give each valid password and passphrase exactly 
       '"../config/validate.ts"',
       url("../config/validate.ts"),
     );
-    await writeFile(join(dir, "entropy.ts"), entropyCode);
+    await writeFile(join(dir, "entropy.ts"), entropyCode.replace('"./separators.ts"', url("separators.ts")));
     const phrase: typeof import("../../src/core/passphrase.ts") = await import(
       pathToFileURL(join(dir, "passphrase.ts")).href
     );
@@ -312,7 +312,13 @@ test("exhaustive decision trees give each valid password and passphrase exactly 
     );
     for (const separatorSymbol of ["random", "random-unique"])
       for (const number of [false, true]) {
-        const o = { ...defaultPassphraseOptions, words: number ? 2 : 3, number, separatorSymbol, capitalize: number };
+        const o = {
+          ...defaultPassphraseOptions,
+          words: number ? 2 : 3,
+          number,
+          separatorSymbol,
+          capitalize: (number ? "random" : "off") as "random" | "off",
+        };
         const distribution = enumerateDecisions((choose) =>
           phrase.generatePassphrase(
             o,
@@ -320,14 +326,13 @@ test("exhaustive decision trees give each valid password and passphrase exactly 
           ),
         );
         const n = BigInt(config.password.characters.simple.length);
-        const expected = number ? 4n * n * 100n * 4n : 8n * n * (separatorSymbol === "random" ? n : n - 1n);
+        const expected = (number ? 4n * 100n * 4n : 8n) * n * (separatorSymbol === "random" ? n : n - 1n);
         assert.equal(BigInt(distribution.size), expected);
         assert.equal(entropy.passphraseEntropy(o).count, expected);
         for (const [value, probability] of distribution) {
           assert.deepEqual(probability, { n: 1n, d: expected });
           const punctuation = [...value].filter((char) => config.password.characters.simple.includes(char));
-          if (number) assert.equal(punctuation[0], punctuation[1]);
-          else if (separatorSymbol === "random-unique") assert.notEqual(punctuation[0], punctuation[1]);
+          if (separatorSymbol === "random-unique") assert.notEqual(punctuation[0], punctuation[1]);
         }
       }
 
@@ -421,15 +426,14 @@ test("separator modes have uniform position marginals and uniform ordered pairs 
   const samples = 60_000;
   for (const separatorSymbol of ["random", "random-unique"])
     for (const number of [false, true]) {
-      const positions = Array.from({ length: 3 }, () => symbols.map(() => 0));
+      const positions = Array.from({ length: number ? 6 : 3 }, () => symbols.map(() => 0));
       const pairs = new Array<number>(n * n).fill(0);
       for (let i = 0; i < samples; i++) {
         const value = generatePassphrase({ ...defaultPassphraseOptions, words: 4, separatorSymbol, number }, source);
         const punctuation = [...value].filter((char) => symbols.includes(char));
-        const chosen = number ? punctuation.filter((_, index) => index % 2 === 0) : punctuation;
-        assert.equal(chosen.length, 3);
-        if (number) for (let j = 0; j < punctuation.length; j += 2) assert.equal(punctuation[j], punctuation[j + 1]);
-        if (separatorSymbol === "random-unique") assert.equal(new Set(chosen).size, 3);
+        const chosen = punctuation;
+        assert.equal(chosen.length, number ? 6 : 3);
+        if (separatorSymbol === "random-unique") assert.equal(new Set(chosen).size, chosen.length);
         chosen.forEach((char, index) => {
           const row = positions[index] as number[];
           const cell = symbols.indexOf(char);
@@ -455,12 +459,15 @@ test("separator entropy uses exact powers or falling factorials and ignores disa
   for (let words = 2; words <= 12; words++)
     for (const number of [false, true])
       for (const symbol of [false, true]) {
-        const base = { ...defaultPassphraseOptions, words, number, symbol };
+        const base = { ...defaultPassphraseOptions, separatorSymbol: "-", words, number, symbol };
         const fixed = passphraseEntropy(base).count;
         for (const separatorSymbol of ["random", "random-unique"]) {
           let choices = 1n;
-          for (let i = 0; i < words - 1; i++)
-            choices *= BigInt(config.password.characters.simple.length - (separatorSymbol === "random-unique" ? i : 0));
+          for (let i = 0; i < (words - 1) * (number ? 2 : 1); i++)
+            choices *= BigInt(
+              config.password.characters.simple.length -
+                (separatorSymbol === "random-unique" ? i % config.password.characters.simple.length : 0),
+            );
           const actual = passphraseEntropy({ ...base, separatorSymbol });
           assert.equal(actual.count, fixed * (symbol ? choices : 1n));
           assert.ok(Math.abs(actual.bits - Math.log2(Number(actual.count))) < 1e-10);

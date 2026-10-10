@@ -32,8 +32,8 @@ test("default anchors are pinned within 0.01 bits", () => {
   assert.ok(Math.abs(password.bits - 130.34) < 0.01);
   assert.equal(filteredWordCount(), 7223);
   const phrase = passphraseEntropy();
-  assert.equal(phrase.count, 7223n ** 5n * 100n ** 4n);
-  assert.ok(Math.abs(phrase.bits - 90.67) < 0.01);
+  assert.equal(phrase.count, 7223n ** 5n * 100n ** 4n * 12n ** 8n);
+  assert.ok(Math.abs(phrase.bits - 119.35) < 0.01);
 });
 
 test("meter wrappers accept the foundation's plan/options signatures", () => {
@@ -41,7 +41,7 @@ test("meter wrappers accept the foundation's plan/options signatures", () => {
   const pp: (options: typeof defaultPassphraseOptions) => number = passphraseBits;
   assert.equal(pw(planPassword(defaultOptions(config.password), config.password)), passwordEntropy().bits);
   assert.equal(pp(defaultPassphraseOptions), passphraseEntropy().bits);
-  assert.throws(() => pp({ ...defaultPassphraseOptions, words: 0 }), PassphraseOptionsError);
+  assert.throws(() => pp({ ...defaultPassphraseOptions, separatorSymbol: "-", words: 0 }), PassphraseOptionsError);
   const impossible = {
     length: 4,
     pool: ["a"],
@@ -134,7 +134,10 @@ test("invalid settings preserve the generators' typed errors", () => {
     { minWordLength: 9, maxWordLength: 5 },
     { separatorSymbol: " " },
   ])
-    assert.throws(() => passphraseEntropy({ ...defaultPassphraseOptions, ...changes }), PassphraseOptionsError);
+    assert.throws(
+      () => passphraseEntropy({ ...defaultPassphraseOptions, separatorSymbol: "-", ...changes }),
+      PassphraseOptionsError,
+    );
 });
 
 test("enumeration covers all four types, merged symbols and automatic Max adjustment", () => {
@@ -184,12 +187,20 @@ test("every real word filter and separator/case combination uses the configured 
     for (let maxWordLength = minWordLength; maxWordLength <= 9; maxWordLength++)
       for (const number of [false, true])
         for (const symbol of [false, true])
-          for (const capitalize of [false, true]) {
-            const options = { ...defaultPassphraseOptions, minWordLength, maxWordLength, number, symbol, capitalize };
+          for (const capitalize of ["off", "random"] as const) {
+            const options = {
+              ...defaultPassphraseOptions,
+              separatorSymbol: "-",
+              minWordLength,
+              maxWordLength,
+              number,
+              symbol,
+              capitalize,
+            };
             const expected =
               5 * Math.log2(filteredWordCount(options)) +
-              (number ? 4 * config.passphrase.separator.numberDigits * Math.log2(10) : 0) +
-              (capitalize ? 5 : 0);
+              (number ? 4 * config.passphrase.separator.numberDigits.default * Math.log2(10) : 0) +
+              (capitalize === "random" ? 5 : 0);
             assert.ok(Math.abs(passphraseEntropy(options).bits - expected) < 1e-10);
           }
 });
@@ -206,7 +217,8 @@ test("synthetic wordlist checks independent word, digit and case spaces and empt
     await writeFile(join(dir, "passphrase.ts"), phraseCode);
     const entropyCode = (await readFile(join(core, "entropy.ts"), "utf8"))
       .replace('"../config/validate.ts"', url("../config/validate.ts"))
-      .replace('"./password.ts"', url("password.ts"));
+      .replace('"./password.ts"', url("password.ts"))
+      .replace('"./separators.ts"', url("separators.ts"));
     await writeFile(join(dir, "entropy.ts"), entropyCode);
     const fixture: typeof import("../../src/core/entropy.ts") = await import(
       pathToFileURL(join(dir, "entropy.ts")).href
@@ -216,19 +228,19 @@ test("synthetic wordlist checks independent word, digit and case spaces and empt
     );
     for (const number of [false, true])
       for (const symbol of [false, true])
-        for (const capitalize of [false, true]) {
-          const options = { ...defaultPassphraseOptions, words: 2, number, symbol, capitalize };
+        for (const capitalize of ["off", "random"] as const) {
+          const options = { ...defaultPassphraseOptions, separatorSymbol: "-", words: 2, number, symbol, capitalize };
           const outputs = new Set<string>();
           for (let first = 0; first < 2; first++)
             for (let second = 0; second < 2; second++)
               for (let n = 0; n < (number ? 100 : 1); n++)
-                for (let cases = 0; cases < (capitalize ? 4 : 1); cases++) {
+                for (let cases = 0; cases < (capitalize === "random" ? 4 : 1); cases++) {
                   const draws = [
                     topBits(first, 1),
-                    ...(capitalize ? [topBits(cases & 1, 1)] : []),
+                    ...(capitalize === "random" ? [topBits(cases & 1, 1)] : []),
                     ...(number ? [topBits(Math.floor(n / 10), 4), topBits(n % 10, 4)] : []),
                     topBits(second, 1),
-                    ...(capitalize ? [topBits((cases >> 1) & 1, 1)] : []),
+                    ...(capitalize === "random" ? [topBits((cases >> 1) & 1, 1)] : []),
                   ];
                   const source = wordsSource(draws);
                   outputs.add(phrase.generatePassphrase(options, source));
@@ -240,11 +252,22 @@ test("synthetic wordlist checks independent word, digit and case spaces and empt
           });
         }
     assert.equal(
-      fixture.passphraseEntropy({ ...defaultPassphraseOptions, minWordLength: 3, maxWordLength: 3 }).count,
+      fixture.passphraseEntropy({
+        ...defaultPassphraseOptions,
+        separatorSymbol: "-",
+        minWordLength: 3,
+        maxWordLength: 3,
+      }).count,
       100n ** 4n,
     );
     assert.throws(
-      () => fixture.passphraseEntropy({ ...defaultPassphraseOptions, minWordLength: 9, maxWordLength: 9 }),
+      () =>
+        fixture.passphraseEntropy({
+          ...defaultPassphraseOptions,
+          separatorSymbol: "-",
+          minWordLength: 9,
+          maxWordLength: 9,
+        }),
       phrase.EmptyWordlistError,
     );
   } finally {

@@ -70,7 +70,13 @@ for (const words of [8, 9, 12])
   });
 
 test("long phrase counts only complete words and included number digits", () => {
-  const options = { ...defaultPassphraseOptions, words: 12, minWordLength: 9, maxWordLength: 9, capitalize: true };
+  const options = {
+    ...defaultPassphraseOptions,
+    words: 12,
+    minWordLength: 9,
+    maxWordLength: 9,
+    capitalize: "random" as const,
+  };
   // Five 9-byte words + five 4-byte separators + seven bytes of word six.
   const bound = 5 * (Math.log2(filteredWordCount(options)) + 1) + 10 * Math.log2(10);
   assert.ok(Math.abs(bcryptPassphraseBits(options) - bound) < 1e-10);
@@ -106,12 +112,11 @@ for (const length of [39, 40, 128])
   });
 
 for (const words of [5, 12])
-  test(`passphrase ${words} words remains below both slow-hash digest caps`, () => {
+  test(`passphrase ${words} words respects both slow-hash digest caps`, () => {
     const options = { ...defaultPassphraseOptions, words };
     const prefix = bcryptPassphrasePrefixBits(options);
     assert.ok(prefix < BCRYPT_BITS);
     assert.equal(bcryptPassphraseBits(options), prefix);
     const bits = passphraseBits(options);
-    assert.ok(bits < 256);
-    assert.equal(digestBits(bits, 8 * config.meter.attacks.argon2id.tagBytes), bits);
+    assert.equal(digestBits(bits, 8 * config.meter.attacks.argon2id.tagBytes), Math.min(bits, 256));
   });
