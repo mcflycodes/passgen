@@ -1,8 +1,9 @@
-import { config } from "../config/validate.ts";
+import { type Config, config } from "../config/validate.ts";
 import { pick, type RandomSource, randomInt, webCrypto } from "./random.ts";
-import { WORDS } from "./wordlist.ts";
+import { isWordListId, WORD_LISTS, type WordListId } from "./wordlists.ts";
 
 export interface PassphraseOptions {
+  wordList: WordListId;
   words: number;
   minWordLength: number;
   maxWordLength: number;
@@ -23,18 +24,25 @@ export class EmptyWordlistError extends RangeError {
 }
 
 const c = config.passphrase;
-export const defaultPassphraseOptions: Readonly<PassphraseOptions> = Object.freeze({
-  words: c.words.default,
-  minWordLength: c.wordLength.defaultMin,
-  maxWordLength: c.wordLength.defaultMax,
-  number: c.separator.number,
-  symbol: c.separator.symbol,
-  excludeLookAlikes: c.separator.excludeLookAlikes,
-  separatorSymbol: c.separator.defaultSymbol,
-  numberDigits: c.separator.numberDigits.default,
-  symbolPosition: c.separator.symbolPosition as PassphraseOptions["symbolPosition"],
-  capitalize: c.capitalize as PassphraseOptions["capitalize"],
-});
+export function defaultPassphraseSettings(deployment: Config = config): PassphraseOptions {
+  const c = deployment.passphrase;
+  const selected = c.wordLists.offered.find((list) => list.id === c.wordLists.default);
+  if (!selected || !isWordListId(selected.id)) throw new PassphraseOptionsError("Invalid default word list");
+  return {
+    wordList: selected.id,
+    words: c.words.default,
+    minWordLength: selected.defaultMin,
+    maxWordLength: selected.defaultMax,
+    number: c.separator.number,
+    symbol: c.separator.symbol,
+    excludeLookAlikes: c.separator.excludeLookAlikes,
+    separatorSymbol: c.separator.defaultSymbol,
+    numberDigits: c.separator.numberDigits.default,
+    symbolPosition: c.separator.symbolPosition as PassphraseOptions["symbolPosition"],
+    capitalize: c.capitalize as PassphraseOptions["capitalize"],
+  };
+}
+export const defaultPassphraseOptions = Object.freeze(defaultPassphraseSettings());
 
 function validate(options: PassphraseOptions): void {
   if (!options || typeof options !== "object" || Array.isArray(options))
@@ -42,10 +50,13 @@ function validate(options: PassphraseOptions): void {
   const keys = Object.keys(defaultPassphraseOptions);
   if (Object.keys(options).some((key) => !keys.includes(key)) || keys.some((key) => !Object.hasOwn(options, key)))
     throw new PassphraseOptionsError("Passphrase options contain missing or unknown keys");
+  if (!isWordListId(options.wordList) || !c.wordLists.offered.some((list) => list.id === options.wordList))
+    throw new PassphraseOptionsError("Unknown or unavailable word list");
+  const bounds = WORD_LISTS[options.wordList];
   for (const [value, min, max] of [
     [options.words, c.words.min, c.words.max],
-    [options.minWordLength, c.wordLength.min, c.wordLength.max],
-    [options.maxWordLength, options.minWordLength, c.wordLength.max],
+    [options.minWordLength, bounds.min, bounds.max],
+    [options.maxWordLength, options.minWordLength, bounds.max],
     [options.numberDigits, c.separator.numberDigits.min, c.separator.numberDigits.max],
   ]) {
     if (!Number.isInteger(value) || (value as number) < (min as number) || (value as number) > (max as number))
@@ -80,15 +91,33 @@ export function effectiveSeparatorSymbol(options: PassphraseOptions): string {
     : options.separatorSymbol;
 }
 
-// The wordlist is immutable: compute the bounded set of length ranges once.
+// Immutable lists: cache each requested bounded range.
 const pools = new Map<string, readonly string[]>();
-for (let min = c.wordLength.min; min <= c.wordLength.max; min++) {
-  for (let max = min; max <= c.wordLength.max; max++) {
-    pools.set(`${min}:${max}`, Object.freeze(WORDS.filter((word) => word.length >= min && word.length <= max)));
-  }
-}
 function filteredWords(options: PassphraseOptions): readonly string[] {
-  return pools.get(`${options.minWordLength}:${options.maxWordLength}`) as readonly string[];
+  const key = `${options.wordList}:${options.minWordLength}:${options.maxWordLength}`;
+  let pool = pools.get(key);
+  if (!pool) {
+    pool = Object.freeze(
+      WORD_LISTS[options.wordList].words.filter(
+        (word) => word.length >= options.minWordLength && word.length <= options.maxWordLength,
+      ),
+    );
+    pools.set(key, pool);
+  }
+  return pool;
+}
+/** Preserve the current range on list changes, clamping both endpoints to real bounds. */
+export function switchWordList(options: PassphraseOptions, wordList: WordListId): PassphraseOptions {
+  const bounds = WORD_LISTS[wordList];
+  const clamp = (value: number) => Math.max(bounds.min, Math.min(bounds.max, value));
+  const next = {
+    ...options,
+    wordList,
+    minWordLength: clamp(options.minWordLength),
+    maxWordLength: clamp(options.maxWordLength),
+  };
+  validate(next);
+  return next;
 }
 
 /** Real pool size for the meter; no randomness consumed. */

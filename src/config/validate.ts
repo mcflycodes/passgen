@@ -1,6 +1,6 @@
 import { countPasswords, defaultOptions, PasswordError, planPassword } from "../core/password.ts";
 import { symbolSlots, uniqueSymbolCount } from "../core/separators.ts";
-import { MAX_WORD_LENGTH, MIN_WORD_LENGTH, WORDS } from "../core/wordlist.ts";
+import { isWordListId, WORD_LISTS, WORDLIST_SOURCES } from "../core/wordlists.ts";
 import shipped from "./config.json" with { type: "json" };
 
 /** The per-type default counts (R11a): a null Max means the length. The JSON infers `null`; the type allows a number. */
@@ -50,7 +50,7 @@ const schema: Schema = {
   },
   passphrase: {
     words: range,
-    wordLength: { min: "number", max: "number", defaultMin: "number", defaultMax: "number" },
+    wordLists: { default: "string", offered: [{ id: "string", defaultMin: "number", defaultMax: "number" }] },
     separator: {
       number: "boolean",
       symbol: "boolean",
@@ -111,8 +111,23 @@ function link(value: string, path: string): void {
 }
 
 /** The non-empty configured links, the only addresses the build may carry (decision 0005). */
-export function configuredLinks(config: Pick<Config, "links">): readonly string[] {
-  return [config.links.repoUrl, config.links.licenseUrl].filter((url) => url !== "");
+export function configuredLinks(config: Pick<Config, "links" | "passphrase">): readonly string[] {
+  return [
+    config.links.repoUrl,
+    config.links.licenseUrl,
+    ...wordListCredits(config).flatMap((credit) => [credit.source.url, credit.source.licenseUrl]),
+  ].filter((url) => url !== "");
+}
+
+/** One attribution record for each offered list, preserving deployment order. */
+export function wordListCredits(config: {
+  readonly passphrase: { readonly wordLists: { readonly offered: ReadonlyArray<{ readonly id: string }> } };
+}) {
+  return config.passphrase.wordLists.offered.map(({ id }) => {
+    if (!isWordListId(id)) throw new Error("Unknown word list");
+    const list = WORD_LISTS[id];
+    return { id, name: list.name, count: list.count, source: WORDLIST_SOURCES[list.source] };
+  });
 }
 
 /** Plain text for the page: no control characters, no line or paragraph separators. */
@@ -208,11 +223,22 @@ export function validateConfig(value: unknown): asserts value is Config {
   integer(c.extraResults, 0, 20, "extraResults");
   bounds(c.password.length, 4, 128, "password.length");
   bounds(c.passphrase.words, 2, 12, "passphrase.words");
-  const w = c.passphrase.wordLength;
-  integer(w.min, MIN_WORD_LENGTH, MAX_WORD_LENGTH, "passphrase.wordLength.min");
-  integer(w.max, w.min, MAX_WORD_LENGTH, "passphrase.wordLength.max");
-  integer(w.defaultMin, w.min, w.max, "passphrase.wordLength.defaultMin");
-  integer(w.defaultMax, w.defaultMin, w.max, "passphrase.wordLength.defaultMax");
+  const wl = c.passphrase.wordLists;
+  if (!wl.offered.length) fail("passphrase.wordLists.offered", "at least one list must be offered");
+  const listIds = new Set<string>();
+  for (const offered of wl.offered) {
+    if (!isWordListId(offered.id)) fail("passphrase.wordLists.offered", "unknown list id");
+    if (listIds.has(offered.id)) fail("passphrase.wordLists.offered", "duplicate list id");
+    listIds.add(offered.id);
+    const list = WORD_LISTS[offered.id];
+    integer(offered.defaultMin, list.min, list.max, "passphrase.wordLists.defaultMin");
+    integer(offered.defaultMax, offered.defaultMin, list.max, "passphrase.wordLists.defaultMax");
+  }
+  if (!isWordListId(wl.default) || !listIds.has(wl.default))
+    fail("passphrase.wordLists.default", "must be an offered list");
+  const w = wl.offered.find(
+    (offered) => offered.id === wl.default,
+  ) as Config["passphrase"]["wordLists"]["offered"][number];
   // Letters and digits are fixed classes. The two symbol classes may hold any
   // printable ASCII punctuation (never space, never non-ASCII) under R7, with
   // the injection and parsing hazards of R7 confined to Complex.
@@ -306,8 +332,10 @@ export function validateConfig(value: unknown): asserts value is Config {
     fail("passphrase.separator.symbolPosition", "requires both, before or after");
   if (!["off", "random", "every"].includes(c.passphrase.capitalize))
     fail("passphrase.capitalize", "requires off, random or every");
-  const filteredCount = WORDS.filter((word) => word.length >= w.defaultMin && word.length <= w.defaultMax).length;
-  if (!filteredCount) fail("passphrase.wordLength", "default filter is empty");
+  const filteredCount = WORD_LISTS[wl.default].words.filter(
+    (word) => word.length >= w.defaultMin && word.length <= w.defaultMax,
+  ).length;
+  if (!filteredCount) fail("passphrase.wordLists", "default filter is empty");
   const gaps = c.passphrase.words.default - 1;
   let symbolBits = 0;
   if (s.symbol && ["random", "random-unique"].includes(s.defaultSymbol)) {

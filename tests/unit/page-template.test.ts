@@ -112,7 +112,7 @@ describe("the shipped index.html", () => {
       /<a class="foot-link" id="license-link" rel="noopener noreferrer" aria-label="Apache-2\.0 license" href="https:\/\/github\.com\/mcflycodes\/passgen\/blob\/main\/LICENSE">Apache-2\.0<\/a>/,
     );
     assert.doesNotMatch(html, /target=/);
-    assert.equal(html.match(/<a\b/g)?.length, 2, "no other anchors");
+    assert.equal(html.match(/<a\b/g)?.length, 12, "configured links and per-list credits");
   });
 
   test("leaves each link out when its URL is empty, with its separator", () => {
@@ -126,15 +126,14 @@ describe("the shipped index.html", () => {
       c.links.licenseUrl = "";
     });
     assert.doesNotMatch(noLicense, /id="license-link"/);
-    assert.doesNotMatch(noLicense, /foot-sep/);
+    assert.equal(noLicense.match(/class="foot-sep"/g)?.length, 1);
     assert.match(noLicense, /id="repo-link"/);
     const none = page((c) => {
       c.links.repoUrl = "";
       c.links.licenseUrl = "";
     });
-    assert.doesNotMatch(none, /<a\b/);
-    assert.doesNotMatch(none, /https?:/);
-    assert.match(none, /<span class="foot-version">v1\.2\.3<\/span>\s*<\/p>/);
+    assert.equal(none.match(/<a\b/g)?.length, 10);
+    assert.match(none, /<span class="foot-version">v1\.2\.3<\/span>/);
   });
 
   test("escapes a link's characters and refuses anything but an https URL in an href", () => {

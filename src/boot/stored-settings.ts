@@ -28,7 +28,7 @@ export interface StoredLimits {
   /** Passphrase word count bounds. */
   readonly words: { readonly min: number; readonly max: number };
   /** Word length bounds of the list. */
-  readonly wordLength: { readonly min: number; readonly max: number };
+  readonly wordLists: ReadonlyArray<{ readonly id: string; readonly min: number; readonly max: number }>;
   /** The Simple symbols, the only separators a passphrase may use (R14). */
   readonly separators: string;
 }
@@ -60,6 +60,7 @@ export interface StoredSettings {
     };
   };
   readonly passphrase: {
+    readonly wordList: string;
     readonly words: number;
     readonly minWordLength: number;
     readonly maxWordLength: number;
@@ -163,6 +164,7 @@ function storedPassword(value: unknown, limits: StoredLimits): StoredSettings["p
 
 function storedPassphrase(value: unknown, limits: StoredLimits): StoredSettings["passphrase"] | null {
   const p = storedRecord(value, [
+    "wordList",
     "words",
     "minWordLength",
     "maxWordLength",
@@ -175,6 +177,10 @@ function storedPassphrase(value: unknown, limits: StoredLimits): StoredSettings[
     "symbolPosition",
   ]);
   if (!p) return null;
+  const wordList = p.wordList;
+  if (typeof wordList !== "string") return null;
+  const bounds = limits.wordLists.find((list) => list.id === wordList);
+  if (!bounds) return null;
   const words = p.words;
   const minWordLength = p.minWordLength;
   const maxWordLength = p.maxWordLength;
@@ -189,8 +195,8 @@ function storedPassphrase(value: unknown, limits: StoredLimits): StoredSettings[
   if (symbolPosition !== "both" && symbolPosition !== "before" && symbolPosition !== "after") return null;
   if (capitalize !== "off" && capitalize !== "random" && capitalize !== "every") return null;
   if (!storedInteger(words, limits.words.min, limits.words.max)) return null;
-  if (!storedInteger(minWordLength, limits.wordLength.min, limits.wordLength.max)) return null;
-  if (!storedInteger(maxWordLength, minWordLength, limits.wordLength.max)) return null;
+  if (!storedInteger(minWordLength, bounds.min, bounds.max)) return null;
+  if (!storedInteger(maxWordLength, minWordLength, bounds.max)) return null;
   if (!storedBoolean(number) || !storedBoolean(symbol) || !storedBoolean(excludeLookAlikes)) return null;
   if (typeof separatorSymbol !== "string") return null;
   if (
@@ -199,6 +205,7 @@ function storedPassphrase(value: unknown, limits: StoredLimits): StoredSettings[
   )
     return null;
   return {
+    wordList,
     words,
     minWordLength,
     maxWordLength,

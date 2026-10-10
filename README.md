@@ -582,7 +582,7 @@ coverage described below.
 | No runtime dependencies, exact pins, pnpm supply-chain settings | `pnpm deps:check` |
 | No attribution to tools, models or vendors | `pnpm attribution:check` |
 | No HTML sinks or executable/link attributes in shipped source | `pnpm html-sinks:check` |
-| Authenticated EFF wordlist and emitted module match | `pnpm wordlist:check` |
+| Authenticated wordlists and emitted modules match | `pnpm wordlist:check` |
 | Typecheck (strict) | `pnpm typecheck` |
 | Lint and format | `pnpm lint` |
 | Unit tests | `pnpm test:unit` |
@@ -627,7 +627,8 @@ Style control out. The footer also shows the version from `package.json`.
 `links.licenseUrl` is the "Apache-2.0" link in the footer. Each is an `https`
 URL, written in its normalised form with no credentials, or empty to leave
 that link out. They render as plain anchors with `rel="noopener noreferrer"`,
-cause no request, and are the only addresses the build may carry: the
+cause no request. The footer also carries source and license URLs only for
+the offered word lists, restricted to designated Credits anchors. The
 host-name checks accept each one exactly as configured, as an anchor's `href`
 and as the configuration string in the bundle, and nothing else.
 
@@ -670,13 +671,45 @@ error carries generated output.
 
 ## Wordlist and passphrases
 
-`vendor/eff_large_wordlist.txt` is the verbatim EFF Large Wordlist; its CC BY
-license and credit are in `NOTICE`. The build verifies the pinned SHA-256,
-7,776 raw entries and exactly four excluded hyphenated entries. The remaining
-7,772 words must be unique lowercase ASCII words with lengths from 3 to 9.
-`pnpm wordlist:gen` emits `src/core/wordlist.ts`; `pnpm wordlist:check` and every
-production build require it to match the authenticated input exactly. These
-steps read only local files and never fetch from the network.
+PassGen offers exactly five unchanged, locally vendored word lists:
+
+| List | Usable words | Real lengths | Default range | License |
+|---|---:|---|---|---|
+| Orchard Street Long (default) | 17,576 | 3–15 | 5–10 | CC BY-SA 4.0 |
+| Orchard Street Medium | 8,192 | 3–10 | 5–10 | CC BY-SA 4.0 |
+| EFF Large | 7,772 | 3–9 | 5–9 | CC BY 4.0 |
+| EFF Short #1 | 1,295 | 3–5 | 3–5 | CC BY 4.0 |
+| EFF Short #2 | 1,295 | 3–10 | 5–10 | CC BY 4.0 |
+
+Orchard Street lists are by Sam Schlinkert, pinned at commit
+`4fd015fe9a8e50d837d9f54cb39883bb801da1ed` in
+[the primary repository](https://github.com/sts10/orchard-street-wordlists).
+EFF lists are by Joseph Bonneau et al., from [EFF](https://www.eff.org/dice).
+Full attribution, sources and licenses are in `NOTICE`. CC BY-SA covers the
+Orchard list content and its bundled representation only; application code
+remains Apache-2.0. The footer's native, collapsed Credits section lists only
+the offered lists, with individual authors, license links, source links and
+usable counts.
+
+The build checks each raw SHA-256 against the verifier's pin and sidecar;
+independent gate pins also lock the bytes. It validates entry counts, unique
+lowercase a-z words and the complete length distribution. Dice codes are
+removed from the EFF modules, and the existing filtering rule excludes four
+hyphenated Large entries and `yo-yo` from each Short list.
+`pnpm wordlist:gen` emits the local modules; `pnpm wordlist:check` and every
+production build require them to match the authenticated inputs exactly.
+No runtime fetch occurs. All five lists and every allowed length range are
+tested for unique decoding without separators before counting entropy.
+
+Deployment configuration uses `passphrase.wordLists.default` and
+`passphrase.wordLists.offered`, an array of `{ id, defaultMin, defaultMax }`.
+The ids are `orchard-long`, `orchard-medium`, `eff-large`, `eff-short1` and
+`eff-short2`. Unknown ids, duplicates, an empty offered set, an unavailable
+default, and ranges outside the corresponding real lengths fail validation.
+Each list always exposes its real shortest and longest words. Switching lists
+clamps the existing endpoints to those bounds and recalculates strength.
+A deployment offering one list hides the dropdown. Saved defaults include
+the selected list and range; Reset restores the deployment's defaults.
 
 `src/core/passphrase.ts` exposes `generatePassphrase`, `filteredWordCount` and
 `defaultPassphraseOptions`. Each word is picked independently with replacement;
@@ -690,7 +723,7 @@ and uses every symbol once before starting another round. When slots exceed
 the alphabet size, repeats are spread evenly and the panel shows a note.
 Fixed symbols remain available. Capitalize offers Off (default), Random
 (one independent case bit per word), and Every word (no added entropy).
-The meter counts all valid sequences exactly. Saved settings use schema v3;
+The meter counts all valid sequences exactly. Saved settings use schema v5;
 older settings are ignored and removed on Save or Reset.
 
 The attribution gate blanks only the explicitly reviewed collision words in
@@ -750,7 +783,8 @@ leave how the page actually parses to the browser tests. Host names are
 recognised by their top-level domain, from a committed snapshot of IANA's list
 in `scripts/lib/data/iana-tlds.txt`; refresh it from
 `https://data.iana.org/TLD/tlds-alpha-by-domain.txt` when needed. The one
-exception is the configured links (`links.repoUrl`, `links.licenseUrl`), which
+exceptions are the configured links (`links.repoUrl`, `links.licenseUrl`) and
+the offered word lists’ source/license links in the Credits section, which
 may appear exactly as configured as an anchor's `href` in the page and as a
 whole string in the bundle; written any other way, or anywhere else, they are
 reported like any other address.

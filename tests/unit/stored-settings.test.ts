@@ -1,3 +1,4 @@
+import { isWordListId, WORD_LISTS } from "../../src/core/wordlists.ts";
 // The shared stored-settings validator (R26): the boot script and the app
 // must make the same decision about every record, and nothing the shared
 // checks accept may be refused by the generators later. Proved here over
@@ -80,11 +81,13 @@ function generate(r: ReturnType<typeof rng>): unknown {
     dontStartWithSymbol: bool(),
     counts: { lowercase: count(), uppercase: count(), numbers: count(), symbols: count() },
   };
-  const minWord = int(limits.wordLength.min, limits.wordLength.max);
+  const minWord = int(required(limits.wordLists[0]).min, required(limits.wordLists[0]).max);
   const passphrase: Json = {
+    wordList: config.passphrase.wordLists.default,
     words: int(limits.words.min, limits.words.max),
     minWordLength: minWord,
-    maxWordLength: r.chance(0.9) && typeof minWord === "number" ? int(minWord, limits.wordLength.max) : int(3, 9),
+    maxWordLength:
+      r.chance(0.9) && typeof minWord === "number" ? int(minWord, required(limits.wordLists[0]).max) : int(3, 9),
     number: bool(),
     symbol: bool(),
     excludeLookAlikes: bool(),
@@ -136,14 +139,17 @@ describe("the shared stored-settings validator", () => {
       styles: config.style.offered.map((s) => s.id),
       length: { min: config.password.length.min, max: config.password.length.max },
       words: { min: config.passphrase.words.min, max: config.passphrase.words.max },
-      wordLength: { min: config.passphrase.wordLength.min, max: config.passphrase.wordLength.max },
+      wordLists: config.passphrase.wordLists.offered.map(({ id }) => {
+        if (!isWordListId(id)) throw new Error("Unknown id");
+        return { id, min: WORD_LISTS[id].min, max: WORD_LISTS[id].max };
+      }),
       separators: config.password.characters.simple,
     });
   });
 
   test("every word-length range within the limits has words, so the pool check cannot refuse an accepted record", () => {
-    for (let min = limits.wordLength.min; min <= limits.wordLength.max; min++)
-      for (let max = min; max <= limits.wordLength.max; max++) {
+    for (let min = required(limits.wordLists[0]).min; min <= required(limits.wordLists[0]).max; min++)
+      for (let max = min; max <= required(limits.wordLists[0]).max; max++) {
         const options: PassphraseOptions = {
           ...defaultSettings(config).passphrase,
           minWordLength: min,
@@ -174,7 +180,13 @@ describe("the shared stored-settings validator", () => {
         assert.deepEqual(app, shared, `the app changed an accepted record: ${label}`);
         assert.deepEqual(painted, { theme: shared.theme, style: shared.style }, `boot differs: ${label}`);
         assert.doesNotThrow(() => planPassword(shared.password, config.password), `planPassword refused: ${label}`);
-        assert.ok(filteredWordCount(shared.passphrase) > 0, `empty pool: ${label}`);
+        assert.ok(
+          filteredWordCount({
+            ...shared.passphrase,
+            wordList: isWordListId(shared.passphrase.wordList) ? shared.passphrase.wordList : "orchard-long",
+          }) > 0,
+          `empty pool: ${label}`,
+        );
       } else {
         refused++;
         assert.deepEqual(painted, { theme: "system", style: "calm" }, `boot applied a refused record: ${label}`);
@@ -260,3 +272,8 @@ describe("inlining the shared module into the boot script", () => {
       assert.ok(compiled.code.includes(key), key);
   });
 });
+
+function required<T>(value: T | undefined): T {
+  assert.ok(value !== undefined);
+  return value;
+}

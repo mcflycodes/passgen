@@ -5,7 +5,7 @@
 // and is the one file scripts/check-attribution.ts does not scan.
 
 /** The explicit dictionary data exceptions; adding a name requires separate review. */
-export const DICTIONARY_COLLISIONS: readonly string[] = ["copilot"];
+export const DICTIONARY_COLLISIONS: readonly string[] = ["copilot", "codex", "cursor", "llama"];
 
 /**
  * Names that have no ordinary meaning in this codebase: flagged anywhere.

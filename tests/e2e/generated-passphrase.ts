@@ -1,8 +1,10 @@
 import { join } from "node:path";
-import { blankDictionaryCollisions, verifiedWordData } from "../../scripts/lib/wordlist-attribution.ts";
+import { blankDictionaryCollisions, verifiedWordDataSets } from "../../scripts/lib/wordlist-attribution.ts";
 import { config } from "../../src/config/validate.ts";
 
-const dictionary = new Set(verifiedWordData(join(import.meta.dirname, "../..")).split(" "));
+const dictionary = new Set(
+  verifiedWordDataSets(join(import.meta.dirname, "../..")).flatMap((words) => words.split(" ")),
+);
 const { min, max } = config.passphrase.words;
 const symbols = config.password.characters.simple;
 const isWord = (word: string) => /^[a-zA-Z][a-z]*$/.test(word) && dictionary.has(word.toLowerCase());
@@ -15,7 +17,7 @@ function joinedWords(text: string): boolean {
     if (offset === text.length) return count >= min && count <= max;
     if (count >= max || seen.has(`${offset}:${count}`)) return false;
     seen.add(`${offset}:${count}`);
-    for (let length = config.passphrase.wordLength.min; length <= config.passphrase.wordLength.max; length++) {
+    for (let length = 3; length <= 15; length++) {
       if (isWord(text.slice(offset, offset + length)) && visit(offset + length, count + 1)) return true;
     }
     return false;

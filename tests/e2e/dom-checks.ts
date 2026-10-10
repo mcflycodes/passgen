@@ -1,3 +1,4 @@
+import { WORDLIST_SOURCES } from "../../src/core/wordlists.ts";
 // Browser-side checks on built pages, shared by built-html.spec.ts and the
 // gate regressions. The browser does the parsing; the judging uses the same
 // helpers as verify-dist (resolveWithinDist, findHostnames, scanText).
@@ -91,7 +92,7 @@ export async function staticHostnameProblems(
 ): Promise<string[]> {
   await page.goto("about:blank");
   const { texts, styled } = await page.evaluate(
-    ({ source, generated }) => {
+    ({ source, generated, creditUrls }) => {
       const doc = new DOMParser().parseFromString(source, "text/html");
       const out: Array<{ text: string; link: boolean }> = [];
       const styled: string[] = [];
@@ -104,11 +105,23 @@ export async function staticHostnameProblems(
         if (el.hasAttribute("style")) styled.push(el.localName);
         if (skip(el)) continue;
         for (const attr of el.attributes)
-          out.push({ text: attr.value, link: el.localName === "a" && attr.name === "href" });
+          out.push({
+            text: attr.value,
+            link:
+              el.localName === "a" &&
+              attr.name === "href" &&
+              (!creditUrls.some((url) => url === attr.value) ||
+                (el.closest("footer details#wordlist-credits") !== null &&
+                  ["source", "license"].includes(el.getAttribute("data-wordlist-credit") ?? ""))),
+          });
       }
       return { texts: out, styled };
     },
-    { source: html, generated: GENERATED_ATTRIBUTE },
+    {
+      source: html,
+      generated: GENERATED_ATTRIBUTE,
+      creditUrls: Object.values(WORDLIST_SOURCES).flatMap((source) => [source.url, source.licenseUrl]),
+    },
   );
   return [
     ...styled.map((name) => `static content: style attribute on <${name}>`),
@@ -120,7 +133,7 @@ export async function staticHostnameProblems(
 
 interface LiveDom {
   problems: string[];
-  urlAttributes: Array<{ element: string; name: string; value: string }>;
+  urlAttributes: Array<{ element: string; name: string; value: string; credit?: boolean }>;
   /** What a reader can see or hear: rendered text, title, generated content, every attribute value. */
   readable: string[];
   generatedTexts: string[];
@@ -135,7 +148,7 @@ export async function collectLiveDom(page: Page): Promise<LiveDom> {
   const dom = await page.evaluate(
     ({ forbidden, urlAttributes, generated, inlineAllowed }) => {
       const problems: string[] = [];
-      const urls: Array<{ element: string; name: string; value: string }> = [];
+      const urls: Array<{ element: string; name: string; value: string; credit?: boolean }> = [];
       const readable: string[] = [document.title];
       const generatedTexts = [...document.querySelectorAll(`[${generated}]`)].map((el) => el.textContent ?? "");
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_COMMENT);
@@ -175,7 +188,15 @@ export async function collectLiveDom(page: Page): Promise<LiveDom> {
           }
           if (attr.name.startsWith("on")) problems.push(`${attr.name} handler on <${name}>`);
           if (attr.name === "srcset" || attr.name === "imagesrcset") problems.push(`${attr.name} on <${name}>`);
-          if (urlAttributes.includes(attr.name)) urls.push({ element: name, name: attr.name, value: attr.value });
+          if (urlAttributes.includes(attr.name))
+            urls.push({
+              element: name,
+              name: attr.name,
+              value: attr.value,
+              credit:
+                el.closest("footer details#wordlist-credits") !== null &&
+                ["source", "license"].includes(el.getAttribute("data-wordlist-credit") ?? ""),
+            });
           readable.push(attr.value);
         }
         // Text that CSS generates is not in innerText.
@@ -237,8 +258,11 @@ export async function collectLiveDom(page: Page): Promise<LiveDom> {
 export function liveDomProblems(file: string, dom: LiveDom, allowed: readonly string[] = []): string[] {
   const problems = [...dom.problems];
   if (!dom.baseIsPage) problems.push("document base URL differs from the page URL");
-  for (const { element, name, value } of dom.urlAttributes) {
-    if (element === "a" && name === "href" && allowed.includes(value)) continue;
+  for (const { element, name, value, credit } of dom.urlAttributes) {
+    const sourceUrl = Object.values(WORDLIST_SOURCES).some((source) =>
+      [source.url, source.licenseUrl].some((url) => url === value),
+    );
+    if (element === "a" && name === "href" && allowed.includes(value) && (!sourceUrl || credit)) continue;
     if (resolveWithinDist(file, value) === null) problems.push(`${name}="${value}" on <${element}> leaves the build`);
     for (const f of findHostnames(file, value)) problems.push(`${name} on <${element}>: ${f.problem}`);
   }

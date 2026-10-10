@@ -60,7 +60,7 @@ test("meter uses core bits and warns below the configurable passphrase floor", (
   const password = bitsFor({ kind: "password", plan: planPassword(defaultOptions(config.password), config.password) });
   assert.ok("bits" in password && password.bits > 128 && password.warning === "");
   const phrase = bitsFor({ kind: "passphrase", options: defaultPassphraseOptions });
-  assert.ok("bits" in phrase && Math.abs(phrase.bits - 119.35) < 0.01 && phrase.warning === "");
+  assert.ok("bits" in phrase && Math.abs(phrase.bits - 124.14) < 0.01 && phrase.warning === "");
   const narrow = bitsFor({
     kind: "passphrase",
     options: { ...defaultPassphraseOptions, separatorSymbol: "-", minWordLength: 3, maxWordLength: 3 },
@@ -115,7 +115,7 @@ test("future estimate enabled config uses the research model and states its assu
 test("full default pool warning names weak settings instead of blaming the range", () => {
   for (const options of [
     { ...defaultPassphraseOptions, words: 2 },
-    { ...defaultPassphraseOptions, number: false },
+    { ...defaultPassphraseOptions, words: 4, number: false },
   ]) {
     const reading = bitsFor({ kind: "passphrase", options });
     assert.ok("bits" in reading);
@@ -145,7 +145,7 @@ for (const narrow of [false, true])
       assert.equal(
         reading.warning,
         narrow
-          ? `This word-length range shrinks the pool to 82 words and provides less than 80 bits with these settings. Widen the range${number ? " or" : ","} ${advice.toLowerCase()}`
+          ? `This word-length range shrinks the pool to 176 words and provides less than 80 bits with these settings. Widen the range${number ? " or" : ","} ${advice.toLowerCase()}`
           : `These settings provide less than 80 bits. ${advice}`,
       );
     });

@@ -24,6 +24,7 @@ test("word choice is uniform over a real length-filtered list (alpha 1e-9)", () 
   const source = bufferedWebCrypto(webCrypto);
   const options = {
     ...defaultPassphraseOptions,
+    wordList: "eff-large" as const,
     separatorSymbol: "-",
     words: 2,
     minWordLength: 9,
@@ -45,7 +46,14 @@ test("every digit slot is uniform for all number lengths (alpha 1e-9)", () => {
     const counts = Array.from({ length: numberDigits }, () => new Array<number>(10).fill(0));
     for (let i = 0; i < samples; i++) {
       const separator = generatePassphrase(
-        { ...defaultPassphraseOptions, separatorSymbol: "-", words: 2, numberDigits },
+        {
+          ...defaultPassphraseOptions,
+          wordList: "eff-large" as const,
+          maxWordLength: 9,
+          separatorSymbol: "-",
+          words: 2,
+          numberDigits,
+        },
         source,
       ).split("-")[1] as string;
       for (let digit = 0; digit < numberDigits; digit++) {
@@ -61,6 +69,8 @@ test("every digit slot is uniform for all number lengths (alpha 1e-9)", () => {
 test("capitalization is uniform at every word position (alpha 1e-9)", () => {
   const options = {
     ...defaultPassphraseOptions,
+    wordList: "eff-large" as const,
+    maxWordLength: 9,
     separatorSymbol: "-",
     words: 12,
     number: false,

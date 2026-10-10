@@ -425,6 +425,10 @@ main {
   min-height: calc(2lh + 33px);
   color: var(--text);
 }
+/* Five words from the longest offered list, with separators, fit in three lines. */
+#pp-value {
+  min-height: calc(3lh + 33px);
+}
 .result-actions {
   display: flex;
   gap: 8px;
@@ -917,7 +921,7 @@ select {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 12px 32px;
   color: var(--text-2);
   font-size: 13px;
@@ -930,13 +934,37 @@ select {
   min-width: 0;
 }
 .foot-meta {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: repeat(5, auto);
   align-items: center;
   gap: 8px;
   font-family: var(--mono);
   font-size: 12px;
   letter-spacing: 0.04em;
-  white-space: nowrap;
+}
+.wordlist-credits {
+  display: contents;
+}
+.wordlist-credits summary {
+  cursor: pointer;
+  min-height: 24px;
+  border-radius: var(--radius-sm);
+}
+.wordlist-credits ul {
+  grid-column: 1 / -1;
+  width: 0;
+  min-width: 100%;
+  padding-left: 20px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-family: var(--sans);
+  letter-spacing: normal;
+}
+.wordlist-credits a {
+  display: inline-block;
+  min-height: 24px;
+  color: inherit;
+  text-underline-offset: 3px;
 }
 .foot-link {
   display: inline-flex;
@@ -967,9 +995,9 @@ select {
     margin-top: min(0px, calc(var(--panel-gap) - 1px));
   }
 }
-@media (max-width: 900px) {
-  /* Five default words and their separators fit in three lines on a phone;
-     keep one more line free. Longer phrases remain fully visible and can grow. */
+@media (max-width: 1100px) {
+  /* Reserve four lines for five long words on phones and compact two-column layouts.
+     Longer phrases remain fully visible and can grow. */
   #pp-value {
     min-height: calc(4lh + 33px);
   }
@@ -1072,4 +1100,8 @@ select {
 .copy-feedback {
   flex-basis: 100%;
   font-size: 14px;
+}
+
+.wordlist-credits li + li {
+  margin-top: 8px;
 }

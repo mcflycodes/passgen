@@ -17,13 +17,18 @@ import { RandomUnavailableError, webCryptoFrom } from "../../src/core/random.ts"
 import { WORDS } from "../../src/core/wordlist.ts";
 import { neverSource, topBits, wordsSource } from "./random-sources.ts";
 
-const defaults = { ...defaultPassphraseOptions, separatorSymbol: "-" };
+const defaults = {
+  ...defaultPassphraseOptions,
+  wordList: "eff-large" as const,
+  maxWordLength: 9,
+  separatorSymbol: "-",
+};
 const pool = WORDS.filter((word) => word.length >= 5);
 const draw = (index: number) => topBits(index, 13);
 test("real filter counts and default strength agree with R13–R15", () => {
-  assert.equal(filteredWordCount(), 7223);
-  assert.ok(Math.abs(Math.log2(filteredWordCount()) - 12.82) < 0.01);
-  assert.ok(5 * Math.log2(filteredWordCount()) + 4 * Math.log2(100) >= 80);
+  assert.equal(filteredWordCount({ ...defaults }), 7223);
+  assert.ok(Math.abs(Math.log2(filteredWordCount(defaults)) - 12.82) < 0.01);
+  assert.ok(5 * Math.log2(filteredWordCount(defaults)) + 4 * Math.log2(100) >= 80);
   for (let min = 3; min <= 9; min++)
     for (let max = min; max <= 9; max++)
       assert.equal(
@@ -149,7 +154,10 @@ async function withWordlist<T>(
     const code = (await readFile(join(core, "passphrase.ts"), "utf8"))
       .replace('"../config/validate.ts"', JSON.stringify(pathToFileURL(join(core, "../config/validate.ts")).href))
       .replace('"./random.ts"', JSON.stringify(pathToFileURL(join(core, "random.ts")).href))
-      .replace('import { WORDS } from "./wordlist.ts";', `const WORDS: readonly string[] = ${JSON.stringify(words)};`);
+      .replace(
+        'import { isWordListId, WORD_LISTS, type WordListId } from "./wordlists.ts";',
+        `import { isWordListId, WORD_LISTS as originalLists } from ${JSON.stringify(pathToFileURL(join(core, "wordlists.ts")).href)}; const WORD_LISTS = Object.fromEntries(Object.entries(originalLists).map(([id, list]) => [id, { ...list, words: ${JSON.stringify(words)} }]));`,
+      );
     const path = join(dir, "passphrase.ts");
     await writeFile(path, code);
     return await run(await import(pathToFileURL(path).href));

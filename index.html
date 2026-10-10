@@ -194,6 +194,13 @@
           </section>
 
           <div class="controls">
+            <!-- passgen:word-list-control -->
+            <div class="control-row">
+              <div class="control-label"><label for="pp-word-list">Word list</label></div>
+              <div class="control-input"><select id="pp-word-list" aria-describedby="pp-word-list-description"><!-- passgen:word-list-options --></select></div>
+            </div>
+            <!-- /passgen:word-list-control -->
+            <p class="hint" id="pp-word-list-description"><!-- passgen:word-list-description --></p>
             <div class="control-row">
               <div class="control-label">
                 <label for="pp-words">Words</label>
@@ -206,7 +213,7 @@
             </div>
 
             <fieldset class="control-row" aria-labelledby="pp-length-label">
-              <div class="control-label" id="pp-length-label">Word length <span class="hint"><span data-cfg-text="passphrase.wordLength.min"></span> to <span data-cfg-text="passphrase.wordLength.max"></span> letters</span></div>
+              <div class="control-label" id="pp-length-label">Word length <span class="hint" id="pp-length-hint"><span data-cfg-text="passphrase.wordLength.min"></span> to <span data-cfg-text="passphrase.wordLength.max"></span> letters</span></div>
               <div class="control-input minmax">
                 <label class="inline-field"><span aria-hidden="true">Min</span><input type="number" id="pp-min-length" inputmode="numeric" data-cfg-min="passphrase.wordLength.min" data-cfg-max="passphrase.wordLength.max" data-cfg-value="passphrase.wordLength.defaultMin" aria-label="Min word length"></label>
                 <label class="inline-field"><span aria-hidden="true">Max</span><input type="number" id="pp-max-length" inputmode="numeric" data-cfg-min="passphrase.wordLength.min" data-cfg-max="passphrase.wordLength.max" data-cfg-value="passphrase.wordLength.defaultMax" aria-label="Max word length"></label>
@@ -268,9 +275,8 @@
     <footer class="foot">
       <div class="foot-text">
         <p>Everything happens in this tab: no account, no tracking, no network requests after the page loads.</p>
-        <p>Passphrase words come from the <span class="nowrap">EFF Large Wordlist</span> by Joseph Bonneau, used under CC BY 3.0.</p>
       </div>
-      <p class="foot-meta">
+      <div class="foot-meta">
         <span class="foot-version">v<!-- passgen:version --></span>
         <!-- passgen:license-link -->
         <span class="foot-sep" aria-hidden="true">·</span>
@@ -278,7 +284,12 @@
         <!-- biome-ignore lint/a11y/useAriaPropsSupportedByRole: with its href the element is a link, which supports aria-label -->
         <a class="foot-link" id="license-link" data-cfg-href="links.licenseUrl" rel="noopener noreferrer" aria-label="Apache-2.0 license">Apache-2.0</a>
         <!-- /passgen:license-link -->
-      </p>
+        <span class="foot-sep" aria-hidden="true">·</span>
+        <details id="wordlist-credits" class="wordlist-credits">
+          <summary>Credits</summary>
+          <ul><!-- passgen:word-list-credits --></ul>
+        </details>
+      </div>
     </footer>
   </body>
 </html>

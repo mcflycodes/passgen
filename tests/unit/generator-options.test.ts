@@ -300,7 +300,10 @@ test("exhaustive decision trees give each valid password and passphrase exactly 
     );
     const phraseCode = (await readFile(join(core, "passphrase.ts"), "utf8"))
       .replace('"../config/validate.ts"', url("../config/validate.ts"))
-      .replace('import { WORDS } from "./wordlist.ts";', 'const WORDS = ["apple", "berry"];');
+      .replace(
+        'import { isWordListId, WORD_LISTS, type WordListId } from "./wordlists.ts";',
+        `import { isWordListId, WORD_LISTS as originalLists } from ${JSON.stringify(pathToFileURL(join(core, "wordlists.ts")).href)}; const WORD_LISTS = Object.fromEntries(Object.entries(originalLists).map(([id, list]) => [id, { ...list, words: ["apple", "berry"] }]));`,
+      );
     await writeFile(join(dir, "passphrase.ts"), phraseCode);
     const entropyCode = (await readFile(join(core, "entropy.ts"), "utf8")).replace(
       '"../config/validate.ts"',

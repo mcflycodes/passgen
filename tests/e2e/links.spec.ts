@@ -48,7 +48,7 @@ test.describe("repository and license links", () => {
     await expect(license).toBeVisible();
     expect(await license.evaluate((el) => el.closest("footer") !== null)).toBe(true);
     await expect(page.locator(".foot-version")).toHaveText(`v${version}`);
-    expect(await page.locator("a[href]").count()).toBe(2);
+    expect(await page.locator("a[href]").count()).toBe(12);
 
     // Wide footers put the meta on the right; narrow ones stack it below the text.
     const text = await page.locator(".foot-text").boundingBox();

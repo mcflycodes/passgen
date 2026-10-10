@@ -69,12 +69,12 @@ test("filtered default entropy is exact and unchecked default stays unchanged", 
   const expected = BigInt(filteredWordCount(options)) ** 5n * 10n ** 8n * 7n ** 8n;
   assert.equal(passphraseEntropy(options).count, expected);
   assert.equal(passphraseEntropy().count, BigInt(filteredWordCount()) ** 5n * 10n ** 8n * 12n ** 8n);
-  assert.equal(Math.floor(passphraseEntropy().bits * 10) / 10, 119.3);
+  assert.equal(Math.floor(passphraseEntropy().bits * 10) / 10, 124.1);
   const expectedBits = Math.log2(Number(expected));
   assert.ok(Math.abs(passphraseEntropy(options).bits - expectedBits) < 1e-12);
   const slots = 2 * (options.words - 1);
   assert.ok(Math.abs(passphraseEntropy(options).bits - (passphraseEntropy().bits - slots * Math.log2(12 / 7))) < 1e-12);
-  assert.equal(Math.floor(expectedBits * 10) / 10, 113.1);
+  assert.equal(Math.floor(expectedBits * 10) / 10, 117.9);
 });
 
 test("separator look-alike settings round trip and reject missing or non-boolean switches", () => {

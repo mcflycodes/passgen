@@ -95,8 +95,14 @@ async function checkSmallWordlists(filteredOnly: boolean) {
         },
       };
       const phraseCode = (await readFile(join(core, "passphrase.ts"), "utf8"))
-        .replace('import { config } from "../config/validate.ts";', `const config = ${JSON.stringify(fixtureConfig)};`)
-        .replace('import { WORDS } from "./wordlist.ts";', 'const WORDS = ["apple", "berry"];');
+        .replace(
+          'import { type Config, config } from "../config/validate.ts";',
+          `const config = ${JSON.stringify(fixtureConfig)};`,
+        )
+        .replace(
+          'import { isWordListId, WORD_LISTS, type WordListId } from "./wordlists.ts";',
+          `import { isWordListId, WORD_LISTS as originalLists } from ${JSON.stringify(pathToFileURL(join(core, "wordlists.ts")).href)}; const WORD_LISTS = Object.fromEntries(Object.entries(originalLists).map(([id, list]) => [id, { ...list, words: ["apple", "berry"] }]));`,
+        );
       const phraseName = `phrase-${alphabet.length}.ts`;
       await writeFile(join(dir, phraseName), phraseCode);
       const entropyCode = (await readFile(join(core, "entropy.ts"), "utf8"))

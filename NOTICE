@@ -6,9 +6,26 @@ Licensed under the Apache License, Version 2.0. See the LICENSE file.
 Third-party content
 -------------------
 
-EFF Large Wordlist, by the Electronic Frontier Foundation and Joseph Bonneau.
-Licensed under Creative Commons Attribution 3.0 United States (CC BY 3.0 US).
-https://creativecommons.org/licenses/by/3.0/us/
-Source: https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt
-The vendored file is unchanged. The build removes dice numbers and excludes
-four hyphenated entries from the usable word module.
+Orchard Street Long and Orchard Street Medium, by Sam Schlinkert.
+Licensed under Creative Commons Attribution-ShareAlike 4.0 International
+(CC BY-SA 4.0). https://creativecommons.org/licenses/by-sa/4.0/
+Source: https://github.com/sts10/orchard-street-wordlists
+Pinned commit: 4fd015fe9a8e50d837d9f54cb39883bb801da1ed
+Files: lists/orchard-street-long.txt and lists/orchard-street-medium.txt.
+The vendored files are unchanged; the build packages their words as local
+TypeScript modules. CC BY-SA applies to this wordlist content only, including
+its bundled representation, not to PassGen's application code.
+
+EFF Large Wordlist, EFF Short Wordlist #1 and EFF Short Wordlist #2,
+by Joseph Bonneau and the Electronic Frontier Foundation.
+Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0).
+https://creativecommons.org/licenses/by/4.0/
+EFF's copyright policy: https://www.eff.org/copyright
+Sources:
+https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt
+https://www.eff.org/files/2016/09/08/eff_short_wordlist_1.txt
+https://www.eff.org/files/2016/09/08/eff_short_wordlist_2_0.txt
+The vendored files are unchanged. The build removes dice numbers and excludes
+four hyphenated entries from Large and yo-yo from each Short list, so the
+usable words contain only lowercase a-z. Hash pins and length distributions
+are checked before packaging the lists into local TypeScript modules.
