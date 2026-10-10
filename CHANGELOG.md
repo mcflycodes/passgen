@@ -13,10 +13,12 @@ Versions follow Semantic Versioning.
 - Open Credits in the footer to see each offered list's author, license, source and usable word count.
 - Verify all vendored list fingerprints and word distributions at build time, and test every length range for separator-free decoding.
 
+## [1.2.2] - 2026-10-10
+
 ### Fixed
 
-- The intro paragraph fits on one line on wide screens and still wraps naturally on phones.
-- Strength text and warnings no longer move the controls while settings change; result boxes also reserve room for typical passwords and passphrases.
+- The default intro paragraph fits on one line on wide screens and still wraps naturally on phones.
+- Strength text and warnings reserve space to reduce layout shifts as settings change; result boxes reserve room for typical passwords and passphrases and grow for longer results.
 
 ## [1.2.1] - 2026-10-10
 
