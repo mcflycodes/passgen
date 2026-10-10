@@ -11,6 +11,27 @@ any domain or subpath, with no hosting provider, CDN or domain required.
 results, saved settings, and five visual styles. See `CHANGELOG.md` for what
 has changed since.
 
+## Screenshots
+
+Calm, the default style, in light and dark themes:
+
+| Light | Dark |
+|---|---|
+| ![PassGen Calm light theme with password and passphrase generators](docs/screenshots/calm-light.png) | ![PassGen Calm dark theme with password and passphrase generators](docs/screenshots/calm-dark.png) |
+
+The other four styles, shown in dark theme:
+
+| Payload | Slate | Green | Purple |
+|---|---|---|---|
+| ![PassGen Payload dark theme with both generators](docs/screenshots/payload-dark.png) | ![PassGen Slate dark theme with both generators](docs/screenshots/slate-dark.png) | ![PassGen Green dark theme with both generators](docs/screenshots/green-dark.png) | ![PassGen Purple dark theme with both generators](docs/screenshots/purple-dark.png) |
+
+[![PassGen Calm light theme on mobile, showing the intro and password generator](docs/screenshots/calm-light-mobile.png)](docs/screenshots/calm-light-mobile.png)
+
+These are fixed demonstration values; do not use them as passwords. Regenerate
+with `pnpm screenshots` using the pinned toolchain and Playwright Chromium
+(`pnpm exec playwright install chromium`). Images are reproducible on the same
+OS, with reduced motion, a fixed clock, and no external requests.
+
 ## Deploy
 
 ### A. Let your AI agent do it
@@ -545,6 +566,7 @@ Other commands:
 |---|---|
 | `pnpm dev` | Vite dev server (no meta CSP; the dev client needs inline script) |
 | `pnpm build` | Production build into `dist/` |
+| `pnpm screenshots` | Build and capture the README images in `docs/screenshots/` |
 | `pnpm serve` | Serve `dist/` on `http://127.0.0.1:4173/` with the reference security headers (a local test server, not for deployment) |
 | `pnpm headers:gen` | Regenerate `deploy/examples/` after changing `security/headers.ts` |
 | `pnpm format` | Apply formatting and safe lint fixes |

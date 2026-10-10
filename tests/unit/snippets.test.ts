@@ -165,6 +165,11 @@ const readme = readFileSync(join(ROOT, "README.md"), "utf8");
 for (const [label, content, expected] of [
   ["README local link", `${readme}\n[Missing](docs/missing-guide.md)`, /broken link docs\/missing-guide\.md/],
   [
+    "README image",
+    `${readme}\n![Missing image](docs/screenshots/missing.png)`,
+    /broken link docs\/screenshots\/missing\.png/,
+  ],
+  [
     "target heading anchor",
     readme.replace("#before-you-start", "#before-you-strat"),
     /broken anchor .*before-you-strat/,

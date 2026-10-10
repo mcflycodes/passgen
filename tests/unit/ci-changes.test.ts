@@ -21,12 +21,14 @@ test("only known documentation paths can skip browser and server jobs", () => {
     "NOTICE.txt",
     "notes.md",
     "docs/releasing.md",
+    "docs/screenshots/calm-light.png",
     "agent-setup/example.json",
   ])
     assert.equal(isCodePath(path), false, path);
   for (const path of [
     "src/styles/README.md",
     "scripts/README.md",
+    "scripts/screenshots.ts",
     "tests/fixtures/example.md",
     "deploy/README.md",
     "security/headers.ts",
