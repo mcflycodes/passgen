@@ -5,6 +5,8 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-10
+
 ### Changed
 
 - Simplified manual deployment and updates in the README; detailed checks and rollback procedures are in the self-hosting guide.
