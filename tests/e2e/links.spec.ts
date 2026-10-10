@@ -29,8 +29,12 @@ test.describe("repository and license links", () => {
     await expect(repo).toHaveAttribute("href", config.links.repoUrl);
     await expect(repo).toHaveAttribute("rel", "noopener noreferrer");
     await expect(repo).not.toHaveAttribute("target", /.*/);
-    await expect(repo).toHaveText("GitHub");
-    await expect(repo).toHaveAccessibleName("PassGen on GitHub");
+    await expect(repo).toHaveText("");
+    await expect(repo).toHaveAccessibleName("GitHub");
+    await expect(repo).toHaveAttribute("title", "GitHub");
+    await expect(repo.locator("svg")).toHaveAttribute("aria-hidden", "true");
+    await expect(repo.locator("svg")).toHaveAttribute("fill", "currentColor");
+    await expect(repo.locator("svg path")).toHaveAttribute("d", /.+/);
     await expect(repo).toBeVisible();
     expect(await repo.evaluate((el) => el.closest(".top-controls") !== null)).toBe(true);
     expect(await repo.evaluate((el) => el.nextElementSibling?.classList.contains("style-control"))).toBe(true);
@@ -99,7 +103,7 @@ test.describe("repository and license links", () => {
           expect(ring.width, `${style}/${theme}/${id}`).toBeGreaterThanOrEqual(2);
           expect(ring.height, `${style}/${theme}/${id}`).toBeGreaterThanOrEqual(24);
           expect(ring.width24, `${style}/${theme}/${id}`).toBeGreaterThanOrEqual(24);
-          expect(ring.decoration, `${style}/${theme}/${id}`).toContain("underline");
+          if (id === "license-link") expect(ring.decoration, `${style}/${theme}/${id}`).toContain("underline");
         }
       }
     }
