@@ -100,8 +100,8 @@ jobs:
       fail-fast: false
       matrix:
         # JSON syntax lets the unit-test coverage guard read this without a YAML dependency.
-        # Chromium's full matrix exceeds five minutes without sharding.
-        include: [{"project":"chromium","shard":1,"label":"chromium 1/2"},{"project":"chromium","shard":2,"label":"chromium 2/2"},{"project":"firefox","shard":0,"label":"firefox"},{"project":"webkit","shard":0,"label":"webkit"}]
+        # Split Chromium's accessibility matrix and WebKit's slower engine for timeout headroom.
+        include: [{"project":"chromium","shard":1,"label":"chromium 1/2"},{"project":"chromium","shard":2,"label":"chromium 2/2"},{"project":"firefox","shard":0,"label":"firefox"},{"project":"webkit","shard":1,"label":"webkit 1/2"},{"project":"webkit","shard":2,"label":"webkit 2/2"}]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     container:
@@ -215,6 +215,8 @@ jobs:
         run: |
           node <<'JS'
           const jobs = JSON.parse(process.env.RESULTS);
+          const required = ['changes', 'static', 'build', 'e2e', 'supply-chain', 'server-configs'];
+          if (Object.keys(jobs).length !== required.length || required.some(name => !jobs[name])) process.exit(1);
           const code = jobs.changes.outputs.code;
           if (!['true', 'false'].includes(code)) process.exit(1);
           for (const [name, job] of Object.entries(jobs)) {

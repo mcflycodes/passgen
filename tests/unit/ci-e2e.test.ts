@@ -369,14 +369,33 @@ function checkFast(configuration: string) {
     { project: "chromium", shard: 1, label: "chromium 1/2" },
     { project: "chromium", shard: 2, label: "chromium 2/2" },
     { project: "firefox", shard: 0, label: "firefox" },
-    { project: "webkit", shard: 0, label: "webkit" },
+    { project: "webkit", shard: 1, label: "webkit 1/2" },
+    { project: "webkit", shard: 2, label: "webkit 2/2" },
   ]);
   assert.doesNotMatch(browser, /mobile-chrome|mobile-safari/);
+  assert.match(browser, /^ {4}timeout-minutes: 15$/m);
+  assert.match(browser, /^ {6}fail-fast: false$/m);
   assert.match(browser, /^ {10}PASSGEN_E2E_MODE: pr$/m);
   assert.match(browser, /^ {10}PASSGEN_E2E_PROJECTS: \$\{\{ matrix.project \}\}$/m);
   assert.match(browser, /^ {10}PLAYWRIGHT_SHARD: \$\{\{ matrix.shard \}\}$/m);
   assert.match(browser, /if \[ "\$PLAYWRIGHT_SHARD" = 0 \]; then\n {12}pnpm test:e2e\n {10}else/);
-  for (const command of E2E_COMMANDS) assert.ok(browser.includes(command.replace("/3", "/2")));
+  const e2eSteps = browser.split(/^ {6}- /m).filter((step) => /\bpnpm test:e2e\b/.test(step));
+  assert.equal(e2eSteps.length, 1);
+  const commands = e2eSteps[0]?.match(/^ {8}run: \|\n((?: {10}.*\n)+)/m)?.[1];
+  assert.deepEqual(
+    commands
+      ?.split("\n")
+      .filter(Boolean)
+      .map((line) => line.trim()),
+    [
+      'if [ "$PLAYWRIGHT_SHARD" = 0 ]; then',
+      "pnpm test:e2e",
+      "else",
+      ...E2E_COMMANDS.map((command) => command.replace("/3", "/2")),
+      "fi",
+    ],
+    "Fast CI must run each test class exactly once per shard",
+  );
   assert.match(browser, /name: playwright-report-pr-\$\{\{ matrix.project \}\}-\$\{\{ matrix.shard \}\}/);
   assert.match(browser, /^ {8}if: matrix.project == 'chromium' && matrix.shard == 1$/m);
   assert.equal((configuration.match(/run: pnpm test:gate/g) ?? []).length, 1);
@@ -405,7 +424,7 @@ function checkFast(configuration: string) {
   assert.deepEqual(needs.sort(), jobNames.sort(), "Summary must need every other job");
 }
 
-function runSummary(configuration: string, code: string, overrides: Record<string, string> = {}) {
+function runSummary(configuration: string, code: string, overrides: Record<string, string> = {}, omitted?: string) {
   const summary = jobBlock(configuration, "result");
   const script = summary.split("node <<'JS'\n")[1]?.split("          JS")[0];
   assert.ok(script);
@@ -420,6 +439,7 @@ function runSummary(configuration: string, code: string, overrides: Record<strin
       },
     ]),
   );
+  if (omitted) delete results[omitted];
   const resultProcess = {
     env: { RESULTS: JSON.stringify(results) },
     exitCode: 0,
@@ -469,12 +489,25 @@ test("fast CI guards reject mobile projects, missing needs, skipped mandatory jo
   }
 });
 
+test("fast CI rejects a missing, duplicate or unsharded WebKit leg", () => {
+  const entry = '{"project":"webkit","shard":2,"label":"webkit 2/2"}';
+  for (const broken of [
+    workflow.replace(`,${entry}`, ""),
+    workflow.replace(entry, '{"project":"webkit","shard":1,"label":"webkit 1/2"}'),
+    workflow.replace(entry, '{"project":"webkit","shard":0,"label":"webkit"}'),
+  ]) {
+    assert.notEqual(broken, workflow);
+    assert.throws(() => checkFast(broken));
+  }
+});
+
 test("summary permits only planned skips and rejects every failed or cancelled job", () => {
   runSummary(workflow, "true");
   runSummary(workflow, "false");
   assert.throws(() => runSummary(workflow, ""));
   for (const code of ["true", "false"]) {
     for (const name of ["changes", "static", "build", "e2e", "supply-chain", "server-configs"]) {
+      assert.throws(() => runSummary(workflow, code, {}, name));
       for (const result of ["failure", "cancelled"])
         assert.throws(() => runSummary(workflow, code, { [name]: result }));
       if (code === "true" || !["e2e", "server-configs"].includes(name))
