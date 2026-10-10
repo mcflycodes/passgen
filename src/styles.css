@@ -214,7 +214,7 @@ summary,
   color: var(--text-2);
   font-size: clamp(17px, 1.4vw, 20px);
   line-height: 1.4;
-  max-width: 46ch;
+  max-width: 90ch;
 }
 .hint {
   color: var(--muted);
@@ -419,7 +419,10 @@ main {
   font-size: clamp(18px, 1.5vw, 22px);
   line-height: 1.45;
   overflow-wrap: anywhere;
-  min-height: 3.2em;
+  /* Fill each line consistently even when random punctuation changes breaks. */
+  line-break: anywhere;
+  /* Two lines, block padding, and one pixel for fractional line rounding. */
+  min-height: calc(2lh + 33px);
   color: var(--text);
 }
 .result-actions {
@@ -531,6 +534,10 @@ main {
   letter-spacing: -0.01em;
 }
 .meter-bits {
+  flex-shrink: 0;
+  min-width: 11ch;
+  text-align: right;
+  white-space: nowrap;
   font-family: var(--mono);
   font-size: 12px;
   color: var(--muted);
@@ -583,6 +590,22 @@ main {
 }
 .meter-headline:empty {
   display: none;
+}
+
+/* The hidden exemplar and visible text share a cell, so wrapping uses the
+   real width and typography in every style. Hidden warnings retain their slot. */
+.reserved-text {
+  display: grid;
+  min-width: 0;
+}
+.reserved-text > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+.reserved-text-sizing {
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
 }
 
 /* ---------- Controls ---------- */
@@ -942,6 +965,21 @@ select {
   .gen + .gen {
     margin-left: 0;
     margin-top: min(0px, calc(var(--panel-gap) - 1px));
+  }
+}
+@media (max-width: 900px) {
+  /* Five default words and their separators fit in three lines on a phone;
+     keep one more line free. Longer phrases remain fully visible and can grow. */
+  #pp-value {
+    min-height: calc(4lh + 33px);
+  }
+}
+@media (max-width: 360px) {
+  #pw-value {
+    min-height: calc(3lh + 33px);
+  }
+  #pp-value {
+    min-height: calc(5lh + 33px);
   }
 }
 @media (max-width: 640px) {
