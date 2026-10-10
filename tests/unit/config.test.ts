@@ -105,11 +105,11 @@ const cases: [string, string, unknown, RegExp][] = [
   ["word minimum", "passphrase.words.min", 1, /integer/],
   ["word maximum", "passphrase.words.max", 13, /integer/],
   ["weak passphrase", "passphrase.words.default", 2, /80 bits/],
-  ["short word limit", "passphrase.wordLength.min", 2, /integer/],
-  ["long word limit", "passphrase.wordLength.max", 10, /integer/],
-  ["filter default below range", "passphrase.wordLength.defaultMin", 2, /integer/],
-  ["filter default above range", "passphrase.wordLength.defaultMax", 10, /integer/],
-  ["filter inverted", "passphrase.wordLength.defaultMax", 4, /integer/],
+  ["short word limit", "passphrase.wordLists.offered.0.defaultMin", 2, /integer/],
+  ["long word limit", "passphrase.wordLists.offered.0.defaultMax", 16, /integer/],
+  ["filter default below range", "passphrase.wordLists.offered.0.defaultMin", 2, /integer/],
+  ["filter default above range", "passphrase.wordLists.offered.0.defaultMax", 16, /integer/],
+  ["filter inverted", "passphrase.wordLists.offered.0.defaultMax", 4, /integer/],
   ["unconfirmed count", "passphrase.defaultFilteredWordCount", 7776, /unknown key/],
   ["negative minimum count", "password.counts.numbers.min", -1, /integer/],
   ["fractional minimum count", "password.counts.numbers.min", 0.5, /integer/],
@@ -331,12 +331,13 @@ test("a disabled class may carry any valid count defaults", () => {
 
 test("accepts a different default filter using its real count", () => {
   const copy = structuredClone(config);
-  copy.passphrase.wordLength.defaultMin = 6;
+  required(copy.passphrase.wordLists.offered[0]).defaultMin = 6;
   validateConfig(copy);
 });
 test("rejects a narrow default filter whose computed count is too weak", () => {
   const copy = structuredClone(config);
-  copy.passphrase.wordLength.defaultMin = 9;
+  required(copy.passphrase.wordLists.offered[0]).defaultMin = 15;
+  required(copy.passphrase.wordLists.offered[0]).defaultMax = 15;
   copy.passphrase.separator.defaultSymbol = "-";
   assert.throws(() => validateConfig(copy), /80 bits/);
 });
@@ -405,3 +406,8 @@ test("extra results rejects 21", () => {
   copy.extraResults = 21;
   assert.throws(() => validateConfig(copy), /extraResults.*integer.*20/);
 });
+
+function required<T>(value: T | undefined): T {
+  assert.ok(value !== undefined);
+  return value;
+}

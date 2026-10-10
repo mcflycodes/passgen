@@ -30,10 +30,10 @@ test("default anchors are pinned within 0.01 bits", () => {
   assert.equal(password.count, countPasswords(planPassword(defaultOptions(config.password), config.password)));
   assert.ok(Math.abs(password.bits - Math.log2(Number(password.count))) < 0.01);
   assert.ok(Math.abs(password.bits - 130.34) < 0.01);
-  assert.equal(filteredWordCount(), 7223);
+  assert.equal(filteredWordCount(), 14034);
   const phrase = passphraseEntropy();
-  assert.equal(phrase.count, 7223n ** 5n * 100n ** 4n * 12n ** 8n);
-  assert.ok(Math.abs(phrase.bits - 119.35) < 0.01);
+  assert.equal(phrase.count, 14034n ** 5n * 100n ** 4n * 12n ** 8n);
+  assert.ok(Math.abs(phrase.bits - 124.14) < 0.01);
 });
 
 test("meter wrappers accept the foundation's plan/options signatures", () => {
@@ -213,7 +213,10 @@ test("synthetic wordlist checks independent word, digit and case spaces and empt
     const phraseCode = (await readFile(join(core, "passphrase.ts"), "utf8"))
       .replace('"../config/validate.ts"', url("../config/validate.ts"))
       .replace('"./random.ts"', url("random.ts"))
-      .replace('import { WORDS } from "./wordlist.ts";', 'const WORDS = ["apple", "berry", "fig"];');
+      .replace(
+        'import { isWordListId, WORD_LISTS, type WordListId } from "./wordlists.ts";',
+        `import { isWordListId, WORD_LISTS as originalLists } from ${JSON.stringify(pathToFileURL(join(core, "wordlists.ts")).href)}; const WORD_LISTS = Object.fromEntries(Object.entries(originalLists).map(([id, list]) => [id, { ...list, words: ["apple", "berry", "fig"] }]));`,
+      );
     await writeFile(join(dir, "passphrase.ts"), phraseCode);
     const entropyCode = (await readFile(join(core, "entropy.ts"), "utf8"))
       .replace('"../config/validate.ts"', url("../config/validate.ts"))

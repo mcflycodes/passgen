@@ -29,6 +29,8 @@ async function keyboard(page: Page) {
     [...document.querySelectorAll<HTMLElement>("a[href], button, input, select, summary")]
       .filter((el) => {
         if ((el as HTMLInputElement).disabled || el.hidden || !el.getClientRects().length) return false;
+        const collapsed = el.closest("details:not([open])");
+        if (collapsed && el.parentElement !== collapsed) return false;
         return !(el instanceof HTMLInputElement && el.type === "radio" && !el.checked);
       })
       .map((el, i) => {

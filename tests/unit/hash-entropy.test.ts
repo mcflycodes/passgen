@@ -93,7 +93,7 @@ test("separator byte boundary counts number digits, fixed symbols add no entropy
 
 test("unseparated variable-length words charge for ambiguous segmentations", () => {
   const options = { ...defaultPassphraseOptions, words: 12, number: false, symbol: false };
-  const bound = 8 * (Math.log2(filteredWordCount(options)) - Math.log2(5));
+  const bound = 7 * (Math.log2(filteredWordCount(options)) - Math.log2(6));
   assert.ok(Math.abs(bcryptPassphraseBits(options) - bound) < 1e-10);
 });
 

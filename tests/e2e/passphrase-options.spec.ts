@@ -1,4 +1,4 @@
-import { SETTINGS_STORAGE_KEY } from "../../src/boot/storage.ts";
+import { SETTINGS_SCHEMA_VERSION, SETTINGS_STORAGE_KEY } from "../../src/boot/storage.ts";
 import { passphraseBits } from "../../src/core/entropy.ts";
 import { defaultPassphraseOptions } from "../../src/core/passphrase.ts";
 import { expect, test } from "./fixtures.ts";
@@ -19,7 +19,7 @@ test("passphrase option defaults, all positions and lengths, capitalization and 
         await page.locator("#pp-capitalize").selectOption(capitalize);
         const options = { ...defaultPassphraseOptions, symbolPosition, numberDigits, capitalize };
         const words =
-          capitalize === "every" ? "[A-Z][a-z]{4,8}" : capitalize === "off" ? "[a-z]{5,9}" : "[A-Za-z][a-z]{4,8}";
+          capitalize === "every" ? "[A-Z][a-z]{4,9}" : capitalize === "off" ? "[a-z]{5,10}" : "[A-Za-z][a-z]{4,9}";
         const before = symbolPosition !== "after" ? "[^a-zA-Z0-9]" : "";
         const after = symbolPosition !== "before" ? "[^a-zA-Z0-9]" : "";
         expect(await resultText(page, "pp-value")).toMatch(
@@ -71,7 +71,7 @@ test("new options save, restore and reset; old v2 records are discarded and clea
   await page.locator("#save-settings").click();
   expect(await page.evaluate(() => localStorage.getItem("passgen:settings:v2"))).toBeNull();
   const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) as string), SETTINGS_STORAGE_KEY);
-  expect(saved.version).toBe(4);
+  expect(saved.version).toBe(SETTINGS_SCHEMA_VERSION);
   expect(saved.settings.passphrase).toMatchObject({ symbolPosition: "after", numberDigits: 1, capitalize: "every" });
   await page.reload();
   await expect(page.locator("#pp-symbol-position")).toHaveValue("after");

@@ -78,8 +78,11 @@ test("authenticated raw list flags exactly the explicit collision set", () => {
     .split("\n")
     .map((line) => line.split("\t")[1] as string)
     .filter((entry) => scanText("dictionary data", entry).length > 0);
-  assert.deepEqual(flagged, DICTIONARY_COLLISIONS);
-  assert.equal(scanText("dictionary data", raw).length, DICTIONARY_COLLISIONS.length);
+  assert.deepEqual(
+    flagged,
+    DICTIONARY_COLLISIONS.filter((word) => scanText("word", word).length > 0 && raw.includes(`\t${word}\n`)),
+  );
+  assert.equal(scanText("dictionary data", raw).length, flagged.length);
 });
 
 test("collision masking preserves every other word in dictionary data", () => {

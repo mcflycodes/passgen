@@ -37,8 +37,9 @@ import {
   type StoredSettings,
 } from "../boot/stored-settings.ts";
 import type { Config } from "../config/validate.ts";
-import { defaultPassphraseOptions, filteredWordCount, type PassphraseOptions } from "../core/passphrase.ts";
+import { defaultPassphraseSettings, filteredWordCount, type PassphraseOptions } from "../core/passphrase.ts";
 import { defaultOptions, type PasswordOptions, planPassword } from "../core/password.ts";
+import { isWordListId } from "../core/wordlists.ts";
 import { byId } from "./dom.ts";
 
 export type { Theme } from "../boot/storage.ts";
@@ -69,7 +70,7 @@ export function defaultSettings(config: Config): Settings {
     theme: config.theme as Theme,
     style: config.style.default,
     password: defaultOptions(config.password),
-    passphrase: { ...defaultPassphraseOptions },
+    passphrase: defaultPassphraseSettings(config),
   };
 }
 
@@ -130,7 +131,8 @@ function toSettings(stored: StoredSettings, config: Config): Settings | null {
       symbols: { ...stored.password.counts.symbols },
     },
   };
-  const passphrase: PassphraseOptions = { ...stored.passphrase };
+  if (!isWordListId(stored.passphrase.wordList)) return null;
+  const passphrase: PassphraseOptions = { ...stored.passphrase, wordList: stored.passphrase.wordList };
   try {
     planPassword(password, config.password);
     if (filteredWordCount(passphrase) < 1) return null;
@@ -212,9 +214,9 @@ export function browserStorage(area: () => Storage = () => localStorage): Settin
   };
   // Remove only this app's obsolete schema, never unrelated browser data.
   const removeLegacy = (): boolean => {
-    for (const key of ["passgen:settings:v1", "passgen:settings:v2", "passgen:settings:v3"])
+    for (const key of ["passgen:settings:v1", "passgen:settings:v2", "passgen:settings:v3", "passgen:settings:v4"])
       if (storage.getItem(key) !== null) storage.removeItem(key);
-    return ["passgen:settings:v1", "passgen:settings:v2", "passgen:settings:v3"].every(
+    return ["passgen:settings:v1", "passgen:settings:v2", "passgen:settings:v3", "passgen:settings:v4"].every(
       (key) => storage.getItem(key) === null,
     );
   };

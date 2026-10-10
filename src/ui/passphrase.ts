@@ -12,13 +12,16 @@ import {
   type PassphraseOptions,
   PassphraseOptionsError,
   separatorSymbols,
+  switchWordList,
 } from "../core/passphrase.ts";
 import { RandomUnavailableError } from "../core/random.ts";
 import { symbolSlots } from "../core/separators.ts";
+import { isWordListId, WORD_LISTS, wordListDescription } from "../core/wordlists.ts";
 import { bindCopy } from "./copy.ts";
 import { bindRangePair, byId, integerValue } from "./dom.ts";
 import type { Meter } from "./meter.ts";
 import type { Panel } from "./password.ts";
+import { reserveText } from "./reserved-text.ts";
 import type { ResultsBox } from "./results.ts";
 import type { SettingsStore } from "./settings.ts";
 
@@ -53,12 +56,30 @@ export function mountPassphrasePanel(store: SettingsStore, config: Config, deps:
   const digits = byId("pp-number-digits", HTMLSelectElement);
   const position = byId("pp-symbol-position", HTMLSelectElement);
   const uniqueNote = byId("pp-unique-note", HTMLElement);
-  const bounds = config.passphrase.wordLength;
+  const listSelect = document.getElementById("pp-word-list") as HTMLSelectElement | null;
+  const description = byId("pp-word-list-description", HTMLElement);
+  reserveText(
+    description,
+    config.passphrase.wordLists.offered.map(({ id }) => {
+      if (!isWordListId(id)) throw new Error("Unavailable word list");
+      return wordListDescription(id);
+    }),
+    { alternatives: true },
+  );
+  const lengthHint = byId("pp-length-hint", HTMLElement);
 
   const options = (): PassphraseOptions => store.current.passphrase;
   const set = (passphrase: PassphraseOptions) => store.update({ passphrase });
 
   const reflect = (o: PassphraseOptions) => {
+    const bounds = WORD_LISTS[o.wordList];
+    if (listSelect) listSelect.value = o.wordList;
+    description.textContent = wordListDescription(o.wordList);
+    lengthHint.textContent = `${bounds.min} to ${bounds.max} letters`;
+    for (const input of [minLength, maxLength]) {
+      input.min = String(bounds.min);
+      input.max = String(bounds.max);
+    }
     lookAlikes.checked = o.excludeLookAlikes;
     const alphabet = separatorSymbols(o);
     symbol.replaceChildren(
@@ -117,7 +138,10 @@ export function mountPassphrasePanel(store: SettingsStore, config: Config, deps:
 
   // Word length (R13): each field is clamped to the list's range; when they
   // cross, the field being edited wins and the other follows it.
-  const clamp = (value: number) => Math.min(bounds.max, Math.max(bounds.min, value));
+  const clamp = (value: number) => {
+    const bounds = WORD_LISTS[options().wordList];
+    return Math.min(bounds.max, Math.max(bounds.min, value));
+  };
   const readLengths = (edited: "min" | "max") => {
     const o = options();
     const minValue = integerValue(minLength);
@@ -131,6 +155,15 @@ export function mountPassphrasePanel(store: SettingsStore, config: Config, deps:
     set({ ...o, minWordLength: min, maxWordLength: max });
     render();
   };
+  listSelect?.addEventListener("change", () => {
+    if (
+      !isWordListId(listSelect.value) ||
+      !config.passphrase.wordLists.offered.some((list) => list.id === listSelect.value)
+    )
+      return;
+    set(switchWordList(options(), listSelect.value));
+    render();
+  });
   minLength.addEventListener("change", () => readLengths("min"));
   maxLength.addEventListener("change", () => readLengths("max"));
 

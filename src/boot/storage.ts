@@ -6,6 +6,7 @@
 // two can never disagree about where the settings are, what shape the
 // stored text must have, or which bounds it must respect.
 
+import { isWordListId, WORD_LISTS } from "../core/wordlists.ts";
 import type { StoredLimits } from "./stored-settings.ts";
 
 /**
@@ -13,10 +14,10 @@ import type { StoredLimits } from "./stored-settings.ts";
  * with a new schema never reads an old build's data, and the stored text
  * carries it again, so a copied or edited value cannot pretend to be new.
  */
-export const SETTINGS_STORAGE_KEY = "passgen:settings:v4";
+export const SETTINGS_STORAGE_KEY = "passgen:settings:v5";
 
 /** The `version` the stored text must carry. Raise it with the key when the settings' shape changes. */
-export const SETTINGS_SCHEMA_VERSION = 4;
+export const SETTINGS_SCHEMA_VERSION = 5;
 
 /**
  * The longest stored text that is read at all, in UTF-16 code units. A valid
@@ -39,7 +40,7 @@ export interface LimitsConfig {
   };
   readonly passphrase: {
     readonly words: { readonly min: number; readonly max: number };
-    readonly wordLength: { readonly min: number; readonly max: number };
+    readonly wordLists: { readonly offered: ReadonlyArray<{ readonly id: string }> };
   };
 }
 
@@ -51,7 +52,11 @@ export function storedLimits(config: LimitsConfig): StoredLimits {
     styles: config.style.offered.map((style) => style.id),
     length: { min: config.password.length.min, max: config.password.length.max },
     words: { min: config.passphrase.words.min, max: config.passphrase.words.max },
-    wordLength: { min: config.passphrase.wordLength.min, max: config.passphrase.wordLength.max },
+    wordLists: config.passphrase.wordLists.offered.map(({ id }) => {
+      if (!isWordListId(id)) throw new Error("Unknown word list");
+      const list = WORD_LISTS[id];
+      return { id, min: list.min, max: list.max };
+    }),
     separators: config.password.characters.simple,
   };
 }

@@ -1,3 +1,4 @@
+import { WORDLIST_SOURCES } from "../../src/core/wordlists.ts";
 // Checks on the build output for domain and host independence (decision 0005)
 // and for the in-page CSP (requirement H2). Pure functions so the tests can feed
 // them known-bad input; scripts/verify-dist.ts runs them on dist/.
@@ -14,7 +15,7 @@ import { parseSync, Visitor } from "vite";
 import { metaCsp } from "../../security/headers.ts";
 import { scanText } from "./attribution-scan.ts";
 import { findCssResources } from "./style-checks.ts";
-import { blankDictionaryCollisions, verifiedWordData } from "./wordlist-attribution.ts";
+import { blankDictionaryCollisions, verifiedWordDataSets } from "./wordlist-attribution.ts";
 
 /**
  * Top-level domains from IANA's root zone list, a committed snapshot of
@@ -297,7 +298,7 @@ function decodeHref(value: string): string {
 function blankAnchorLinks(html: string, allowed: readonly string[]): string {
   return html.replace(
     /<!--[\s\S]*?(?:-->|$)|<(script|style|textarea|title)\b[^>]*>[\s\S]*?<\/\1\s*>|<[^>]*>/gi,
-    (tag) => {
+    (tag, _rawElement: string | undefined, offset: number) => {
       if (!/^<a\s/i.test(tag)) return tag;
       // Require a complete start tag made exclusively of ordinary named attributes.
       if (!/^<a(?:\s+[a-z][\w:-]*(?:\s*=\s*(?:"[^"<>]*"|'[^'<>]*'|[^\s"'<>\x60=]+))?)*\s*\/?>(?:$)/i.test(tag))
@@ -308,6 +309,19 @@ function blankAnchorLinks(html: string, allowed: readonly string[]): string {
       const attr = hrefs[0];
       const quoted = attr?.[2];
       if (!attr || !quoted || !/^["']/.test(quoted) || !allowed.includes(decodeHref(quoted.slice(1, -1)))) return tag;
+      const url = decodeHref(quoted.slice(1, -1));
+      if (
+        Object.values(WORDLIST_SOURCES).some((source) => [source.url, source.licenseUrl].some((value) => value === url))
+      ) {
+        const prefix = html.slice(0, offset);
+        const opening = prefix.lastIndexOf('<details id="wordlist-credits" class="wordlist-credits">');
+        if (opening < 0 || opening < prefix.lastIndexOf("</details>")) return tag;
+        const footer = prefix.lastIndexOf('<footer class="foot">');
+        if (footer < 0 || footer < prefix.lastIndexOf("</footer>") || footer > opening) return tag;
+        const kind = attributes.find((entry) => entry[1] === "data-wordlist-credit")?.[2];
+        const source = Object.values(WORDLIST_SOURCES).find((entry) => entry.url === url || entry.licenseUrl === url);
+        if (kind !== (source?.url === url ? '"source"' : '"license"')) return tag;
+      }
       const start = (attr.index ?? 0) + attr[0].indexOf(quoted);
       return tag.slice(0, start) + " ".repeat(quoted.length) + tag.slice(start + quoted.length);
     },
@@ -454,7 +468,7 @@ export function checkJs(file: string, source: string, allowed: readonly string[]
   for (const e of errors) findings.push({ file, problem: `does not parse: ${e.message}` });
 
   const texts: string[] = comments.map((c) => c.value);
-  const wordData = verifiedWordData(join(import.meta.dirname, "../.."));
+  const wordData = verifiedWordDataSets(join(import.meta.dirname, "../.."));
   const dataSpans: Array<{ start: number; end: number }> = [];
   const exemptQuasis = new Set<number>();
   const linkQuasis = new Set<number>();
@@ -470,7 +484,12 @@ export function checkJs(file: string, source: string, allowed: readonly string[]
         linkSpans.push({ start: node.start, end: node.end });
         linkQuasis.add(quasi.start);
       }
-      if (node.expressions.length === 0 && node.quasis.length === 1 && quasi?.value.cooked === wordData) {
+      if (
+        node.expressions.length === 0 &&
+        node.quasis.length === 1 &&
+        typeof quasi?.value.cooked === "string" &&
+        wordData.includes(quasi.value.cooked)
+      ) {
         dataSpans.push({ start: node.start, end: node.end });
         exemptQuasis.add(quasi.start);
       }
@@ -488,7 +507,7 @@ export function checkJs(file: string, source: string, allowed: readonly string[]
   new Visitor({
     Literal(node) {
       if (typeof node.value === "string") {
-        if (node.value === wordData) {
+        if (wordData.includes(node.value)) {
           dataSpans.push({ start: node.start, end: node.end });
           texts.push(blankDictionaryCollisions(node.value));
         } else if (allowed.includes(node.value)) {

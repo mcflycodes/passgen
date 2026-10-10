@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { WORD_LISTS } from "../../src/core/wordlists.ts";
 import { expect, test } from "./fixtures.ts";
 import { chooseStyle, chooseTheme, openPage, STYLES, setNumber, setRange } from "./helpers.ts";
 
@@ -48,6 +49,8 @@ for (const style of STYLES) {
         }
         for (const expanded of [false, true]) {
           if (expanded) await page.locator(`#${prefix}-meter summary`).click();
+          // Keep the original EFF pool for the six-band and longest-warning coverage.
+          if (prefix === "pp") await page.locator("#pp-word-list").selectOption("eff-large");
           const initial = await position(page, prefix);
           const bands = new Set<string>();
           const check = async (label: string, absolute?: number[]) => {
@@ -134,13 +137,14 @@ for (const style of STYLES) {
                 await check(`${words}/${field} restored`, fixed.absolute);
               }
             }
+            await page.locator("#pp-word-list").selectOption("orchard-long");
             await setRange(page.locator("#pp-words"), 5);
-            await setNumber(page.locator("#pp-max-length"), 9);
+            await setNumber(page.locator("#pp-max-length"), 10);
             await check("default word range / Very strong");
             // The longest default words exercise the whole default-range output
             // reservation, independently of the shorter fixed pool above.
-            await setNumber(page.locator("#pp-min-length"), 9);
-            await setNumber(page.locator("#pp-max-length"), 9);
+            await setNumber(page.locator("#pp-min-length"), 10);
+            await setNumber(page.locator("#pp-max-length"), 10);
             await setRange(page.locator("#pp-words"), 2);
             const defaultRange = await position(page, prefix);
             for (let words = 2; words <= 5; words++) {
@@ -148,6 +152,7 @@ for (const style of STYLES) {
               await check(`long default words/${words}`, defaultRange.absolute);
             }
             // Small pools reach Very weak and exercise the longest warning text.
+            await page.locator("#pp-word-list").selectOption("eff-large");
             await page.locator("#pp-number").uncheck();
             await page.locator("#pp-symbol").uncheck();
             await setNumber(page.locator("#pp-min-length"), 3);
@@ -218,3 +223,47 @@ test("enabled future estimates reserve their changing text", async ({ page }) =>
     }
   }
 });
+
+for (const width of [320, 900, 901, 2400]) {
+  for (const style of STYLES)
+    test(`${style} list switching preserves meter and result reservations at ${width}px`, async ({ page }) => {
+      test.setTimeout(180_000);
+      await page.setViewportSize({ width, height: 1000 });
+      await openPage(page);
+      await page.locator("#pp-number-digits").selectOption("3");
+      await chooseStyle(page, style);
+      for (const expanded of [false, true]) {
+        const meter = page.locator("#pp-meter details");
+        if (((await meter.getAttribute("open")) !== null) !== expanded) await meter.locator("summary").click();
+        await setRange(page.locator("#pp-words"), 2);
+        const baseline = await position(page, "pp");
+        for (const [id, list] of Object.entries(WORD_LISTS)) {
+          await page.locator("#pp-word-list").selectOption(id);
+          await setNumber(page.locator("#pp-max-length"), list.max);
+          await setNumber(page.locator("#pp-min-length"), list.max);
+          for (const words of [2, 3, 4, 5]) {
+            await setRange(page.locator("#pp-words"), words);
+            const current = await position(page, "pp");
+            const label = `${style}/${expanded}/${id}/${words}`;
+            expectStablePosition(current.height, baseline.height, `${label}: meter height`);
+            expectStablePosition(current.relative, baseline.relative, `${label}: offsets from meter bottom`);
+            expectStablePosition(current.absolute, baseline.absolute, `${label}: page positions`);
+          }
+          if (id === "orchard-long")
+            await expect(page.locator("#pp-value")).toHaveText(/^[a-z]{15}(?:[^a-z]\d{3}[^a-z][a-z]{15}){4}$/);
+        }
+        await page.locator("#pp-word-list").selectOption("orchard-long");
+        await setNumber(page.locator("#pp-min-length"), 5);
+        await setNumber(page.locator("#pp-max-length"), 9);
+        await setRange(page.locator("#pp-words"), 2);
+        await page.locator("#pp-number").uncheck();
+        await page.locator("#pp-symbol").uncheck();
+        await expect(page.locator("#pp-meter-warning")).toContainText("12,148 words");
+        const warning = await position(page, "pp");
+        expectStablePosition(warning.height, baseline.height, `${style}: five-digit pool warning height`);
+        expectStablePosition(warning.absolute, baseline.absolute, `${style}: five-digit pool warning position`);
+        await page.locator("#pp-number").check();
+        await page.locator("#pp-symbol").check();
+      }
+    });
+}

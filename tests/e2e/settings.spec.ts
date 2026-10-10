@@ -77,7 +77,7 @@ async function expectDefaults(page: Page): Promise<void> {
   await expect(page.locator("#pw-uppercase-max")).toHaveValue(DEFAULT_LENGTH);
   await expect(page.locator("#pp-words-number")).toHaveValue(DEFAULT_WORDS);
   await expect(page.locator("#pp-words")).toHaveValue(DEFAULT_WORDS);
-  await expect(page.locator("#pp-min-length")).toHaveValue(String(config.passphrase.wordLength.defaultMin));
+  await expect(page.locator("#pp-min-length")).toHaveValue(String(config.passphrase.wordLists.offered[0]?.defaultMin));
   await expect(page.locator("#pp-number")).toBeChecked();
   await expect(page.locator("#pp-symbol-char")).toHaveValue(config.passphrase.separator.defaultSymbol);
   await expect(page.locator("#pp-capitalize")).toHaveValue("off");
@@ -207,6 +207,7 @@ const EVERYTHING_CHANGED = {
       },
     },
     passphrase: {
+      wordList: defaultSettings(config).passphrase.wordList,
       numberDigits: 2,
       symbolPosition: "both",
       words: 7,
@@ -595,7 +596,8 @@ test.describe("saved settings", () => {
     walk(JSON.parse((await storedText(page)) as string));
     for (const leaf of leaves) {
       if (typeof leaf === "number") expect(Number.isInteger(leaf) && leaf >= 0 && leaf <= 128).toBe(true);
-      else if (typeof leaf === "string") expect(leaf.length <= 8).toBe(true);
+      else if (typeof leaf === "string")
+        expect(leaf.length <= 8 || config.passphrase.wordLists.offered.some((list) => list.id === leaf)).toBe(true);
       else expect(typeof leaf).toBe("boolean");
     }
     expect(await storageKeys(page)).toEqual([KEY]);

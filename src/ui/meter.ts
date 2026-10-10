@@ -47,7 +47,13 @@ export function bitsFor(input: MeterInput): MeterReading {
     let warning = "";
     if (input.kind === "passphrase" && bits < config.meter.passphraseWarningBits) {
       const count = filteredWordCount(input.options);
-      const defaultCount = filteredWordCount();
+      const range = config.passphrase.wordLists.offered.find((list) => list.id === input.options.wordList);
+      if (!range) throw new PassphraseOptionsError("Unavailable word list");
+      const defaultCount = filteredWordCount({
+        ...input.options,
+        minWordLength: range.defaultMin,
+        maxWordLength: range.defaultMax,
+      });
       const numberSuggestion = input.options.number ? "" : " or turn on number separators";
       warning =
         count < defaultCount
@@ -179,7 +185,7 @@ export function createMeter(prefix: "pw" | "pp"): Meter {
   }
   if (prefix === "pp") {
     reserveText(warning, [
-      `This word-length range shrinks the pool to 8,888 words and provides less than ${config.meter.passphraseWarningBits} bits with these settings. Widen the range, add words or turn on number separators.`,
+      `This word-length range shrinks the pool to 88,888 words and provides less than ${config.meter.passphraseWarningBits} bits with these settings. Widen the range, add words or turn on number separators.`,
     ]);
     reserveText(byId("pp-unique-note", HTMLElement), [
       "All symbols are used before repeating; repeats are spread evenly.",

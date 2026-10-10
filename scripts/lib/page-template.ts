@@ -1,3 +1,6 @@
+import { wordListCredits } from "../../src/config/validate.ts";
+import { isWordListId, WORD_LISTS, wordListDescription } from "../../src/core/wordlists.ts";
+
 // Fills index.html from the configuration at build time (requirements R4d
 // and C1). The page text, the control defaults and the offered styles live in
 // src/config/config.json, never in the markup; this module inserts them as
@@ -27,6 +30,12 @@
 // build, as does a path that names nothing or names an object.
 
 export interface PageConfig {
+  readonly passphrase: {
+    readonly wordLists: {
+      readonly default: string;
+      readonly offered: Array<{ id: string; defaultMin: number; defaultMax: number }>;
+    };
+  };
   readonly theme: string;
   readonly style: {
     readonly default: string;
@@ -162,7 +171,48 @@ function stringAt(config: PageConfig, path: string): string {
 export function renderPage(html: string, config: PageConfig, build: BuildInfo): string {
   if (!VERSION.test(build.version))
     throw new Error(`index.html: "${build.version}" is not a version the page can show`);
+  const lists = config.passphrase.wordLists;
+  if (!isWordListId(lists.default)) throw new Error("Unknown default word list");
+  const selected = lists.offered.find((entry) => entry.id === lists.default);
+  if (!selected) throw new Error("Default word list is not offered");
+  const bounds = WORD_LISTS[lists.default];
+  // Derived defaults are template data only, never another deployment setting.
+  const templateConfig = {
+    ...config,
+    passphrase: {
+      ...config.passphrase,
+      wordLength: {
+        min: bounds.min,
+        max: bounds.max,
+        defaultMin: selected.defaultMin,
+        defaultMax: selected.defaultMax,
+      },
+    },
+  };
   let out = html;
+  out = section(out, "word-list-control", lists.offered.length > 1);
+  if (lists.offered.length > 1)
+    out = marker(
+      out,
+      "word-list-options",
+      lists.offered
+        .map(({ id }) => {
+          if (!isWordListId(id)) throw new Error("Unknown word list");
+          return `<option value="${id}"${id === lists.default ? " selected" : ""}>${escapeHtml(WORD_LISTS[id].name)}</option>`;
+        })
+        .join(""),
+    );
+  out = marker(out, "word-list-description", escapeHtml(wordListDescription(lists.default)));
+  out = marker(
+    out,
+    "word-list-credits",
+    wordListCredits(config)
+      .map(
+        ({ id, name, count, source }) =>
+          `<li data-word-list="${id}">${escapeHtml(name)} — ${escapeHtml(source.author)} · <a data-wordlist-credit="license" href="${source.licenseUrl}" rel="noopener noreferrer">${source.license}</a> · <a data-wordlist-credit="source" href="${source.url}" rel="noopener noreferrer">Source</a> · ${count.toLocaleString("en-US")} usable words</li>`,
+      )
+      .join(""),
+  );
   if (out.split(BOOT_MARKER).length !== 2) throw new Error(`index.html: expected exactly one ${BOOT_MARKER}`);
   out = section(out, "intro", config.text.intro.enabled);
   out = section(out, "tagline", config.text.tagline.trim() !== "");
@@ -178,30 +228,36 @@ export function renderPage(html: string, config: PageConfig, build: BuildInfo): 
     .join("");
   if (config.style.offered.length > 1) out = marker(out, "style-options", styleOptions);
 
-  out = fillContent(out, "data-cfg-text", (path) => escapeHtml(stringAt(config, path)));
-  out = fillContent(out, "data-cfg-chars", (path) => escapeHtml([...stringAt(config, path)].join(" ")));
+  out = fillContent(out, "data-cfg-text", (path) => escapeHtml(stringAt(templateConfig, path)));
+  out = fillContent(out, "data-cfg-chars", (path) => escapeHtml([...stringAt(templateConfig, path)].join(" ")));
   for (const name of ["min", "max", "value"] as const) {
-    out = rewriteAttribute(out, `data-cfg-${name}`, (path) => `${name}="${escapeHtml(stringAt(config, path))}"`);
+    out = rewriteAttribute(
+      out,
+      `data-cfg-${name}`,
+      (path) => `${name}="${escapeHtml(stringAt(templateConfig, path))}"`,
+    );
   }
-  out = rewriteAttribute(out, "data-cfg-checked", (path) => (configValue(config, path) === true ? "checked" : ""));
+  out = rewriteAttribute(out, "data-cfg-checked", (path) =>
+    configValue(templateConfig, path) === true ? "checked" : "",
+  );
   // A link the validator accepted (an https URL) or nothing: an empty link
   // has no element to carry it, since its section is left out above.
   out = rewriteAttribute(out, "data-cfg-href", (path) => {
-    const url = stringAt(config, path);
+    const url = stringAt(templateConfig, path);
     if (!/^https:\/\/\S+$/.test(url)) throw new Error(`index.html: "${path}" is not an https URL`);
     return `href="${escapeHtml(url)}"`;
   });
   out = rewriteAttribute(out, "data-cfg-checked-eq", (path, tagText) => {
     const own = tagText.match(/\svalue="([^"]*)"/)?.[1];
     if (own === undefined) throw new Error(`index.html: data-cfg-checked-eq="${path}" needs a value attribute`);
-    return stringAt(config, path) === own ? "checked" : "";
+    return stringAt(templateConfig, path) === own ? "checked" : "";
   });
   // A select whose options are the characters of a configured string.
   const SELECT =
     /<select((?:\s+[^\s=>]+(?:="[^"]*")?)*)\s+data-cfg-options="([^"]*)"\s+data-cfg-selected="([^"]*)"((?:\s+[^\s=>]+(?:="[^"]*")?)*)\s*>\s*<\/select>/g;
   out = out.replace(SELECT, (_m, before: string, path: string, selectedPath: string, after: string) => {
-    const chosen = stringAt(config, selectedPath);
-    const options = [...stringAt(config, path)]
+    const chosen = stringAt(templateConfig, selectedPath);
+    const options = [...stringAt(templateConfig, path)]
       .map((char) => {
         const name = SYMBOL_NAMES[char];
         const label = name === undefined ? char : `${char} ${name}`;
@@ -221,7 +277,7 @@ export function renderPage(html: string, config: PageConfig, build: BuildInfo): 
   out = out.replace(
     /<select([^>]*?)\sdata-cfg-selected="([^"]*)"([^>]*)>([\s\S]*?)<\/select>/g,
     (_match, before: string, path: string, after: string, options: string) => {
-      const chosen = stringAt(config, path);
+      const chosen = stringAt(templateConfig, path);
       const filled = options.replace(/<option value="([^"]*)">/g, (tag: string, value: string) =>
         value === chosen ? tag.replace(">", " selected>") : tag,
       );

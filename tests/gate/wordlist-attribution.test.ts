@@ -32,7 +32,7 @@ for (const injection of [
       await mkdir(join(dir, "src/core"), { recursive: true });
       await cp(join(root, "vendor"), join(dir, "vendor"), { recursive: true });
       const module = join(dir, "src/core/wordlist.ts");
-      await cp(join(root, "src/core/wordlist.ts"), module);
+      await cp(join(root, "src/core"), join(dir, "src/core"), { recursive: true });
       execFileSync("git", ["init", "-q"], { cwd: dir });
       if (injection === "module comment")
         await writeFile(module, `${await readFile(module, "utf8")}\n// Built with ${name}\n`);

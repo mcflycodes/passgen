@@ -6,10 +6,10 @@ import { openPage, resultText, setNumber, setRange } from "./helpers.ts";
 
 const sep = "-";
 const escaped = sep.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const defaultPattern = /^[a-z]{5,9}(?:[^a-z0-9]\d{2}[^a-z0-9][a-z]{5,9}){4}$/;
+const defaultPattern = /^[a-z]{5,10}(?:[^a-z0-9]\d{2}[^a-z0-9][a-z]{5,10}){4}$/;
 
 test.describe("passphrase", () => {
-  test("appears on load with the defaults: five words of 5 to 9 letters, number and symbol separators", async ({
+  test("appears on load with the defaults: five words of 5 to 10 letters, number and symbol separators", async ({
     page,
   }) => {
     await openPage(page);
@@ -45,7 +45,7 @@ test.describe("passphrase", () => {
     expect(await resultText(page, "pp-value")).toMatch(/^[a-z]+(?:_\d{2}_[a-z]+){4}$/);
     await page.locator("#pp-symbol").uncheck();
     await page.locator("#pp-number").uncheck();
-    expect(await resultText(page, "pp-value")).toMatch(/^[a-z]{25,45}$/);
+    expect(await resultText(page, "pp-value")).toMatch(/^[a-z]{25,50}$/);
   });
 
   test("capitalize uppercases first letters at random (R14a)", async ({ page }) => {
@@ -74,12 +74,12 @@ test.describe("passphrase", () => {
     }
     await setNumber(page.locator("#pp-max-length"), 4);
     await expect(page.locator("#pp-min-length")).toHaveValue("4");
-    await setNumber(page.locator("#pp-min-length"), 9);
-    await expect(page.locator("#pp-max-length")).toHaveValue("9");
+    await setNumber(page.locator("#pp-min-length"), 15);
+    await expect(page.locator("#pp-max-length")).toHaveValue("15");
     await setNumber(page.locator("#pp-min-length"), 1);
-    await expect(page.locator("#pp-min-length")).toHaveValue(String(config.passphrase.wordLength.min));
+    await expect(page.locator("#pp-min-length")).toHaveValue(String(3));
     await setNumber(page.locator("#pp-max-length"), 99);
-    await expect(page.locator("#pp-max-length")).toHaveValue(String(config.passphrase.wordLength.max));
+    await expect(page.locator("#pp-max-length")).toHaveValue(String(15));
     await expect(page.locator("#pp-notice")).toBeHidden();
   });
 

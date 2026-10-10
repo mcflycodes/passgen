@@ -100,6 +100,7 @@ describe("stored settings (R24 to R26, C3)", () => {
       "separatorSymbol",
       "symbol",
       "symbolPosition",
+      "wordList",
       "words",
     ]);
   });
@@ -125,6 +126,7 @@ describe("stored settings (R24 to R26, C3)", () => {
         },
       },
       passphrase: {
+        wordList: "orchard-long",
         numberDigits: 2,
         symbolPosition: "both",
         words: 7,
@@ -235,7 +237,7 @@ describe("stored settings (R24 to R26, C3)", () => {
       ["too many words", text(envelope((s) => (passphrase(s).words = config.passphrase.words.max + 1)))],
       ["words as a string", text(envelope((s) => (passphrase(s).words = "5")))],
       ["a word length below the list's shortest", text(envelope((s) => (passphrase(s).minWordLength = 2)))],
-      ["a word length above the list's longest", text(envelope((s) => (passphrase(s).maxWordLength = 10)))],
+      ["a word length above the list's longest", text(envelope((s) => (passphrase(s).maxWordLength = 16)))],
       [
         "a shortest word length above the longest",
         text(
@@ -352,11 +354,11 @@ describe("the storage adapter and the initial settings", () => {
   for (const action of ["write", "remove"] as const) {
     test(`${action} removes legacy settings without touching unrelated keys`, () => {
       const { area, items } = fakeArea();
-      items.set("passgen:settings:v1", "legacy");
+      for (const version of [1, 2, 3, 4]) items.set(`passgen:settings:v${version}`, "legacy");
       items.set("other", "keep");
       const storage = browserStorage(() => area) as SettingsStorage;
       assert.equal(action === "write" ? storage.write("new") : storage.remove(), true);
-      assert.equal(items.has("passgen:settings:v1"), false);
+      for (const version of [1, 2, 3, 4]) assert.equal(items.has(`passgen:settings:v${version}`), false);
       assert.equal(items.get("other"), "keep");
     });
   }

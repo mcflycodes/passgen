@@ -3,7 +3,10 @@ import { SETTINGS_STORAGE_KEY } from "../../src/boot/storage.ts";
 import { config } from "../../src/config/validate.ts";
 import { passphraseBits } from "../../src/core/entropy.ts";
 import { defaultPassphraseOptions, filteredWordCount } from "../../src/core/passphrase.ts";
-import { WORDS } from "../../src/core/wordlist.ts";
+import { WORD_LISTS } from "../../src/core/wordlists.ts";
+
+const WORDS = WORD_LISTS["orchard-long"].words;
+
 import { futureEstimate } from "../../src/ui/meter.ts";
 import { expect, test } from "./fixtures.ts";
 import { openPage, setNumber, setRange } from "./helpers.ts";
@@ -171,6 +174,7 @@ test("expanded scenarios and warning pass axe with reduced motion", async ({ pag
 
 test("displayed bits stay below the Moderate band boundary", async ({ page }) => {
   await openPage(page);
+  await page.locator("#pp-word-list").selectOption("eff-large");
   await page.locator("#pp-symbol-char").selectOption("-");
   await setNumber(page.locator("#pp-words-number"), 7);
   await setNumber(page.locator("#pp-min-length"), 6);
@@ -185,6 +189,7 @@ test("displayed bits stay below the Moderate band boundary", async ({ page }) =>
 
 test("full default pool warning asks for words or numbers", async ({ page }) => {
   await openPage(page);
+  await page.locator("#pp-symbol-char").selectOption("-");
   await page.locator("#pp-number").uncheck();
   await expect(page.locator("#pp-meter-warning")).toHaveText(
     "These settings provide less than 80 bits. Add words or turn on number separators.",
@@ -230,7 +235,7 @@ for (const narrow of [false, true])
     await expect(page.locator("#pp-meter-warning")).toBeVisible();
     await expect(page.locator("#pp-meter-warning")).toHaveText(
       narrow
-        ? "This word-length range shrinks the pool to 82 words and provides less than 80 bits with these settings. Widen the range or add words."
+        ? "This word-length range shrinks the pool to 176 words and provides less than 80 bits with these settings. Widen the range or add words."
         : "These settings provide less than 80 bits. Add words.",
     );
   });
@@ -275,9 +280,11 @@ test.describe("meter", () => {
 
 test("saved passphrase settings restore matching meter bits on reload and update afterwards", async ({ page }) => {
   await openPage(page);
+  await page.locator("#pp-word-list").selectOption("eff-large");
   await page.locator("#pp-symbol-char").selectOption("-");
   const options = {
     ...defaultPassphraseOptions,
+    wordList: "eff-large" as const,
     separatorSymbol: "-",
     words: 7,
     minWordLength: 6,

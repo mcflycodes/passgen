@@ -86,12 +86,6 @@
       "max": 12,
       "default": 5
     },
-    "wordLength": {
-      "min": 3,
-      "max": 9,
-      "defaultMin": 5,
-      "defaultMax": 9
-    },
     "separator": {
       "number": true,
       "symbol": true,
@@ -106,7 +100,37 @@
       },
       "symbolPosition": "both"
     },
-    "capitalize": "off"
+    "capitalize": "off",
+    "wordLists": {
+      "default": "orchard-long",
+      "offered": [
+        {
+          "id": "orchard-long",
+          "defaultMin": 5,
+          "defaultMax": 10
+        },
+        {
+          "id": "orchard-medium",
+          "defaultMin": 5,
+          "defaultMax": 10
+        },
+        {
+          "id": "eff-large",
+          "defaultMin": 5,
+          "defaultMax": 9
+        },
+        {
+          "id": "eff-short1",
+          "defaultMin": 3,
+          "defaultMax": 5
+        },
+        {
+          "id": "eff-short2",
+          "defaultMin": 5,
+          "defaultMax": 10
+        }
+      ]
+    }
   },
   "meter": {
     "bands": [
