@@ -5,13 +5,20 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-10
+
 ### Added
 
-- Choose among Orchard Street Long and Medium, EFF Large, and the two EFF Short word lists. Orchard Street Long is now the default, using 5–10 letters per word.
-- Word-length limits and strength follow the selected list. Saved defaults keep the list choice; Reset restores the deployment defaults.
-- Hosts can choose which lists to offer and their default ranges. A single offered list hides the picker.
-- Open Credits in the footer to see each offered list's author, license, source and usable word count.
-- Verify all vendored list fingerprints and word distributions at build time, and test every length range for separator-free decoding.
+- You can choose among Orchard Street Long and Medium, EFF Large, and EFF Short #1 and #2 word lists.
+- Word-length limits and strength estimates reflect the selected list. Saved defaults keep your list choice; Reset restores the deployment defaults.
+- Site hosts can choose which lists to offer, the default list and each list's default word-length range. The picker is hidden when only one list is offered.
+- Credits in the footer show each offered list's author, license, source and usable word count.
+- Bundled word lists are checked against pinned fingerprints and expected word-length distributions during builds. Automated tests check unambiguous decoding without separators for every supported word-length range.
+
+### Changed
+
+- Orchard Street Long is now the default word list, with a default range of 5–10 letters per word.
+- Saved settings use a new schema; settings saved by 1.2.x are ignored on load and removed on save or reset.
 
 ## [1.2.2] - 2026-10-10
 
