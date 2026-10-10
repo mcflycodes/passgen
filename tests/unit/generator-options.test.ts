@@ -199,6 +199,9 @@ test("config validates the boolean default and allows repeated rounds for unique
   assert.throws(() => validateConfig(copy), /dontStartWithSymbol/);
   const short = structuredClone(config);
   short.password.characters.simple = "!@#$*()-";
+  short.passphrase.separator.lookAlikes = [...short.passphrase.separator.lookAlikes]
+    .filter((char) => short.password.characters.simple.includes(char))
+    .join("");
   validateConfig(short);
   short.passphrase.words.max = 9;
   validateConfig(short);

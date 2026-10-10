@@ -214,6 +214,7 @@ const EVERYTHING_CHANGED = {
       maxWordLength: 6,
       number: false,
       symbol: true,
+      excludeLookAlikes: false,
       separatorSymbol: "random-unique",
       capitalize: "random" as const,
     },

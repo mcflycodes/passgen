@@ -8,6 +8,7 @@ export interface PassphraseOptions {
   maxWordLength: number;
   number: boolean;
   symbol: boolean;
+  excludeLookAlikes: boolean;
   separatorSymbol: string;
   numberDigits: number;
   symbolPosition: "both" | "before" | "after";
@@ -28,6 +29,7 @@ export const defaultPassphraseOptions: Readonly<PassphraseOptions> = Object.free
   maxWordLength: c.wordLength.defaultMax,
   number: c.separator.number,
   symbol: c.separator.symbol,
+  excludeLookAlikes: c.separator.excludeLookAlikes,
   separatorSymbol: c.separator.defaultSymbol,
   numberDigits: c.separator.numberDigits.default,
   symbolPosition: c.separator.symbolPosition as PassphraseOptions["symbolPosition"],
@@ -49,7 +51,7 @@ function validate(options: PassphraseOptions): void {
     if (!Number.isInteger(value) || (value as number) < (min as number) || (value as number) > (max as number))
       throw new PassphraseOptionsError("Passphrase counts and lengths must be integers within configured bounds");
   }
-  if ([options.number, options.symbol].some((value) => typeof value !== "boolean"))
+  if ([options.number, options.symbol, options.excludeLookAlikes].some((value) => typeof value !== "boolean"))
     throw new PassphraseOptionsError("Passphrase switches must be booleans");
   if (
     typeof options.separatorSymbol !== "string" ||
@@ -62,6 +64,20 @@ function validate(options: PassphraseOptions): void {
     !["off", "random", "every"].includes(options.capitalize)
   )
     throw new PassphraseOptionsError("Invalid symbol position or capitalization mode");
+}
+
+/** Separator-only alphabet; words and digits are unaffected. */
+export function separatorSymbols(options: PassphraseOptions): string[] {
+  return [...config.password.characters.simple].filter(
+    (char) => !options.excludeLookAlikes || !c.separator.lookAlikes.includes(char),
+  );
+}
+
+/** Resolve an excluded fixed choice to the configured fixed default. */
+export function effectiveSeparatorSymbol(options: PassphraseOptions): string {
+  return options.excludeLookAlikes && c.separator.lookAlikes.includes(options.separatorSymbol)
+    ? c.separator.defaultFixedSymbol
+    : options.separatorSymbol;
 }
 
 // The wordlist is immutable: compute the bounded set of length ranges once.
@@ -89,22 +105,24 @@ export function generatePassphrase(
   validate(options);
   const pool = filteredWords(options);
   if (!pool.length) throw new EmptyWordlistError("No words remain in the selected length range");
-  const available = Array.from(config.password.characters.simple);
+  const alphabet = separatorSymbols(options);
+  const available = [...alphabet];
+  const separatorSymbol = effectiveSeparatorSymbol(options);
   let result = "";
   for (let index = 0; index < options.words; index++) {
     if (index) {
       const nextSymbol = () => {
         if (!options.symbol) return "";
-        if (options.separatorSymbol === "random") return pick(available, source);
-        if (options.separatorSymbol === "random-unique") {
-          if (!available.length) available.push(...config.password.characters.simple);
+        if (separatorSymbol === "random") return pick(available, source);
+        if (separatorSymbol === "random-unique") {
+          if (!available.length) available.push(...alphabet);
           // At an odd-sized round boundary inside a gap, forbid its first symbol.
           const candidates = available.filter((value) => value !== first);
           const value = pick(candidates, source);
           available.splice(available.indexOf(value), 1);
           return value;
         }
-        return options.separatorSymbol;
+        return separatorSymbol;
       };
       let first = "";
       if (!options.number || options.symbolPosition !== "after") {

@@ -4,6 +4,7 @@ import {
   EmptyWordlistError,
   filteredWordCount,
   type PassphraseOptions,
+  separatorSymbols,
 } from "./passphrase.ts";
 import {
   countPasswords,
@@ -59,10 +60,11 @@ export function passphraseEntropy(options: PassphraseOptions = defaultPassphrase
   let symbolSpace = 1n;
   if (options.symbol && ["random", "random-unique"].includes(options.separatorSymbol)) {
     const slots = symbolSlots(options);
+    const alphabet = separatorSymbols(options).length;
     symbolSpace =
       options.separatorSymbol === "random-unique"
-        ? uniqueSymbolCount(config.password.characters.simple.length, options.words - 1, slots)
-        : BigInt(config.password.characters.simple.length) ** BigInt((options.words - 1) * slots);
+        ? uniqueSymbolCount(alphabet, options.words - 1, slots)
+        : BigInt(alphabet) ** BigInt((options.words - 1) * slots);
   }
   const count = wordSpace * numberSpace * caseSpace * symbolSpace;
   return { count, bits: log2BigInt(count) };

@@ -101,6 +101,7 @@ legend {
 /* Keep the entire focus outline visible when an engine scrolls the control
    box to a viewport edge: 2px offset + up to 3px ring + 3px breathing room.
    Apply before focus scrolling, including the hidden inputs with drawn proxies. */
+a[href],
 button,
 input,
 select,

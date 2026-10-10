@@ -5,6 +5,10 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Passphrases can exclude look-alike separator symbols while keeping words and numbers unchanged.
+
 ### Changed
 
 - The header repository link is an accessible GitHub mark icon.

@@ -164,7 +164,7 @@
 
           <div class="result">
             <!-- biome-ignore lint/a11y/useSemanticElements: output preserves its control associations; group replaces its implicit live status without announcing secrets. -->
-            <output class="value" id="pp-value" for="pp-words pp-min-length pp-max-length pp-number pp-symbol pp-symbol-char pp-symbol-position pp-number-digits pp-capitalize" data-generated tabindex="-1" role="group" aria-live="off" aria-label="Generated passphrase"></output>
+            <output class="value" id="pp-value" for="pp-words pp-min-length pp-max-length pp-number pp-symbol pp-symbol-char pp-symbol-position pp-number-digits pp-capitalize pp-lookalikes" data-generated tabindex="-1" role="group" aria-live="off" aria-label="Generated passphrase"></output>
             <div class="result-actions">
               <button type="button" class="btn btn-primary" id="pp-copy" aria-label="Copy main passphrase">Copy</button>
               <button type="button" class="btn" id="pp-regen">Regenerate</button>
@@ -237,6 +237,12 @@
                 <label class="inline-field select-field"><span>Capitalize</span>
                   <select id="pp-capitalize" data-cfg-selected="passphrase.capitalize"><option value="off">Off</option><option value="random">Random</option><option value="every">Every word</option></select>
                 </label>
+              </div>
+            </fieldset>
+            <fieldset class="control-row" aria-labelledby="pp-readability-label">
+              <div class="control-label" id="pp-readability-label">Readability</div>
+              <div class="control-input checks">
+                <label class="check"><input type="checkbox" id="pp-lookalikes" data-cfg-checked="passphrase.separator.excludeLookAlikes"><span class="box"></span><span class="check-text">No look-alike characters <code data-cfg-text="passphrase.separator.lookAlikes"></code><span class="hint">Separator symbols only</span></span></label>
               </div>
             </fieldset>
           </div>

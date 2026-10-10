@@ -7,9 +7,11 @@
 import type { Config } from "../config/validate.ts";
 import {
   EmptyWordlistError,
+  effectiveSeparatorSymbol,
   generatePassphrase,
   type PassphraseOptions,
   PassphraseOptionsError,
+  separatorSymbols,
 } from "../core/passphrase.ts";
 import { RandomUnavailableError } from "../core/random.ts";
 import { symbolSlots } from "../core/separators.ts";
@@ -44,6 +46,7 @@ export function mountPassphrasePanel(store: SettingsStore, config: Config, deps:
   const minLength = byId("pp-min-length", HTMLInputElement);
   const maxLength = byId("pp-max-length", HTMLInputElement);
   const useNumber = byId("pp-number", HTMLInputElement);
+  const lookAlikes = byId("pp-lookalikes", HTMLInputElement);
   const useSymbol = byId("pp-symbol", HTMLInputElement);
   const symbol = byId("pp-symbol-char", HTMLSelectElement);
   const capitalize = byId("pp-capitalize", HTMLSelectElement);
@@ -56,6 +59,16 @@ export function mountPassphrasePanel(store: SettingsStore, config: Config, deps:
   const set = (passphrase: PassphraseOptions) => store.update({ passphrase });
 
   const reflect = (o: PassphraseOptions) => {
+    lookAlikes.checked = o.excludeLookAlikes;
+    const alphabet = separatorSymbols(o);
+    symbol.replaceChildren(
+      ...[...alphabet, "random", "random-unique"].map((value) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value === "random" ? "Random" : value === "random-unique" ? "Random (unique)" : value;
+        return option;
+      }),
+    );
     useNumber.checked = o.number;
     useSymbol.checked = o.symbol;
     capitalize.value = o.capitalize;
@@ -63,9 +76,7 @@ export function mountPassphrasePanel(store: SettingsStore, config: Config, deps:
     digits.disabled = !o.number;
     position.value = o.symbolPosition;
     position.disabled = !o.number || !o.symbol;
-    uniqueNote.hidden = !(
-      o.separatorSymbol === "random-unique" && symbolSlots(o) * (o.words - 1) > config.password.characters.simple.length
-    );
+    uniqueNote.hidden = !(o.separatorSymbol === "random-unique" && symbolSlots(o) * (o.words - 1) > alphabet.length);
     symbol.value = o.separatorSymbol;
     symbol.disabled = !o.symbol;
     minLength.value = String(o.minWordLength);
@@ -73,7 +84,12 @@ export function mountPassphrasePanel(store: SettingsStore, config: Config, deps:
   };
 
   const render = () => {
-    const o = options();
+    let o = options();
+    const separatorSymbol = effectiveSeparatorSymbol(o);
+    if (separatorSymbol !== o.separatorSymbol) {
+      o = { ...o, separatorSymbol };
+      set(o);
+    }
     reflect(o);
     try {
       output.textContent = generatePassphrase(o);
@@ -118,6 +134,10 @@ export function mountPassphrasePanel(store: SettingsStore, config: Config, deps:
   minLength.addEventListener("change", () => readLengths("min"));
   maxLength.addEventListener("change", () => readLengths("max"));
 
+  lookAlikes.addEventListener("change", () => {
+    set({ ...options(), excludeLookAlikes: lookAlikes.checked });
+    render();
+  });
   useNumber.addEventListener("change", () => {
     set({ ...options(), number: useNumber.checked });
     render();

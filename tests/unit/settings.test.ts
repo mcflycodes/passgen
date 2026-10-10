@@ -92,6 +92,7 @@ describe("stored settings (R24 to R26, C3)", () => {
     ]);
     assert.deepEqual(Object.keys(parsed.settings.passphrase).sort(), [
       "capitalize",
+      "excludeLookAlikes",
       "maxWordLength",
       "minWordLength",
       "number",
@@ -131,6 +132,7 @@ describe("stored settings (R24 to R26, C3)", () => {
         maxWordLength: 6,
         number: false,
         symbol: true,
+        excludeLookAlikes: false,
         separatorSymbol: ".",
         capitalize: "random" as const,
       },
