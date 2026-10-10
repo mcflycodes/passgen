@@ -86,7 +86,7 @@ test("new options save, restore and reset; old v2 records are discarded and clea
   expect(await page.evaluate((key) => localStorage.getItem(key), SETTINGS_STORAGE_KEY)).toBeNull();
 });
 
-test("separator look-alikes filter the dropdown and output, fall back, save and reset", async ({ page }) => {
+test("separator look-alikes filter the dropdown, fall back, save and reset", async ({ page }) => {
   await openPage(page);
   const checkbox = page.locator("#pp-lookalikes");
   const dropdown = page.locator("#pp-symbol-char");
@@ -103,18 +103,6 @@ test("separator look-alikes filter the dropdown and output, fall back, save and 
   expect(
     await dropdown.locator("option").evaluateAll((options) => options.map((option) => option.getAttribute("value"))),
   ).toEqual([..."@#$^*-?", "random", "random-unique"]);
-  for (const mode of ["-", "random", "random-unique"]) {
-    await dropdown.selectOption(mode);
-    for (const position of ["both", "before", "after"]) {
-      await page.locator("#pp-symbol-position").selectOption(position);
-      for (let i = 0; i < 5; i++) {
-        await page.locator("#pp-regen").click();
-        const value = await resultText(page, "pp-value");
-        expect(value).not.toMatch(/[!()._]/);
-        expect(value.match(/[^a-zA-Z0-9]/g)?.every((symbol) => "@#$^*-?".includes(symbol))).toBe(true);
-      }
-    }
-  }
   await dropdown.selectOption("random-unique");
   await page.locator("#pp-symbol-position").selectOption("both");
   await expect(page.locator("#pp-unique-note")).toBeVisible();
@@ -132,3 +120,22 @@ test("separator look-alikes filter the dropdown and output, fall back, save and 
   await expect(dropdown).toHaveValue("random");
   await expect(dropdown.locator('option[value="!"]')).toHaveCount(1);
 });
+
+// Keep each mode/position within its own test budget: WebKit's normal click
+// actionability checks make 45 regenerations too slow for one 30-second test.
+for (const mode of ["-", "random", "random-unique"]) {
+  for (const position of ["both", "before", "after"]) {
+    test(`separator look-alikes filter generated output: ${mode}, ${position}`, async ({ page }) => {
+      await openPage(page);
+      await page.locator("#pp-lookalikes").check();
+      await page.locator("#pp-symbol-char").selectOption(mode);
+      await page.locator("#pp-symbol-position").selectOption(position);
+      for (let i = 0; i < 5; i++) {
+        await page.locator("#pp-regen").click();
+        const value = await resultText(page, "pp-value");
+        expect(value).not.toMatch(/[!()._]/);
+        expect(value.match(/[^a-zA-Z0-9]/g)?.every((symbol) => "@#$^*-?".includes(symbol))).toBe(true);
+      }
+    });
+  }
+}
