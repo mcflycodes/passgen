@@ -5,6 +5,8 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-09
+
 ### Added
 
 - Passphrases offer symbol position (Both sides, Before, After), number lengths
@@ -14,9 +16,10 @@ Versions follow Semantic Versioning.
 
 ### Changed
 
-- Passphrase symbols default to Random and every slot is chosen independently.
+- Passphrase symbols default to Random, which chooses every slot independently.
   Strength estimates count the exact spaces for all separator and case options.
-- Saved settings use a new schema; older saved settings are discarded.
+- Saved settings use a new schema; older saved settings are ignored on load
+  and removed when saving or resetting defaults.
 
 ## [1.1.1] - 2026-10-09
 
