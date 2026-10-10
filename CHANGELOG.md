@@ -5,6 +5,14 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Simplified manual deployment and updates in the README; detailed checks and rollback procedures are in the self-hosting guide.
+
+### Added
+
+- Release archives and checksums also have stable `passgen.zip` and `passgen.zip.sha256` download names.
+
 ## [1.3.0] - 2026-10-10
 
 ### Added

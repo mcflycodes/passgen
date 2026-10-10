@@ -116,4 +116,4 @@ jobs:
           done
           test "$type" = commit
           test "$sha" = "$RELEASE_COMMIT"
-          gh release create "v$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --verify-tag --title "PassGen $RELEASE_VERSION" --notes-file release/notes.md "release/passgen-$RELEASE_VERSION.zip" release/SHA256SUMS "release/passgen-$RELEASE_VERSION.zip.sha256"
+          gh release create "v$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --verify-tag --title "PassGen $RELEASE_VERSION" --notes-file release/notes.md "release/passgen-$RELEASE_VERSION.zip" release/SHA256SUMS "release/passgen-$RELEASE_VERSION.zip.sha256" release/passgen.zip release/passgen.zip.sha256

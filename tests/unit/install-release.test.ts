@@ -438,7 +438,13 @@ describe("install-release: fixtures and arguments", () => {
       "1.2.3",
     ]);
     await writeFile(join(dir, "SHA256SUMS"), manifestText);
-    assert.deepEqual((await readdir(dir)).sort(), ["SHA256SUMS", ZIP, `${ZIP}.sha256`]);
+    assert.deepEqual((await readdir(dir)).sort(), [
+      "SHA256SUMS",
+      ZIP,
+      `${ZIP}.sha256`,
+      "passgen.zip",
+      "passgen.zip.sha256",
+    ]);
     const { docroot } = await makeSite();
     const result = await install(["--version", VERSION, "--docroot", docroot, "--from-dir", dir]);
     assert.equal(result.code, 0, result.output);

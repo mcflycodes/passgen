@@ -97,6 +97,10 @@ with zipfile.ZipFile(archive) as zipped:
         .update(await readFile(archive))
         .digest("hex");
       hashes.push(digest);
+      const stable = join(scratch, `${name}-zip`, "passgen.zip");
+      assert.deepEqual(await readFile(stable), await readFile(archive));
+      assert.equal(await readFile(`${stable}.sha256`, "utf8"), `${digest}  passgen.zip\n`);
+      execFileSync("sha256sum", ["-c", "passgen.zip.sha256"], { cwd: join(scratch, `${name}-zip`) });
       assert.equal(await readFile(`${archive}.sha256`, "utf8"), `${digest}  passgen-1.0.0.zip\n`);
       execFileSync(
         process.execPath,
@@ -266,6 +270,13 @@ esac
       const args = await readFile(join(scratch, "published"), "utf8");
       assert.match(args, /^release\ncreate\nv1\.0\.0\n/);
       assert.match(args, /--repo\nexample\/project\n--verify-tag\n/);
+      assert.deepEqual(args.trim().split("\n").slice(-5), [
+        "release/passgen-1.0.0.zip",
+        "release/SHA256SUMS",
+        "release/passgen-1.0.0.zip.sha256",
+        "release/passgen.zip",
+        "release/passgen.zip.sha256",
+      ]);
       await rm(join(scratch, "published"));
     }
   } finally {

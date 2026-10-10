@@ -138,22 +138,25 @@ function checkDocReferences(file: string, content: string): string {
   return withoutLinks;
 }
 
-test("README and agent setup docs have valid links, anchors, script paths and raw URLs", async () => {
+test("deployment docs have valid links, anchors, script paths and raw URLs", async () => {
   const folder = join(ROOT, "agent-setup");
   const files = [
     "README.md",
+    "docs/self-hosting.md",
+    "docs/install-release.md",
+    "docs/releasing.md",
     ...(await readdir(folder)).filter((file) => file.endsWith(".md")).map((file) => `agent-setup/${file}`),
   ];
   for (const file of files) {
     const content = await readFile(join(ROOT, file), "utf8");
     const withoutLinks = checkDocReferences(file, content);
-    if (file === "README.md") continue; // The README also links to public project and reference sites.
+    if (!file.startsWith("agent-setup/")) continue; // Deployment guides also link to public project and reference sites.
     // Only existing source paths are exempted from domain detection (.sh and
     // .md are also top-level domains); actual deployment paths remain scanned.
     const scanText = withoutLinks
       .replace(/(?:[\w-]+\/)+[\w.-]+/g, (path) => (existsSync(join(ROOT, path)) ? "source-file" : path))
       .replaceAll("https://example.com/", "example.com")
-      .replace(/passgen-X\.Y\.Z\.zip(?:\.sha256)?/g, "release-asset");
+      .replace(/passgen(?:-X\.Y\.Z)?\.zip(?:\.sha256)?/g, "release-asset");
     assert.deepEqual(
       findHostnames(file, scanText, false).filter((finding) => finding.problem !== "host name: example.com"),
       [],
@@ -171,20 +174,16 @@ for (const [label, content, expected] of [
   ],
   [
     "target heading anchor",
-    readme.replace("#before-you-start", "#before-you-strat"),
+    `${readme}\n[Details](docs/self-hosting.md#before-you-strat)`,
     /broken anchor .*before-you-strat/,
   ],
   ["local heading anchor", `${readme}\n[Missing](#missing-deploy-section)`, /broken anchor #missing-deploy-section/],
   [
     "shell script path",
-    readme.replaceAll("scripts/install-release.sh", "scripts/install-releaze.sh"),
+    `${readme}\nUse scripts/install-releaze.sh.`,
     /missing script path scripts\/install-releaze\.sh/,
   ],
-  [
-    "TypeScript path",
-    readme.replaceAll("scripts/verify-live.ts", "scripts/verify-lvie.ts"),
-    /missing script path scripts\/verify-lvie\.ts/,
-  ],
+  ["TypeScript path", `${readme}\nUse scripts/verify-lvie.ts.`, /missing script path scripts\/verify-lvie\.ts/],
   [
     "other script extension",
     `${readme}\nUse scripts/missing-check.py.`,
@@ -218,7 +217,7 @@ function checkTimestampCommands(file: string, content: string): void {
   }
 }
 
-for (const file of TIMESTAMP_DOCS) {
+for (const file of TIMESTAMP_DOCS.filter((file) => file !== "README.md")) {
   test(`${file} timestamp commands cannot follow symlinks or create targets`, async () => {
     checkTimestampCommands(file, await readFile(join(ROOT, file), "utf8"));
   });
@@ -261,9 +260,7 @@ for (const command of ["exit 1", "sha256sum -c SHA256SUMS || exit 1", "(exit 1)"
 }
 
 test("manual timestamp steps require checksum verification, then symlink inspection, then touch", async () => {
-  assert.match(readme, /9\. \*\*Required:\*\* Verify the staged files, check for symlinks/);
-  assert.match(readme, /16\. \*\*Manual, required:\*\* Verify staged files, check for symlinks/);
-  for (const file of TIMESTAMP_DOCS.filter((file) => file !== "agent-setup/prompt.md")) {
+  for (const file of TIMESTAMP_DOCS.filter((file) => file !== "agent-setup/prompt.md" && file !== "README.md")) {
     const content = await readFile(join(ROOT, file), "utf8");
     const blocks = shellBlocks(content);
     let touches = 0;
@@ -273,8 +270,22 @@ test("manual timestamp steps require checksum verification, then symlink inspect
       assert.match(blocks[index - 2] ?? "", /sha256sum -c/, `${file}: verify checksums first`);
       assert.match(blocks[index - 1] ?? "", /find -P[^\n]+-type l -print/, `${file}: inspect symlinks next`);
     }
-    assert.equal(touches, file === "README.md" ? 4 : 1);
+    assert.equal(touches, file === "docs/self-hosting.md" ? 5 : 1);
     assert.match(content, /Continue only if every checksum says `OK`; otherwise, stop\./);
     assert.match(content, /If this prints anything, stop: the release contains a symbolic link\. Do not continue\./);
   }
+});
+
+test("short README deployment refreshes timestamps and replaces the tree without deletion", () => {
+  const deploy = readme.split("## Deploy\n")[1]?.split("## Requirements\n")[0];
+  assert.ok(deploy);
+  assert.match(deploy, /### Install by hand/);
+  assert.match(deploy, /### Update/);
+  assert.match(deploy, /### Install with an AI agent/);
+  assert.equal((deploy.match(/unzip -DD /g) ?? []).length, 2);
+  assert.doesNotMatch(deploy, /\brm\b|\$[A-Za-z{]/);
+  assert.match(deploy, /mkdir \.\/passgen-next &&/);
+  assert.match(deploy, /test ! -e \.\/passgen-previous && test ! -L \.\/passgen-previous &&/);
+  assert.match(deploy, /test -d \.\/passgen && test ! -L \.\/passgen &&/);
+  assert.match(deploy, /mv -T \.\/passgen \.\/passgen-previous &&\nmv -T \.\/passgen-next \.\/passgen/);
 });

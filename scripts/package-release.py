@@ -26,6 +26,9 @@ def package(dist: Path, output: Path, version: str) -> Path:
                 zipped.writestr(info, path.read_bytes())
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     archive.with_suffix(".zip.sha256").write_text(f"{digest}  {archive.name}\n", encoding="utf-8")
+    stable = output / "passgen.zip"
+    shutil.copyfile(archive, stable)
+    stable.with_suffix(".zip.sha256").write_text(f"{digest}  {stable.name}\n", encoding="utf-8")
     return archive
 
 

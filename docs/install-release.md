@@ -34,14 +34,18 @@ read access only.
 
 ## What a release contains
 
-Each GitHub Release `vX.Y.Z` attaches three files, which the installer treats as
-its contract:
+The installer uses these three versioned assets from GitHub Release `vX.Y.Z`
+as its contract:
 
 | File | Content |
 |---|---|
 | `passgen-X.Y.Z.zip` | The build: the contents of `dist/` at the zip root. |
 | `passgen-X.Y.Z.zip.sha256` | One `sha256sum` line for the zip. |
 | `SHA256SUMS` | The build manifest: one `sha256sum` line per file, paths relative to the web root, as `pnpm manifest` writes it. |
+
+New releases also attach `passgen.zip` (byte-identical to the versioned ZIP) and
+`passgen.zip.sha256` for stable download URLs. The installer uses the versioned
+files above; older releases do not need the aliases.
 
 Obtain the version you intend to install through a channel you trust, such as
 the release notes, and pass it exactly. There is no "latest".

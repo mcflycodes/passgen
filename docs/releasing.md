@@ -41,8 +41,11 @@ and [release immutability](https://docs.github.com/en/code-security/how-tos/secu
    ```
 
 4. Check the Release workflow and published GitHub Release. Confirm its source
-   tag, notes and three assets: `passgen-X.Y.Z.zip`, `SHA256SUMS`, and
-   `passgen-X.Y.Z.zip.sha256`. Download them and verify the archive and extracted
+   tag, notes and five assets: `passgen-X.Y.Z.zip`, its `.sha256`,
+   `SHA256SUMS`, `passgen.zip` and `passgen.zip.sha256`. Confirm both ZIPs are
+   byte-identical and each ZIP checksum names its matching archive. The stable
+   aliases support `/releases/latest/download/passgen.zip` and its `.sha256`.
+   Download them and verify the archive and extracted
    files as described in [self-hosting](self-hosting.md#deploy-from-a-release).
 
 The workflow reruns the fast gates, builds without a dependency cache, and
