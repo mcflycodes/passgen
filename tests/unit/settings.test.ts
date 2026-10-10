@@ -95,8 +95,10 @@ describe("stored settings (R24 to R26, C3)", () => {
       "maxWordLength",
       "minWordLength",
       "number",
+      "numberDigits",
       "separatorSymbol",
       "symbol",
+      "symbolPosition",
       "words",
     ]);
   });
@@ -122,13 +124,15 @@ describe("stored settings (R24 to R26, C3)", () => {
         },
       },
       passphrase: {
+        numberDigits: 2,
+        symbolPosition: "both",
         words: 7,
         minWordLength: 4,
         maxWordLength: 6,
         number: false,
         symbol: true,
         separatorSymbol: ".",
-        capitalize: true,
+        capitalize: "random" as const,
       },
     };
     const stored = serializeSettings(changed, config);

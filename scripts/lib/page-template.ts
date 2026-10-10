@@ -21,6 +21,7 @@
 //   data-cfg-checked="path"   `checked` when the value is true
 //   data-cfg-checked-eq="path"  `checked` when the value equals the element's value attribute
 //   data-cfg-options="path" data-cfg-selected="path"  <option>s for each character of the string
+//   data-cfg-selected="path"  selected option in a fixed-option select
 //
 // Every marker and data-cfg attribute must be consumed; a leftover fails the
 // build, as does a path that names nothing or names an object.
@@ -215,6 +216,18 @@ export function renderPage(html: string, config: PageConfig, build: BuildInfo): 
       .join("");
     return `<select${before}${after}>${options}${modes}</select>`;
   });
+
+  // Fixed-option selects use the same config defaults as the runtime store.
+  out = out.replace(
+    /<select([^>]*?)\sdata-cfg-selected="([^"]*)"([^>]*)>([\s\S]*?)<\/select>/g,
+    (_match, before: string, path: string, after: string, options: string) => {
+      const chosen = stringAt(config, path);
+      const filled = options.replace(/<option value="([^"]*)">/g, (tag: string, value: string) =>
+        value === chosen ? tag.replace(">", " selected>") : tag,
+      );
+      return `<select${before}${after}>${filled}</select>`;
+    },
+  );
 
   const leftover = out.match(/data-cfg-[a-z-]+=|<!-- \/?passgen:(?!(?:csp|boot) -->)[a-z-]+ -->/);
   if (leftover) throw new Error(`index.html: unresolved template marker ${leftover[0]}`);

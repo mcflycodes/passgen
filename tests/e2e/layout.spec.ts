@@ -52,6 +52,8 @@ test.describe("page shell", () => {
       "pp-number",
       "pp-symbol",
       "pp-symbol-char",
+      "pp-symbol-position",
+      "pp-number-digits",
       "pp-capitalize",
       "pp-copy",
       "pp-regen",

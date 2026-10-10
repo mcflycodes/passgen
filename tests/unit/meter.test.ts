@@ -60,10 +60,10 @@ test("meter uses core bits and warns below the configurable passphrase floor", (
   const password = bitsFor({ kind: "password", plan: planPassword(defaultOptions(config.password), config.password) });
   assert.ok("bits" in password && password.bits > 128 && password.warning === "");
   const phrase = bitsFor({ kind: "passphrase", options: defaultPassphraseOptions });
-  assert.ok("bits" in phrase && Math.abs(phrase.bits - 90.67) < 0.01 && phrase.warning === "");
+  assert.ok("bits" in phrase && Math.abs(phrase.bits - 119.35) < 0.01 && phrase.warning === "");
   const narrow = bitsFor({
     kind: "passphrase",
-    options: { ...defaultPassphraseOptions, minWordLength: 3, maxWordLength: 3 },
+    options: { ...defaultPassphraseOptions, separatorSymbol: "-", minWordLength: 3, maxWordLength: 3 },
   });
   assert.ok("bits" in narrow && narrow.bits < 80 && /shrinks the pool to \d+ words/.test(narrow.warning));
 });

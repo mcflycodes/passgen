@@ -5,6 +5,19 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Passphrases offer symbol position (Both sides, Before, After), number lengths
+  from 1–3 digits, and capitalization modes Off, Random, and Every word.
+- Random (unique) uses each symbol before repeating, with even reuse when
+  needed and a short note when repeats become unavoidable.
+
+### Changed
+
+- Passphrase symbols default to Random and every slot is chosen independently.
+  Strength estimates count the exact spaces for all separator and case options.
+- Saved settings use a new schema; older saved settings are discarded.
+
 ## [1.1.1] - 2026-10-09
 
 ### Fixed

@@ -66,7 +66,9 @@ export interface StoredSettings {
     readonly number: boolean;
     readonly symbol: boolean;
     readonly separatorSymbol: string;
-    readonly capitalize: boolean;
+    readonly numberDigits: number;
+    readonly symbolPosition: "both" | "before" | "after";
+    readonly capitalize: "off" | "random" | "every";
   };
 }
 
@@ -167,6 +169,8 @@ function storedPassphrase(value: unknown, limits: StoredLimits): StoredSettings[
     "symbol",
     "separatorSymbol",
     "capitalize",
+    "numberDigits",
+    "symbolPosition",
   ]);
   if (!p) return null;
   const words = p.words;
@@ -176,18 +180,32 @@ function storedPassphrase(value: unknown, limits: StoredLimits): StoredSettings[
   const symbol = p.symbol;
   const separatorSymbol = p.separatorSymbol;
   const capitalize = p.capitalize;
+  const numberDigits = p.numberDigits;
+  const symbolPosition = p.symbolPosition;
+  if (!storedInteger(numberDigits, 1, 3)) return null;
+  if (symbolPosition !== "both" && symbolPosition !== "before" && symbolPosition !== "after") return null;
+  if (capitalize !== "off" && capitalize !== "random" && capitalize !== "every") return null;
   if (!storedInteger(words, limits.words.min, limits.words.max)) return null;
   if (!storedInteger(minWordLength, limits.wordLength.min, limits.wordLength.max)) return null;
   if (!storedInteger(maxWordLength, minWordLength, limits.wordLength.max)) return null;
-  if (!storedBoolean(number) || !storedBoolean(symbol) || !storedBoolean(capitalize)) return null;
+  if (!storedBoolean(number) || !storedBoolean(symbol)) return null;
   if (typeof separatorSymbol !== "string") return null;
   if (
     !["random", "random-unique"].includes(separatorSymbol) &&
     (separatorSymbol.length !== 1 || !limits.separators.includes(separatorSymbol))
   )
     return null;
-  if (symbol && separatorSymbol === "random-unique" && words - 1 > limits.separators.length) return null;
-  return { words, minWordLength, maxWordLength, number, symbol, separatorSymbol, capitalize };
+  return {
+    words,
+    minWordLength,
+    maxWordLength,
+    number,
+    symbol,
+    separatorSymbol,
+    capitalize,
+    numberDigits,
+    symbolPosition,
+  };
 }
 
 /**

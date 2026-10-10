@@ -1,8 +1,9 @@
 // Hash limits affect offline searches, never the generator's displayed entropy.
-import { config } from "../config/validate.ts";
+
 import { log2BigInt, passphraseBits, passwordBits } from "./entropy.ts";
 import { filteredWordCount, type PassphraseOptions } from "./passphrase.ts";
 import { countPasswords, type PasswordPlan } from "./password.ts";
+import { symbolSlots } from "./separators.ts";
 
 export const BCRYPT_BYTES = 72;
 export const NTLM_BITS = 128;
@@ -33,8 +34,7 @@ export function bcryptPasswordPrefixBits(plan: PasswordPlan): number {
 }
 
 export function passphraseMaxBytes(options: PassphraseOptions): number {
-  const separator =
-    (options.number ? config.passphrase.separator.numberDigits : 0) + (options.symbol ? (options.number ? 2 : 1) : 0);
+  const separator = (options.number ? options.numberDigits : 0) + symbolSlots(options);
   return options.words * options.maxWordLength + (options.words - 1) * separator;
 }
 
@@ -44,6 +44,7 @@ export function passphraseMaxBytes(options: PassphraseOptions): number {
  * number digits individually. With no separator, a prefix may have several
  * word segmentations: the union bound charges one length-range factor per
  * complete word, so this remains conservative even for ambiguous boundaries.
+ * Every word title case marks boundaries explicitly and needs no length penalty.
  * This settings-only lower bound also covers every extra result in the panel.
  */
 export function bcryptPassphrasePrefixBits(options: PassphraseOptions): number {
@@ -52,11 +53,11 @@ export function bcryptPassphrasePrefixBits(options: PassphraseOptions): number {
   const words = filteredWordCount(options);
   let remaining = BCRYPT_BYTES;
   let prefixBits = 0;
-  const ambiguous = !options.number && !options.symbol;
+  const ambiguous = !options.number && !options.symbol && options.capitalize !== "every";
   const wordBits = Math.max(
     0,
     Math.log2(words) +
-      (options.capitalize ? 1 : 0) -
+      (options.capitalize === "random" ? 1 : 0) -
       (ambiguous ? Math.log2(options.maxWordLength - options.minWordLength + 1) : 0),
   );
   for (let index = 0; index < options.words; index++) {
@@ -64,16 +65,16 @@ export function bcryptPassphrasePrefixBits(options: PassphraseOptions): number {
     remaining -= options.maxWordLength;
     prefixBits += wordBits;
     if (index === options.words - 1) break;
-    if (options.symbol) {
+    if (options.symbol && (!options.number || options.symbolPosition !== "after")) {
       if (remaining === 0) break;
       remaining--;
     }
     if (options.number) {
-      const digits = Math.min(remaining, config.passphrase.separator.numberDigits);
+      const digits = Math.min(remaining, options.numberDigits);
       prefixBits += digits * Math.log2(10);
       remaining -= digits;
-      if (digits < config.passphrase.separator.numberDigits) break;
-      if (options.symbol) {
+      if (digits < options.numberDigits) break;
+      if (options.symbol && options.symbolPosition !== "before") {
         if (remaining === 0) break;
         remaining--;
       }

@@ -80,7 +80,7 @@ async function expectDefaults(page: Page): Promise<void> {
   await expect(page.locator("#pp-min-length")).toHaveValue(String(config.passphrase.wordLength.defaultMin));
   await expect(page.locator("#pp-number")).toBeChecked();
   await expect(page.locator("#pp-symbol-char")).toHaveValue(config.passphrase.separator.defaultSymbol);
-  await expect(page.locator("#pp-capitalize")).not.toBeChecked();
+  await expect(page.locator("#pp-capitalize")).toHaveValue("off");
   await expect(page.locator("#pw-value")).not.toHaveText("");
   await expect(page.locator("#pp-value")).not.toHaveText("");
 }
@@ -182,7 +182,7 @@ async function changeEverything(page: Page): Promise<void> {
   await setNumber(page.locator("#pp-max-length"), 6);
   await page.locator("#pp-number").uncheck();
   await page.locator("#pp-symbol-char").selectOption("random-unique");
-  await page.locator("#pp-capitalize").check();
+  await page.locator("#pp-capitalize").selectOption("random");
 }
 
 const EVERYTHING_CHANGED = {
@@ -207,13 +207,15 @@ const EVERYTHING_CHANGED = {
       },
     },
     passphrase: {
+      numberDigits: 2,
+      symbolPosition: "both",
       words: 7,
       minWordLength: 4,
       maxWordLength: 6,
       number: false,
       symbol: true,
       separatorSymbol: "random-unique",
-      capitalize: true,
+      capitalize: "random" as const,
     },
   },
 };
@@ -265,7 +267,7 @@ test.describe("saved settings", () => {
     await expect(page.locator("#pp-max-length")).toHaveValue("6");
     await expect(page.locator("#pp-number")).not.toBeChecked();
     await expect(page.locator("#pp-symbol-char")).toHaveValue("random-unique");
-    await expect(page.locator("#pp-capitalize")).toBeChecked();
+    await expect(page.locator("#pp-capitalize")).toHaveValue("random");
     // The generators use the restored settings, not just the controls.
     const password = await resultText(page, "pw-value");
     expect(password).toHaveLength(32);
@@ -300,7 +302,7 @@ test.describe("saved settings", () => {
     await chooseStyle(page, "green");
     await chooseTheme(page, "dark");
     await setRange(page.locator("#pw-length"), 40);
-    await page.locator("#pp-capitalize").check();
+    await page.locator("#pp-capitalize").selectOption("random");
     await page.locator("#pw-regen").click();
     expect(await storedText(page)).toBe(saved);
 
@@ -309,7 +311,7 @@ test.describe("saved settings", () => {
     await expect(page.locator("html")).toHaveAttribute("data-style", "slate");
     await expect(page.locator("html")).toHaveAttribute("data-theme", "system");
     await expect(page.locator("#pw-length-number")).toHaveValue("24");
-    await expect(page.locator("#pp-capitalize")).not.toBeChecked();
+    await expect(page.locator("#pp-capitalize")).toHaveValue("off");
     expect(await storedText(page)).toBe(saved);
     // Saving again replaces the record with the current settings.
     await chooseTheme(page, "light");
@@ -500,7 +502,7 @@ test.describe("saved settings", () => {
     await chooseTheme(page, "dark");
     await chooseStyle(page, "slate");
     await setRange(page.locator("#pw-length"), 30);
-    await page.locator("#pp-capitalize").check();
+    await page.locator("#pp-capitalize").selectOption("random");
     await page.locator("#pw-regen").click();
     await page.locator("#pp-regen").click();
     await expect(page.locator("#pw-value")).not.toHaveText("");
@@ -539,7 +541,7 @@ test.describe("saved settings", () => {
     }
     await setRange(page.locator("#pw-length"), 40);
     await setRange(page.locator("#pp-words"), 3);
-    await page.locator("#pp-capitalize").check();
+    await page.locator("#pp-capitalize").selectOption("random");
     await chooseTheme(page, "dark");
     await page.locator("#pw-regen").click();
     await collect();

@@ -48,7 +48,7 @@ describe("the shipped index.html", () => {
     assert.match(html, /id="theme-system" value="system" checked>/);
     assert.match(html, /id="theme-dark" value="dark">/);
     assert.match(html, /<option value="calm" selected>Calm<\/option><option value="payload">Payload<\/option>/);
-    assert.match(html, /<option value="-" selected>- hyphen<\/option>/);
+    assert.match(html, /<option value="random" selected>Random<\/option>/);
     assert.match(html, /<option value="\?">\? question mark<\/option>/);
     assert.match(html, /<script src="\.\/assets\/boot-x\.js"><\/script>/);
     assert.match(html, /<span class="foot-version">v1\.2\.3<\/span>/);
@@ -56,6 +56,17 @@ describe("the shipped index.html", () => {
     assert.doesNotMatch(html, /passgen:(?!csp)/);
     assert.match(html, /<!-- passgen:csp -->/, "the CSP placeholder is left for its own plugin");
     assert.match(html, /<!-- biome-ignore/, "lint directives stay as comments");
+  });
+
+  test("fixed-option passphrase controls reflect configured defaults", () => {
+    const html = page((c) => {
+      c.passphrase.separator.numberDigits.default = 3;
+      c.passphrase.separator.symbolPosition = "after";
+      c.passphrase.capitalize = "every";
+    });
+    assert.match(html, /<option value="3" selected>3 digits<\/option>/);
+    assert.match(html, /<option value="after" selected>After<\/option>/);
+    assert.match(html, /<option value="every" selected>Every word<\/option>/);
   });
 
   test("escapes the inserted text", () => {

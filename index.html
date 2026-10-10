@@ -161,13 +161,14 @@
 
           <div class="result">
             <!-- biome-ignore lint/a11y/useSemanticElements: output preserves its control associations; group replaces its implicit live status without announcing secrets. -->
-            <output class="value" id="pp-value" for="pp-words pp-min-length pp-max-length pp-number pp-symbol pp-symbol-char pp-capitalize" data-generated tabindex="-1" role="group" aria-live="off" aria-label="Generated passphrase"></output>
+            <output class="value" id="pp-value" for="pp-words pp-min-length pp-max-length pp-number pp-symbol pp-symbol-char pp-symbol-position pp-number-digits pp-capitalize" data-generated tabindex="-1" role="group" aria-live="off" aria-label="Generated passphrase"></output>
             <div class="result-actions">
               <button type="button" class="btn btn-primary" id="pp-copy" aria-label="Copy main passphrase">Copy</button>
               <button type="button" class="btn" id="pp-regen">Regenerate</button>
             </div>
           </div>
           <p class="notice" id="pp-notice" role="status" hidden></p>
+          <p class="notice" id="pp-unique-note" role="status" hidden>All symbols are used before repeating; repeats are spread evenly.</p>
 
           <section class="meter" id="pp-meter" aria-labelledby="pp-meter-title" data-level="">
             <h3 class="sr-only" id="pp-meter-title">Passphrase strength</h3>
@@ -212,19 +213,27 @@
             <fieldset class="control-row" aria-labelledby="pp-separator-label">
               <div class="control-label" id="pp-separator-label">Separator</div>
               <div class="control-input checks">
-                <label class="check"><input type="checkbox" id="pp-number" data-cfg-checked="passphrase.separator.number"><span class="box"></span><span class="check-text">Number <span class="hint">a random two-digit number between words</span></span></label>
+                <label class="check"><input type="checkbox" id="pp-number" data-cfg-checked="passphrase.separator.number"><span class="box"></span><span class="check-text">Number <span class="hint">a random number between words</span></span></label>
+                <label class="inline-field select-field"><span>Number length</span>
+                  <select id="pp-number-digits" data-cfg-selected="passphrase.separator.numberDigits.default"><option value="1">1 digit</option><option value="2">2 digits</option><option value="3">3 digits</option></select>
+                </label>
                 <label class="check"><input type="checkbox" id="pp-symbol" data-cfg-checked="passphrase.separator.symbol"><span class="box"></span><span class="check-text">Symbol</span></label>
                 <label class="inline-field select-field"><span>Symbol</span>
                   <select id="pp-symbol-char" aria-describedby="pp-symbol-hint" data-cfg-options="password.characters.simple" data-cfg-selected="passphrase.separator.defaultSymbol"></select>
                 </label>
-                <span class="hint" id="pp-symbol-hint">Random picks a symbol for each gap; Random (unique) never repeats between gaps. A number uses the same symbol on both sides.</span>
+                <label class="inline-field select-field"><span>Symbol position</span>
+                  <select id="pp-symbol-position" data-cfg-selected="passphrase.separator.symbolPosition"><option value="both">Both sides</option><option value="before">Before</option><option value="after">After</option></select>
+                </label>
+                <span class="hint" id="pp-symbol-hint">Random picks each symbol independently. Random (unique) uses every symbol before repeating and never repeats within a separator.</span>
               </div>
             </fieldset>
 
             <fieldset class="control-row" aria-labelledby="pp-case-label">
               <div class="control-label" id="pp-case-label">Case</div>
               <div class="control-input checks">
-                <label class="check"><input type="checkbox" id="pp-capitalize" data-cfg-checked="passphrase.capitalize"><span class="box"></span><span class="check-text">Capitalize <span class="hint">each word's first letter, at random</span></span></label>
+                <label class="inline-field select-field"><span>Capitalize</span>
+                  <select id="pp-capitalize" data-cfg-selected="passphrase.capitalize"><option value="off">Off</option><option value="random">Random</option><option value="every">Every word</option></select>
+                </label>
               </div>
             </fieldset>
           </div>

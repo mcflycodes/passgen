@@ -9,7 +9,9 @@ export interface PassphraseOptions {
   number: boolean;
   symbol: boolean;
   separatorSymbol: string;
-  capitalize: boolean;
+  numberDigits: number;
+  symbolPosition: "both" | "before" | "after";
+  capitalize: "off" | "random" | "every";
 }
 
 export class PassphraseOptionsError extends RangeError {
@@ -27,7 +29,9 @@ export const defaultPassphraseOptions: Readonly<PassphraseOptions> = Object.free
   number: c.separator.number,
   symbol: c.separator.symbol,
   separatorSymbol: c.separator.defaultSymbol,
-  capitalize: c.capitalize,
+  numberDigits: c.separator.numberDigits.default,
+  symbolPosition: c.separator.symbolPosition as PassphraseOptions["symbolPosition"],
+  capitalize: c.capitalize as PassphraseOptions["capitalize"],
 });
 
 function validate(options: PassphraseOptions): void {
@@ -40,11 +44,12 @@ function validate(options: PassphraseOptions): void {
     [options.words, c.words.min, c.words.max],
     [options.minWordLength, c.wordLength.min, c.wordLength.max],
     [options.maxWordLength, options.minWordLength, c.wordLength.max],
+    [options.numberDigits, c.separator.numberDigits.min, c.separator.numberDigits.max],
   ]) {
     if (!Number.isInteger(value) || (value as number) < (min as number) || (value as number) > (max as number))
       throw new PassphraseOptionsError("Passphrase counts and lengths must be integers within configured bounds");
   }
-  if ([options.number, options.symbol, options.capitalize].some((value) => typeof value !== "boolean"))
+  if ([options.number, options.symbol].some((value) => typeof value !== "boolean"))
     throw new PassphraseOptionsError("Passphrase switches must be booleans");
   if (
     typeof options.separatorSymbol !== "string" ||
@@ -53,11 +58,10 @@ function validate(options: PassphraseOptions): void {
   )
     throw new PassphraseOptionsError("Passphrase separator must be a simple symbol or a random mode");
   if (
-    options.symbol &&
-    options.separatorSymbol === "random-unique" &&
-    options.words - 1 > config.password.characters.simple.length
+    !["both", "before", "after"].includes(options.symbolPosition) ||
+    !["off", "random", "every"].includes(options.capitalize)
   )
-    throw new PassphraseOptionsError("Not enough simple symbols for unique separators");
+    throw new PassphraseOptionsError("Invalid symbol position or capitalization mode");
 }
 
 // The wordlist is immutable: compute the bounded set of length ranges once.
@@ -77,7 +81,7 @@ export function filteredWordCount(options: PassphraseOptions = defaultPassphrase
   return filteredWords(options).length;
 }
 
-/** Words use independent picks with replacement; unique separators use a shrinking pool. No partial result on error. */
+/** Independent word picks; unique symbols consume successive alphabet rounds. No partial result on error. */
 export function generatePassphrase(
   options: PassphraseOptions = defaultPassphraseOptions,
   source: RandomSource = webCrypto,
@@ -89,22 +93,32 @@ export function generatePassphrase(
   let result = "";
   for (let index = 0; index < options.words; index++) {
     if (index) {
-      // One choice per word gap; number separators reuse it on both sides.
-      let symbol = "";
-      if (options.symbol) {
-        if (options.separatorSymbol === "random") symbol = pick(available, source);
-        else if (options.separatorSymbol === "random-unique")
-          symbol = available.splice(randomInt(available.length, source), 1)[0] as string;
-        else symbol = options.separatorSymbol;
+      const nextSymbol = () => {
+        if (!options.symbol) return "";
+        if (options.separatorSymbol === "random") return pick(available, source);
+        if (options.separatorSymbol === "random-unique") {
+          if (!available.length) available.push(...config.password.characters.simple);
+          // At an odd-sized round boundary inside a gap, forbid its first symbol.
+          const candidates = available.filter((value) => value !== first);
+          const value = pick(candidates, source);
+          available.splice(available.indexOf(value), 1);
+          return value;
+        }
+        return options.separatorSymbol;
+      };
+      let first = "";
+      if (!options.number || options.symbolPosition !== "after") {
+        first = nextSymbol();
+        result += first;
       }
-      result += symbol;
       if (options.number) {
-        for (let digit = 0; digit < c.separator.numberDigits; digit++) result += String(randomInt(10, source));
-        result += symbol;
+        for (let digit = 0; digit < options.numberDigits; digit++) result += String(randomInt(10, source));
+        if (options.symbolPosition !== "before") result += nextSymbol();
       }
     }
     let word = pick(pool, source);
-    if (options.capitalize && randomInt(2, source)) word = word.charAt(0).toUpperCase() + word.slice(1);
+    if (options.capitalize === "every" || (options.capitalize === "random" && randomInt(2, source)))
+      word = word.charAt(0).toUpperCase() + word.slice(1);
     result += word;
   }
   return result;

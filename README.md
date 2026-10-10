@@ -680,9 +680,18 @@ steps read only local files and never fetch from the network.
 
 `src/core/passphrase.ts` exposes `generatePassphrase`, `filteredWordCount` and
 `defaultPassphraseOptions`. Each word is picked independently with replacement;
-each separator digit and each optional capitalization bit use the unbiased
+each separator digit and each optional random capitalization bit use the unbiased
 randomness core. Invalid options and empty pools raise typed errors without
-returning output.
+returning output. Numbers have 1–3 digits (default 2), including leading zeros.
+Symbols default to Random: each slot is an independent pick. Symbol position
+can be Both sides (default), Before or After a number; without numbers each
+separator has one symbol. Random (unique) never repeats within a separator
+and uses every symbol once before starting another round. When slots exceed
+the alphabet size, repeats are spread evenly and the panel shows a note.
+Fixed symbols remain available. Capitalize offers Off (default), Random
+(one independent case bit per word), and Every word (no added entropy).
+The meter counts all valid sequences exactly. Saved settings use schema v3;
+older settings are ignored and removed on Save or Reset.
 
 The attribution gate blanks only the explicitly reviewed collision words in
 `DICTIONARY_COLLISIONS`, within authenticated data lines and the verified

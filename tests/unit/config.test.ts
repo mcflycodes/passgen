@@ -139,13 +139,15 @@ const cases: [string, string, unknown, RegExp][] = [
     { lowercase: false, uppercase: false, numbers: false, simple: false, complex: false },
     /at least one/,
   ],
+  ["symbol position", "passphrase.separator.symbolPosition", "side", /both, before or after/],
+  ["capitalize mode", "passphrase.capitalize", "yes", /off, random or every/],
   ["separator empty", "passphrase.separator.defaultSymbol", "", /one simple/],
   ["separator multiple", "passphrase.separator.defaultSymbol", "--", /one simple/],
   ["separator complex", "passphrase.separator.defaultSymbol", "~", /one simple/],
   ["separator hazard", "passphrase.separator.defaultSymbol", "+", /one simple/],
-  ["separator minimum", "passphrase.separator.numberMin", 1, /00–99/],
-  ["separator maximum", "passphrase.separator.numberMax", 100, /00–99/],
-  ["separator width", "passphrase.separator.numberDigits", 1, /00–99/],
+  ["separator minimum", "passphrase.separator.numberDigits.min", 0, /1–3/],
+  ["separator maximum", "passphrase.separator.numberDigits.max", 4, /1–3/],
+  ["separator width", "passphrase.separator.numberDigits.default", 0, /integer/],
   ["missing band", "meter.bands", config.meter.bands.slice(1), /R17/],
   ["inflated meter", "meter.bands.3.minBits", 79, /integer/],
   ["wrong band label", "meter.bands.3.label", "Excellent", /R17/],
@@ -280,6 +282,7 @@ test("rejects unordered meter thresholds", () => {
 test("rejects defaults below a stricter Strong threshold", () => {
   const copy = structuredClone(config);
   atPath(copy, "meter.bands.3").minBits = 100;
+  copy.passphrase.separator.defaultSymbol = "-";
   assert.throws(() => validateConfig(copy), /configured Strong/);
 });
 
@@ -334,6 +337,7 @@ test("accepts a different default filter using its real count", () => {
 test("rejects a narrow default filter whose computed count is too weak", () => {
   const copy = structuredClone(config);
   copy.passphrase.wordLength.defaultMin = 9;
+  copy.passphrase.separator.defaultSymbol = "-";
   assert.throws(() => validateConfig(copy), /80 bits/);
 });
 

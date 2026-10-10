@@ -13,6 +13,7 @@ import {
   type PasswordPlan,
   planPassword,
 } from "./password.ts";
+import { symbolSlots, uniqueSymbolCount } from "./separators.ts";
 
 export interface Entropy {
   readonly count: bigint;
@@ -46,27 +47,22 @@ export function passwordEntropy(
   return { count, bits: log2BigInt(count) };
 }
 
-/**
- * Independent word picks with replacement: W^w. Each of the w-1 number
- * separators has 10^d possibilities (including leading zeroes). The known
- * fixed symbol adds none; random modes add n^(w-1) or the falling
- * factorial n!/(n-w+1)!. A number reuses its gap's symbol on both sides. Random first-letter case adds 2^w when enabled.
- * Uses settings alone; no result or randomness is read.
+/** Exact uniform space: independent words, digits, case bits and symbol sequences.
+ * The production wordlist is uniquely decodable even without separators.
  */
 export function passphraseEntropy(options: PassphraseOptions = defaultPassphraseOptions): Entropy {
   const words = filteredWordCount(options); // Also validates all options, exactly as generation does.
   if (words === 0) throw new EmptyWordlistError("No words remain in the selected length range");
   const wordSpace = BigInt(words) ** BigInt(options.words);
-  const numberSpace = options.number
-    ? 10n ** BigInt(config.passphrase.separator.numberDigits * (options.words - 1))
-    : 1n;
-  const caseSpace = options.capitalize ? 2n ** BigInt(options.words) : 1n;
+  const numberSpace = options.number ? 10n ** BigInt(options.numberDigits * (options.words - 1)) : 1n;
+  const caseSpace = options.capitalize === "random" ? 2n ** BigInt(options.words) : 1n;
   let symbolSpace = 1n;
   if (options.symbol && ["random", "random-unique"].includes(options.separatorSymbol)) {
-    for (let i = 0; i < options.words - 1; i += 1)
-      symbolSpace *= BigInt(
-        config.password.characters.simple.length - (options.separatorSymbol === "random-unique" ? i : 0),
-      );
+    const slots = symbolSlots(options);
+    symbolSpace =
+      options.separatorSymbol === "random-unique"
+        ? uniqueSymbolCount(config.password.characters.simple.length, options.words - 1, slots)
+        : BigInt(config.password.characters.simple.length) ** BigInt((options.words - 1) * slots);
   }
   const count = wordSpace * numberSpace * caseSpace * symbolSpace;
   return { count, bits: log2BigInt(count) };

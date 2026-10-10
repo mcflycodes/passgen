@@ -113,9 +113,11 @@ test("slow-hash digest limits bound the displayed estimates and disclose the cap
       `${crackTime(bcryptPassphrasePrefixBits(options), config.meter.attacks.bcrypt.guessesPerSecond)} on average`,
     );
     await expect(page.locator("#pp-scenarios p").nth(1)).toContainText(
-      `${crackTime(passphraseBits(options), config.meter.attacks.argon2id.guessesPerSecond)} on average`,
+      `${crackTime(Math.min(passphraseBits(options), 256), config.meter.attacks.argon2id.guessesPerSecond)} on average`,
     );
-    await expect(page.locator("#pp-scenarios")).not.toContainText(/(?:bcrypt|Argon2id) search capped/);
+    if (passphraseBits(options) > 256)
+      await expect(page.locator("#pp-scenarios")).toContainText("Argon2id search capped");
+    else await expect(page.locator("#pp-scenarios")).not.toContainText(/(?:bcrypt|Argon2id) search capped/);
   }
 });
 

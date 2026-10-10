@@ -17,9 +17,9 @@ for (const { id: style } of config.style.offered) {
     await page.keyboard.press("Space");
     await expect(firstRule).toBeChecked();
     const select = page.locator("#pp-symbol-char");
-    await expect(select).toHaveValue("-");
+    await expect(select).toHaveValue("random");
     await expect(select).toHaveAccessibleName("Symbol");
-    await expect(select).toHaveAccessibleDescription(/Random picks a symbol/);
+    await expect(select).toHaveAccessibleDescription(/Random picks each symbol/);
     for (const mode of ["random", "random-unique"]) {
       await select.selectOption(mode);
       await select.focus();
@@ -31,9 +31,11 @@ for (const { id: style } of config.style.offered) {
         const value = await resultText(page, "pp-value");
         const punctuation = [...value].filter((char) => config.password.characters.simple.includes(char));
         expect(punctuation).toHaveLength(number ? 22 : 11);
-        const gaps = number ? punctuation.filter((_, i) => i % 2 === 0) : punctuation;
-        if (mode === "random-unique") expect(new Set(gaps).size).toBe(11);
-        if (number) for (let i = 0; i < punctuation.length; i += 2) expect(punctuation[i]).toBe(punctuation[i + 1]);
+        if (mode === "random-unique") {
+          expect(new Set(punctuation.slice(0, 12)).size).toBe(number ? 12 : 11);
+          if (number)
+            for (let i = 0; i < punctuation.length; i += 2) expect(punctuation[i]).not.toBe(punctuation[i + 1]);
+        }
         await expect(page.locator("#pp-notice")).toBeHidden();
         await expect(page.locator("#pp-copy")).toBeEnabled();
       }

@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 import { config } from "../../src/config/validate.ts";
 import {
-  defaultPassphraseOptions as defaults,
+  defaultPassphraseOptions,
   EmptyWordlistError,
   filteredWordCount,
   generatePassphrase,
@@ -17,6 +17,7 @@ import { RandomUnavailableError, webCryptoFrom } from "../../src/core/random.ts"
 import { WORDS } from "../../src/core/wordlist.ts";
 import { neverSource, topBits, wordsSource } from "./random-sources.ts";
 
+const defaults = { ...defaultPassphraseOptions, separatorSymbol: "-" };
 const pool = WORDS.filter((word) => word.length >= 5);
 const draw = (index: number) => topBits(index, 13);
 test("real filter counts and default strength agree with R13–R15", () => {
@@ -51,7 +52,7 @@ test("default five words have fresh independent numbers and leading zeroes", () 
     ...[0, 1, 2, 3].flatMap((n) => [topBits(n, 4), topBits(9 - n, 4), draw(n + 1)]),
   ]);
   assert.equal(
-    generatePassphrase(undefined, source),
+    generatePassphrase(defaults, source),
     `${pool[0]}-09-${pool[1]}-18-${pool[2]}-27-${pool[3]}-36-${pool[4]}`,
   );
 });
@@ -63,7 +64,7 @@ test("words repeat, and capitalize draws an independent bit per word", () => {
   const source = wordsSource([draw(0), topBits(1, 1), draw(0), topBits(0, 1)]);
   const word = pool[0] as string;
   assert.equal(
-    generatePassphrase({ ...defaults, words: 2, number: false, capitalize: true }, source),
+    generatePassphrase({ ...defaults, words: 2, number: false, capitalize: "random" as const }, source),
     `${word[0]?.toUpperCase()}${word.slice(1)}-${word}`,
   );
 });
@@ -100,7 +101,9 @@ for (const [key, values] of Object.entries({
   maxWordLength: [2, 10, 5.5, "9"],
   number: [0, null],
   symbol: [1, "true"],
-  capitalize: [1, null],
+  capitalize: [true, false, "yes", 1, null],
+  symbolPosition: ["side", true, null],
+  numberDigits: [0, 4, 1.5, "2", NaN],
   separatorSymbol: ["", "--", "~", "%", "+", "=", "&", " ", "é", null],
 }))
   for (const value of values)
@@ -163,7 +166,7 @@ test("empty list raises a typed error without randomness", async () => {
 });
 test("one-word pool: the only possible passphrase is produced, drawing one word per pick", async () => {
   await withWordlist(["apple"], (one) => {
-    const options = { ...defaults, words: 3, number: false, capitalize: false };
+    const options = { ...defaults, words: 3, number: false, capitalize: "off" as const };
     assert.equal(one.filteredWordCount(options), 1);
     const source = wordsSource([0, 0xffffffff, 0x80000000]);
     assert.equal(one.generatePassphrase(options, source), "apple-apple-apple");
@@ -188,9 +191,9 @@ test("one-word pool fails closed: no output with Web Crypto missing, not a funct
   await withWordlist(["apple"], (one) => {
     // Every variant of the request whose only randomness is the one-word pick.
     const variants = [
-      { ...defaults, words: 2, number: false, capitalize: false },
-      { ...defaults, words: 2, number: false, symbol: false, capitalize: false },
-      { ...defaults, words: 12, number: false, capitalize: false },
+      { ...defaults, words: 2, number: false, capitalize: "off" as const },
+      { ...defaults, words: 2, number: false, symbol: false, capitalize: "off" as const },
+      { ...defaults, words: 12, number: false, capitalize: "off" as const },
     ];
     for (const [label, cryptoObject] of broken) {
       const source = webCryptoFrom(cryptoObject);
@@ -200,7 +203,7 @@ test("one-word pool fails closed: no output with Web Crypto missing, not a funct
       // With separator numbers or capitalization the draws are not forced; those fail closed too.
       assert.throws(() => one.generatePassphrase({ ...defaults, words: 2 }, source), RandomUnavailableError, label);
       assert.throws(
-        () => one.generatePassphrase({ ...defaults, words: 2, number: false, capitalize: true }, source),
+        () => one.generatePassphrase({ ...defaults, words: 2, number: false, capitalize: "random" as const }, source),
         RandomUnavailableError,
         label,
       );

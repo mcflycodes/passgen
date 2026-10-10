@@ -14,7 +14,7 @@ const bits = async (page: import("@playwright/test").Page, prefix: string) =>
 test("default text equivalents, six coloured segments and attack assumptions", async ({ page }) => {
   await openPage(page);
   await expect(page.locator("#pw-band")).toHaveText("Excellent");
-  await expect(page.locator("#pp-band")).toHaveText("Strong");
+  await expect(page.locator("#pp-band")).toHaveText("Very strong");
   await expect(page.locator("#pw-meter .seg")).toHaveCount(6);
   const colors = await page
     .locator("#pw-meter .seg")
@@ -44,7 +44,7 @@ test("both meters change with settings and tighter Min/Max lowers password stren
   await page.locator("#pp-number").uncheck();
   expect(await bits(page, "pp")).toBeLessThan(phrase);
   const noNumbers = await bits(page, "pp");
-  await page.locator("#pp-capitalize").check();
+  await page.locator("#pp-capitalize").selectOption("random");
   expect(await bits(page, "pp")).toBeCloseTo(noNumbers + 5, 1);
 });
 
@@ -64,6 +64,7 @@ test("invalid password settings clear the previous rating and recover", async ({
 
 test("a small R13 pool warns while generation stays available", async ({ page }) => {
   await openPage(page);
+  await page.locator("#pp-symbol-char").selectOption("-");
   await setNumber(page.locator("#pp-min-length"), 3);
   await setNumber(page.locator("#pp-max-length"), 3);
   await expect(page.locator("#pp-meter-warning")).toBeVisible();
@@ -169,11 +170,12 @@ test("expanded scenarios and warning pass axe with reduced motion", async ({ pag
 
 test("displayed bits stay below the Moderate band boundary", async ({ page }) => {
   await openPage(page);
+  await page.locator("#pp-symbol-char").selectOption("-");
   await setNumber(page.locator("#pp-words-number"), 7);
   await setNumber(page.locator("#pp-min-length"), 6);
   await setNumber(page.locator("#pp-max-length"), 6);
   await page.locator("#pp-number").uncheck();
-  await page.locator("#pp-capitalize").check();
+  await page.locator("#pp-capitalize").selectOption("random");
   await expect(page.locator("#pp-band")).toHaveText("Moderate");
   await expect(page.locator("#pp-bits")).toHaveText("79.9 bits");
   await expect(page.locator("#pp-meter-warning")).toContainText("less than 80 bits");
@@ -272,20 +274,22 @@ test.describe("meter", () => {
 
 test("saved passphrase settings restore matching meter bits on reload and update afterwards", async ({ page }) => {
   await openPage(page);
+  await page.locator("#pp-symbol-char").selectOption("-");
   const options = {
     ...defaultPassphraseOptions,
+    separatorSymbol: "-",
     words: 7,
     minWordLength: 6,
     maxWordLength: 6,
     number: false,
-    capitalize: true,
+    capitalize: "random" as const,
   };
   const expectedBits = (value: typeof options) => `${(Math.floor(passphraseBits(value) * 10) / 10).toFixed(1)} bits`;
   await setNumber(page.locator("#pp-words-number"), options.words);
   await setNumber(page.locator("#pp-min-length"), options.minWordLength);
   await setNumber(page.locator("#pp-max-length"), options.maxWordLength);
   await page.locator("#pp-number").uncheck();
-  await page.locator("#pp-capitalize").check();
+  await page.locator("#pp-capitalize").selectOption("random");
   await expect(page.locator("#pp-bits")).toHaveText(expectedBits(options));
   await page.locator("#save-settings").click();
   await expect(page.locator("#save-settings-status")).toContainText("Saved");
@@ -298,7 +302,7 @@ test("saved passphrase settings restore matching meter bits on reload and update
   await expect(page.locator("#pp-min-length")).toHaveValue("6");
   await expect(page.locator("#pp-max-length")).toHaveValue("6");
   await expect(page.locator("#pp-number")).not.toBeChecked();
-  await expect(page.locator("#pp-capitalize")).toBeChecked();
+  await expect(page.locator("#pp-capitalize")).toHaveValue("random");
   await expect(page.locator("#pp-bits")).toHaveText("79.9 bits");
   await expect(page.locator("#pp-band")).toHaveText("Moderate");
   await expect(page.locator("#pp-meter-warning")).toBeVisible();

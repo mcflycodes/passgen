@@ -4,9 +4,9 @@ import { config } from "../../src/config/validate.ts";
 import { expect, test } from "./fixtures.ts";
 import { openPage, resultText, setNumber, setRange } from "./helpers.ts";
 
-const sep = config.passphrase.separator.defaultSymbol;
+const sep = "-";
 const escaped = sep.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const defaultPattern = new RegExp(`^[a-z]{5,9}(?:${escaped}\\d{2}${escaped}[a-z]{5,9}){4}$`);
+const defaultPattern = /^[a-z]{5,9}(?:[^a-z0-9]\d{2}[^a-z0-9][a-z]{5,9}){4}$/;
 
 test.describe("passphrase", () => {
   test("appears on load with the defaults: five words of 5 to 9 letters, number and symbol separators", async ({
@@ -20,6 +20,7 @@ test.describe("passphrase", () => {
 
   test("the word count follows the slider and the exact field", async ({ page }) => {
     await openPage(page);
+    await page.locator("#pp-symbol-char").selectOption("-");
     await setRange(page.locator("#pp-words"), 3);
     await expect(page.locator("#pp-words-number")).toHaveValue("3");
     expect((await resultText(page, "pp-value")).split(sep)).toHaveLength(5); // w-NN-w-NN-w
@@ -36,6 +37,7 @@ test.describe("passphrase", () => {
     expect(await resultText(page, "pp-value")).toMatch(/^[a-z]+(?:\d{2}[a-z]+){4}$/);
     await page.locator("#pp-symbol").check();
     await page.locator("#pp-number").uncheck();
+    await page.locator("#pp-symbol-char").selectOption("-");
     expect(await resultText(page, "pp-value")).toMatch(new RegExp(`^[a-z]+(?:${escaped}[a-z]+){4}$`));
     await page.locator("#pp-symbol-char").selectOption("_");
     expect(await resultText(page, "pp-value")).toMatch(/^[a-z]+(?:_[a-z]+){4}$/);
@@ -48,13 +50,13 @@ test.describe("passphrase", () => {
 
   test("capitalize uppercases first letters at random (R14a)", async ({ page }) => {
     await openPage(page);
-    await page.locator("#pp-capitalize").check();
+    await page.locator("#pp-capitalize").selectOption("random");
     const seen: string[] = [];
     for (let i = 0; i < 6; i += 1) {
       seen.push(await resultText(page, "pp-value"));
       await page.locator("#pp-regen").click();
     }
-    const words = seen.flatMap((v) => v.split(/[-\d]+/));
+    const words = seen.flatMap((v) => v.split(/[^a-zA-Z]+/));
     expect(words.every((w) => /^[A-Za-z][a-z]*$/.test(w))).toBe(true);
     expect(words.some((w) => /^[A-Z]/.test(w))).toBe(true);
     expect(words.some((w) => /^[a-z]/.test(w))).toBe(true);
@@ -65,7 +67,7 @@ test.describe("passphrase", () => {
     await setNumber(page.locator("#pp-min-length"), 7);
     await setNumber(page.locator("#pp-max-length"), 7);
     for (let i = 0; i < 3; i += 1) {
-      const words = (await resultText(page, "pp-value")).split(/[-\d]+/);
+      const words = (await resultText(page, "pp-value")).split(/[^a-zA-Z]+/);
       expect(words).toHaveLength(5);
       for (const w of words) expect(w).toHaveLength(7);
       await page.locator("#pp-regen").click();
