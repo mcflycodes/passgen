@@ -249,10 +249,11 @@ On every code change, CI builds the PassGen image locally on amd64 and arm64,
 brings up each recipe with its `compose.yaml` and generated configuration
 unchanged, and checks:
 
-- every release file with GET and HEAD, plus 304, 404, refused methods (405) and
-  refused paths (403), each with all nine headers exactly once and the right
-  cache policy (Apache: 304 via `If-Modified-Since`, since its examples disable
-  ETags);
+- every release file with GET and HEAD, plus 304 and 404, each with all nine
+  headers exactly once and the right cache policy (Apache: 304 via
+  `If-Modified-Since`, since its examples disable ETags);
+- refused methods (405) and refused paths (403), each with all nine headers
+  exactly once;
 - the live bytes against the build manifest, with the verifier;
 - Caddy's HTTP-to-HTTPS redirect and, for `caddy-https`, its 502 while PassGen is
   stopped, both with all nine headers;
