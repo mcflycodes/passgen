@@ -465,6 +465,12 @@ test.describe("saved settings", () => {
       await save(page).click();
       await expect(save(page)).toHaveClass(/is-done/);
       await expect(status(page)).toHaveText(SAVED_STATUS);
+      const doneDurations = await save(page).evaluate((button) =>
+        getComputedStyle(button)
+          .transitionDuration.split(",")
+          .map((value) => value.trim()),
+      );
+      for (const duration of doneDurations) expect(duration).toBe("0s");
       expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
       expect(await save(page).evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
       await expect(save(page)).not.toHaveClass(/is-done/, { timeout: SAVE_FEEDBACK_MS * 3 });

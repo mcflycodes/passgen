@@ -961,6 +961,7 @@ select {
 }
 .wordlist-credits ul {
   position: relative;
+  /* These offsets assume .foot-meta ends at the footer’s right edge. */
   width: 100cqw;
   left: calc(100% - 100cqw);
   min-width: 0;

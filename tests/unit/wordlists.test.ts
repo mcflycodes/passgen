@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { DICTIONARY_COLLISIONS } from "../../scripts/lib/attribution-patterns.ts";
 import { scanText } from "../../scripts/lib/attribution-scan.ts";
 import { checkHtml, checkJs, cspMetaTag } from "../../scripts/lib/dist-checks.ts";
 import { renderPage } from "../../scripts/lib/page-template.ts";
-import { EXTRA_WORDLISTS, verifiedExtraWordlist, verifiedWordlist } from "../../scripts/lib/wordlist.ts";
+import { EXTRA_WORDLISTS, verifiedExtraWordlist, verifiedWordlist, WORDLIST } from "../../scripts/lib/wordlist.ts";
 import { sourceAttributionInput } from "../../scripts/lib/wordlist-attribution.ts";
 import { config, configuredLinks, validateConfig, wordListCredits } from "../../src/config/validate.ts";
 import { passphraseEntropy } from "../../src/core/entropy.ts";
@@ -203,4 +204,49 @@ test("runtime list metadata matches the authenticated words and real lengths", (
     assert.equal(list.min, Math.min(...verified.words.map((word) => word.length)));
     assert.equal(list.max, Math.max(...verified.words.map((word) => word.length)));
   }
+});
+
+test("dictionary exemptions are explicit and exact for every list", () => {
+  const expected = {
+    "orchard-long": [DICTIONARY_COLLISIONS[1], DICTIONARY_COLLISIONS[2]],
+    "orchard-medium": [DICTIONARY_COLLISIONS[1]],
+    "eff-large": [DICTIONARY_COLLISIONS[0], DICTIONARY_COLLISIONS[2]],
+    "eff-short1": [],
+    "eff-short2": [DICTIONARY_COLLISIONS[3]],
+  };
+  for (const id of ids) {
+    assert.deepEqual(
+      required([WORDLIST, ...EXTRA_WORDLISTS].find((entry) => entry.id === id)).dictionaryExemptions,
+      expected[id],
+    );
+    assert.deepEqual(
+      required([WORDLIST, ...EXTRA_WORDLISTS].find((entry) => entry.id === id)).dictionaryExemptions,
+      DICTIONARY_COLLISIONS.filter((word) => WORD_LISTS[id].words.includes(word)),
+    );
+  }
+});
+
+test("every offered list must meet the default strength threshold", () => {
+  for (const id of ids.filter((id) => id !== config.passphrase.wordLists.default)) {
+    const copy = structuredClone(config);
+    copy.passphrase.words.default = 8;
+    required(copy.meter.bands[3]).minBits = 100;
+    copy.passphrase.wordLists.offered = copy.passphrase.wordLists.offered.filter(
+      (entry) => entry.id === copy.passphrase.wordLists.default || entry.id === id,
+    );
+    const offered = required(copy.passphrase.wordLists.offered.find((entry) => entry.id === id));
+    copy.passphrase.separator.number = false;
+    copy.passphrase.separator.symbol = false;
+    offered.defaultMin = WORD_LISTS[id].max;
+    offered.defaultMax = WORD_LISTS[id].max;
+    assert.throws(() => validateConfig(copy), /wordLists.*80 bits/);
+  }
+});
+
+test("word-list URLs have no JavaScript bundle exemption", () => {
+  for (const source of Object.values(WORDLIST_SOURCES))
+    for (const url of [source.url, source.licenseUrl]) {
+      for (const snippet of [`const link = ${JSON.stringify(url)};`, `const link = \`${url}\`;`, `// ${url}`])
+        assert.ok(checkJs("bundle.js", snippet, configuredLinks(config)).length, snippet);
+    }
 });

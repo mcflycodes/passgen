@@ -1,9 +1,11 @@
+import { WORD_LISTS } from "../../src/core/wordlists.ts";
 import { DICTIONARY_COLLISIONS } from "./attribution-patterns.ts";
 import {
   checkWordlist,
   EXTRA_WORDLISTS,
   verifiedExtraWordlist,
   verifiedWordlist,
+  WORDLIST,
   WORDLIST_MODULE_PATH,
   WORDLIST_PATH,
 } from "./wordlist.ts";
@@ -22,10 +24,19 @@ export function verifiedWordDataSets(root: string): readonly string[] {
   ];
 }
 
+export function dictionaryExemptions(text: string): readonly string[] {
+  const list = Object.entries(WORD_LISTS).find(([, list]) => text === list.words.join(" "));
+  return [WORDLIST, ...EXTRA_WORDLISTS].find((entry) => entry.id === list?.[0])?.dictionaryExemptions ?? [];
+}
+
 /** Preserve offsets while blanking only whole words in the explicit collision set. */
 export function blankDictionaryCollisions(text: string): string {
+  return blankListCollisions(text, DICTIONARY_COLLISIONS);
+}
+
+export function blankListCollisions(text: string, exemptions: readonly string[]): string {
   return text.replace(/\b[a-z]+\b/gi, (word) =>
-    DICTIONARY_COLLISIONS.includes(word.toLowerCase()) ? " ".repeat(word.length) : word,
+    exemptions.includes(word.toLowerCase()) ? " ".repeat(word.length) : word,
   );
 }
 
@@ -35,19 +46,21 @@ export function sourceAttributionInput(root: string, file: string, text: string)
     const { raw, words } = verifiedExtraWordlist(root, spec);
     if (file === spec.file) {
       if (text !== raw) throw new Error("Wordlist attribution input differs from authenticated bytes");
-      return text.replace(/^(?:[1-6]{4}\t)?[a-z-]+$/gm, blankDictionaryCollisions);
+      return text.replace(/^(?:[1-6]{4}\t)?[a-z-]+$/gm, (line) => blankListCollisions(line, spec.dictionaryExemptions));
     }
     checkWordlist(root);
-    return text.replace(JSON.stringify(words.join(" ")), blankDictionaryCollisions);
+    return text.replace(JSON.stringify(words.join(" ")), (line) =>
+      blankListCollisions(line, spec.dictionaryExemptions),
+    );
   }
   if (file === WORDLIST_PATH) {
     const { raw } = verifiedWordlist(root);
     if (text !== raw) throw new Error("Wordlist attribution input differs from authenticated bytes");
-    return text.replace(/^[1-6]{5}\t[a-z-]+$/gm, blankDictionaryCollisions);
+    return text.replace(/^[1-6]{5}\t[a-z-]+$/gm, (line) => blankListCollisions(line, WORDLIST.dictionaryExemptions));
   }
   if (file === WORDLIST_MODULE_PATH) {
     const literal = JSON.stringify(verifiedWordData(root));
-    return text.replace(literal, blankDictionaryCollisions);
+    return text.replace(literal, (value) => blankListCollisions(value, WORDLIST.dictionaryExemptions));
   }
   return text;
 }

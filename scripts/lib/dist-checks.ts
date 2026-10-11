@@ -1,4 +1,3 @@
-import { WORDLIST_SOURCES } from "../../src/core/wordlists.ts";
 // Checks on the build output for domain and host independence (decision 0005)
 // and for the in-page CSP (requirement H2). Pure functions so the tests can feed
 // them known-bad input; scripts/verify-dist.ts runs them on dist/.
@@ -13,9 +12,10 @@ import { join } from "node:path";
 import { transform } from "lightningcss";
 import { parseSync, Visitor } from "vite";
 import { metaCsp } from "../../security/headers.ts";
+import { WORDLIST_SOURCES } from "../../src/core/wordlists.ts";
 import { scanText } from "./attribution-scan.ts";
 import { findCssResources } from "./style-checks.ts";
-import { blankDictionaryCollisions, verifiedWordDataSets } from "./wordlist-attribution.ts";
+import { blankListCollisions, dictionaryExemptions, verifiedWordDataSets } from "./wordlist-attribution.ts";
 
 /**
  * Top-level domains from IANA's root zone list, a committed snapshot of
@@ -462,6 +462,8 @@ export function checkSvg(file: string, svg: string): Finding[] {
  * configuration carries it) and nowhere else.
  */
 export function checkJs(file: string, source: string, allowed: readonly string[] = []): Finding[] {
+  const creditUrls = Object.values(WORDLIST_SOURCES).flatMap((source) => [source.url, source.licenseUrl]);
+  allowed = allowed.filter((url) => !creditUrls.includes(url as (typeof creditUrls)[number]));
   const findings: Finding[] = [];
   const linkSpans: Array<{ start: number; end: number }> = [];
   const { program, comments, errors } = parseSync(file, source, { sourceType: "module" });
@@ -469,7 +471,7 @@ export function checkJs(file: string, source: string, allowed: readonly string[]
 
   const texts: string[] = comments.map((c) => c.value);
   const wordData = verifiedWordDataSets(join(import.meta.dirname, "../.."));
-  const dataSpans: Array<{ start: number; end: number }> = [];
+  const dataSpans: Array<{ start: number; end: number; exemptions: readonly string[] }> = [];
   const exemptQuasis = new Set<number>();
   const linkQuasis = new Set<number>();
   new Visitor({
@@ -490,7 +492,7 @@ export function checkJs(file: string, source: string, allowed: readonly string[]
         typeof quasi?.value.cooked === "string" &&
         wordData.includes(quasi.value.cooked)
       ) {
-        dataSpans.push({ start: node.start, end: node.end });
+        dataSpans.push({ start: node.start, end: node.end, exemptions: dictionaryExemptions(quasi.value.cooked) });
         exemptQuasis.add(quasi.start);
       }
     },
@@ -508,8 +510,8 @@ export function checkJs(file: string, source: string, allowed: readonly string[]
     Literal(node) {
       if (typeof node.value === "string") {
         if (wordData.includes(node.value)) {
-          dataSpans.push({ start: node.start, end: node.end });
-          texts.push(blankDictionaryCollisions(node.value));
+          dataSpans.push({ start: node.start, end: node.end, exemptions: dictionaryExemptions(node.value) });
+          texts.push(blankListCollisions(node.value, dictionaryExemptions(node.value)));
         } else if (allowed.includes(node.value)) {
           linkSpans.push({ start: node.start, end: node.end });
         } else texts.push(node.value);
@@ -519,8 +521,9 @@ export function checkJs(file: string, source: string, allowed: readonly string[]
     TemplateElement(node) {
       if (linkQuasis.has(node.start)) return;
       if (exemptQuasis.has(node.start)) {
-        texts.push(blankDictionaryCollisions(node.value.raw));
-        if (typeof node.value.cooked === "string") texts.push(blankDictionaryCollisions(node.value.cooked));
+        texts.push(blankListCollisions(node.value.raw, dictionaryExemptions(node.value.cooked ?? node.value.raw)));
+        if (typeof node.value.cooked === "string")
+          texts.push(blankListCollisions(node.value.cooked, dictionaryExemptions(node.value.cooked)));
         return;
       }
       texts.push(node.value.raw);
@@ -565,10 +568,10 @@ export function checkJs(file: string, source: string, allowed: readonly string[]
   // Only explicit collision words inside verified word-data literals are blanked.
   // All other data, comments, identifiers and decoded strings remain scanned.
   let attributionSource = source;
-  for (const { start, end } of dataSpans.sort((a, b) => b.start - a.start)) {
+  for (const { start, end, exemptions } of dataSpans.sort((a, b) => b.start - a.start)) {
     attributionSource =
       attributionSource.slice(0, start) +
-      blankDictionaryCollisions(source.slice(start, end)) +
+      blankListCollisions(source.slice(start, end), exemptions) +
       attributionSource.slice(end);
   }
   for (const credit of [

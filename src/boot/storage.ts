@@ -39,6 +39,7 @@ export interface LimitsConfig {
     readonly characters: { readonly simple: string };
   };
   readonly passphrase: {
+    readonly separator: { readonly numberDigits: { readonly min: number; readonly max: number } };
     readonly words: { readonly min: number; readonly max: number };
     readonly wordLists: { readonly offered: ReadonlyArray<{ readonly id: string }> };
   };
@@ -52,6 +53,7 @@ export function storedLimits(config: LimitsConfig): StoredLimits {
     styles: config.style.offered.map((style) => style.id),
     length: { min: config.password.length.min, max: config.password.length.max },
     words: { min: config.passphrase.words.min, max: config.passphrase.words.max },
+    digits: [config.passphrase.separator.numberDigits.min, config.passphrase.separator.numberDigits.max],
     wordLists: config.passphrase.wordLists.offered.map(({ id }) => {
       if (!isWordListId(id)) throw new Error("Unknown word list");
       const list = WORD_LISTS[id];
