@@ -925,17 +925,21 @@ select {
   gap: 12px 32px;
   color: var(--text-2);
   font-size: 13px;
+  container-type: inline-size;
 }
 .foot-text {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  flex: 1 1 420px;
+  /* Give spare width to the caption on a shared row. On a wrapped row,
+     metadata can fill the footer so its list has the same left edge. */
+  flex: 1000000 1 420px;
   min-width: 0;
 }
 .foot-meta {
   display: grid;
-  grid-template-columns: repeat(5, auto);
+  grid-template-columns: repeat(4, max-content) minmax(max-content, 1fr);
+  flex: 1 1 max-content;
   align-items: center;
   gap: 8px;
   font-family: var(--mono);
@@ -945,18 +949,26 @@ select {
 .wordlist-credits {
   display: contents;
 }
+.wordlist-credits::details-content {
+  grid-column: 1 / -1;
+  contain: inline-size;
+}
 .wordlist-credits summary {
+  justify-self: start;
   cursor: pointer;
   min-height: 24px;
   border-radius: var(--radius-sm);
 }
 .wordlist-credits ul {
-  grid-column: 1 / -1;
-  width: 0;
-  min-width: 100%;
+  position: relative;
+  width: 100cqw;
+  left: calc(100% - 100cqw);
+  min-width: 0;
+  margin-top: 12px;
   padding-left: 20px;
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: normal;
   font-family: var(--sans);
   letter-spacing: normal;
 }
