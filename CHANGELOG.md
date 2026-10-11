@@ -5,6 +5,19 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-10-11
+
+### Fixed
+
+- At default settings the password and passphrase result boxes are the same height, so the two cards line up when they sit side by side from 901px wide.
+- Open Credits entries are right-aligned under the toggle, and their separators and word counts no longer wrap awkwardly on phones.
+- Site configuration checks now validate passphrase strength at default settings for every offered word list, requiring at least 80 bits and the configured Strong threshold.
+
+### Changed
+
+- Tighter spacing between the result box and the strength meter, and between the crack-time line and Other attack scenarios.
+- Strength warnings now appear below the quantum line, in space both cards reserve, and settings notices appear below the settings. This reduces how far the controls move when settings change; very long results can still grow the result box.
+
 ## [1.4.0] - 2026-10-11
 
 ### Added
