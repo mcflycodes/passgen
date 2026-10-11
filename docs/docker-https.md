@@ -52,12 +52,13 @@ the headers, for example with `curl --include https://passgen.example.com/`.
 
 Tested in CI: use the [`caddy-https` recipe](../deploy/compose/caddy-https/compose.yaml).
 Caddy obtains and renews certificates by itself and redirects HTTP to HTTPS.
-Its generated [Caddyfile](../deploy/compose/caddy-https/caddy/Caddyfile) is
-essentially:
+Its generated [Caddyfile](../deploy/compose/caddy-https/caddy/Caddyfile) proxies
+to the `passgen` service on port 8080 and is otherwise the same as this version
+for a Caddy running on the host in front of the `localhost` recipe:
 
 ```caddyfile
 {$PASSGEN_DOMAIN} {
-	reverse_proxy passgen:8080
+	reverse_proxy 127.0.0.1:8080
 	handle_errors {
 		import /etc/caddy/passgen-headers.caddy
 		header -Server
@@ -86,8 +87,8 @@ with a DNS provider plugin and credentials, which needs a custom Caddy build.
 Keep the `caddy_data` volume: it holds the certificates and their private keys.
 
 To use Caddy you already run on the host instead, publish PassGen with the
-`localhost` recipe and use the same site block with `reverse_proxy 127.0.0.1:8080`
-and your own path to the generated `passgen-headers.caddy`.
+`localhost` recipe and use the site blocks above with your own path to the
+generated `passgen-headers.caddy`.
 
 ## Traefik with Let's Encrypt
 
@@ -110,6 +111,8 @@ services:
       - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?set an ACME contact email}
       - --certificatesresolvers.le.acme.storage=/acme/acme.json
       - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+    environment:
+      PASSGEN_HOST: passgen
     ports:
       - "80:80"
       - "443:443"
@@ -135,8 +138,12 @@ http:
     passgen:
       loadBalancer:
         servers:
-          - url: http://passgen:8080
+          - url: 'http://{{ env "PASSGEN_HOST" }}:8080'
 ```
+
+Traefik fills in `PASSGEN_HOST` when it reads the file, so the same route works
+for Traefik running on the host against the `localhost` recipe with
+`PASSGEN_HOST=127.0.0.1`.
 
 Create `traefik-acme` readable only by its owner; it holds certificate keys.
 Attach no `headers` middleware with security headers, CSP or HSTS settings to
@@ -155,8 +162,8 @@ security effect; HSTS only counts over HTTPS.
 
 Not CI-tested. nginx terminates TLS, Certbot obtains and renews certificates
 with the webroot method, and PassGen sits on the internal network (or on
-`127.0.0.1:8080` with the `localhost` recipe if nginx runs on the host; use that
-address in `proxy_pass`).
+`127.0.0.1:8080` with the `localhost` recipe if nginx runs on the host; set
+`$passgen_host` to `127.0.0.1` and drop the `resolver` line).
 
 First issue a certificate with only the port 80 server below enabled:
 
@@ -186,8 +193,10 @@ server {
     server_name passgen.example.com;
     ssl_certificate /etc/letsencrypt/live/passgen.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/passgen.example.com/privkey.pem;
+    resolver 127.0.0.11 valid=10s;
     location / {
-        proxy_pass http://passgen:8080;
+        set $passgen_host passgen;
+        proxy_pass http://$passgen_host:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -206,6 +215,10 @@ The proxying `location /` has no `add_header`, so PassGen's headers pass through
 as they are. Make sure no `add_header`, `proxy_hide_header` or headers-more rule
 for those names is inherited from the `http` or `server` level. Keep
 `proxy_intercept_errors off` so PassGen's own 404 and 405 are not replaced.
+Proxying through a variable makes nginx look the name up with Docker's DNS
+server at `127.0.0.11` while running, so it finds PassGen again after the
+container is recreated with a new address instead of answering 502 until a
+reload.
 
 Renew with a systemd timer or cron job running `certbot renew` and reloading
 nginx after a successful renewal (`--deploy-hook "systemctl reload nginx"` on a
@@ -236,7 +249,8 @@ secrets:
 `--token-file` needs cloudflared 2025.4.0 or later. Keep the token file out of
 version control, readable by the connector's non-root user, and rotate the token
 if it leaks. In the Cloudflare dashboard, create a remotely managed tunnel and
-route `passgen.example.com` to `http://passgen:8080`. Turn on Always Use HTTPS
+add a public hostname `passgen.example.com` with service type HTTP, pointing at
+the `passgen` service on port 8080. Turn on Always Use HTTPS
 for the hostname so Cloudflare redirects HTTP.
 
 Cloudflare must not change PassGen's headers or bodies: leave zone HSTS off

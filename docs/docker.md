@@ -113,14 +113,15 @@ folders until they are labeled for container use, for example with
 ## Pin by digest
 
 The image has three tags per release: `X.Y.Z`, `X.Y` and `latest`. `X.Y.Z` is
-never replaced by project policy, but any tag is only a name. Deploy by digest,
-keeping the version in front as a label for people:
+never replaced by project policy, but any tag is only a name. Deploy by digest:
 
 ```text
-ghcr.io/mcflycodes/passgen:X.Y.Z@sha256:<index-digest>
+ghcr.io/mcflycodes/passgen@sha256:<index-digest>
 ```
 
-When a reference has both, Docker pulls the digest and ignores the tag. Look up
+The recipes' `example.env` files also put the `X.Y.Z` tag after the image name,
+before the `@`, as a label for people. When a reference has both, Docker pulls
+the digest and ignores the tag. Look up
 the index digest, the top-level `Digest` line, which covers both architectures:
 
 ```sh
@@ -129,9 +130,9 @@ docker buildx imagetools inspect ghcr.io/mcflycodes/passgen:X.Y.Z
 
 Verify that digest before putting it in `.env`. The official Caddy and httpd
 images in the recipes are pinned the same way. They come from AWS's public copy of
-Docker's official images, which avoids Docker Hub's anonymous pull limit; Docker
-Hub serves the same digest under `caddy:2.11.7` and `httpd:2.4.69`, which you can
-confirm with the same `imagetools inspect` command.
+Docker's official images, which avoids Docker Hub's anonymous pull limit. Docker
+Hub serves the same digests under the same version tags, which you can confirm
+with the same `imagetools inspect` command.
 
 ## Verify the image
 
@@ -167,8 +168,8 @@ recipe's `passgen` folder so it also checks the complete file set.
 3. Edit `.env`, keeping the previous line as a comment for rollback:
 
    ```sh
-   # Previous: PASSGEN_IMAGE=ghcr.io/mcflycodes/passgen:X.Y.Z@sha256:<previous-digest>
-   PASSGEN_IMAGE=ghcr.io/mcflycodes/passgen:X.Y.Z@sha256:<new-digest>
+   # Previous: PASSGEN_IMAGE=ghcr.io/mcflycodes/passgen@sha256:<previous-digest>
+   PASSGEN_IMAGE=ghcr.io/mcflycodes/passgen@sha256:<new-digest>
    ```
 
 4. Apply it and check the site:
