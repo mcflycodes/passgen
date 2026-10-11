@@ -75,6 +75,22 @@ mv -T ./passgen ./passgen-previous &&
 mv -T ./passgen-next ./passgen
 ```
 
+### Run with Docker
+
+The official image serves PassGen over plain HTTP on port 8080; put HTTPS in
+front of it. The recommended Compose recipe runs it behind Caddy, which gets the
+certificate:
+
+```sh
+git clone --depth 1 --branch vX.Y.Z https://github.com/mcflycodes/passgen.git
+cd passgen/deploy/compose/caddy-https
+cp example.env .env   # set the verified image digest and your hostname
+docker compose up -d
+```
+
+Other recipes, pinning and verifying the image, updates and HTTPS options: see
+[Running PassGen with Docker](docs/docker.md).
+
 ### Install with an AI agent
 
 > Fetch and follow the instructions at https://raw.githubusercontent.com/mcflycodes/passgen/main/agent-setup/prompt.md to set up PassGen for me.
@@ -103,7 +119,7 @@ Other commands:
 | `pnpm build` | Production build into `dist/` |
 | `pnpm screenshots` | Build and capture the README images in `docs/screenshots/` |
 | `pnpm serve` | Serve `dist/` on `http://127.0.0.1:4173/` with the reference security headers (a local test server, not for deployment) |
-| `pnpm headers:gen` | Regenerate `deploy/examples/` after changing `security/headers.ts` |
+| `pnpm headers:gen` | Regenerate `deploy/examples/`, `deploy/container/` and the `deploy/compose/` config folders after changing `security/headers.ts` |
 | `pnpm format` | Apply formatting and safe lint fixes |
 
 ## Gates

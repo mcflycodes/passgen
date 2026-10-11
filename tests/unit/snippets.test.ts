@@ -145,6 +145,7 @@ test("deployment docs have valid links, anchors, script paths and raw URLs", asy
     "docs/self-hosting.md",
     "docs/install-release.md",
     "docs/releasing.md",
+    ...DOCKER_DOCS,
     ...(await readdir(folder)).filter((file) => file.endsWith(".md")).map((file) => `agent-setup/${file}`),
   ];
   for (const file of files) {
@@ -163,6 +164,74 @@ test("deployment docs have valid links, anchors, script paths and raw URLs", asy
     );
   }
 });
+
+const DOCKER_DOCS = ["docs/docker.md", "docs/docker-https.md", "deploy/compose/README.md"];
+// Names the Docker guides may use: placeholders, loopback, the project's own
+// repository and registry, the official image registry and container-network
+// names. Links to reference sites are exempt; anything else is a finding.
+const DOCKER_DOC_NAMES: [RegExp, string][] = [
+  [/\]\((?:https?:)?\/\/[^)\s]+\)/g, "]"],
+  [/https:\/\/github\.com\/mcflycodes\/passgen[\w./-]*/g, "project-url"],
+  [/(?:oci:\/\/)?ghcr\.io\/mcflycodes\/passgen/g, "project-image"],
+  [/public\.ecr\.aws\/docker\/library\/(?:caddy|httpd)/g, "official-image"],
+  [/https?:\/\/passgen\.example\.com[^\s`'"]*/g, "placeholder-url"],
+  [/\bpassgen\.example\.com\b/g, "placeholder-host"],
+  [/(?:http:\/\/)?127\.0\.0\.1(?![\d.])/g, "loopback"],
+  [/\bresolver 127\.0\.0\.11\b/g, "resolver docker-dns"],
+  [/`127\.0\.0\.11`/g, "docker-dns"],
+  [/http:\/\/\{\{ env "PASSGEN_HOST" \}\}:8080/g, "traefik-upstream"],
+  [/http:\/\/\$passgen_host:8080/g, "nginx-upstream"],
+  [/`\.localhost`/g, "loopback-name"],
+  [/http:\/\/\{\$PASSGEN_DOMAIN\}|https:\/\/\{host\}\{uri\}/g, "caddy-placeholder"],
+  [/`https?:\/\/`/g, "scheme"],
+  [/`localhost\/?`/g, "loopback-recipe"],
+  [/docker login ghcr\.io/g, "registry-login"],
+  [/listen \[::\]:(?=80;|443 ssl;)/g, "listen "],
+  [/--(?:entrypoints|providers|certificatesresolvers)\.[\w.]+/g, "--traefik-option"],
+];
+
+function dockerDocFindings(file: string, content: string) {
+  let text = checkDocReferences(file, content);
+  for (const [pattern, replacement] of DOCKER_DOC_NAMES) text = text.replace(pattern, replacement);
+  text = text
+    .replace(/(?:[\w-]+\/)+[\w.-]+/g, (path) => (existsSync(join(ROOT, path)) ? "source-file" : path))
+    .replace(/passgen(?:-X\.Y\.Z)?\.zip(?:\.sha256)?/g, "release-asset");
+  return findHostnames(file, text, false);
+}
+
+for (const file of DOCKER_DOCS) {
+  test(`${file} names only placeholder hosts and the project's own registries`, async () => {
+    assert.deepEqual(dockerDocFindings(file, await readFile(join(ROOT, file), "utf8")), []);
+  });
+}
+
+test("Docker guide scan rejects a real-looking hostname and a bare published port", async () => {
+  const guide = await readFile(join(ROOT, "docs/docker.md"), "utf8");
+  assert.notDeepEqual(
+    dockerDocFindings(
+      "docs/docker.md",
+      `${guide}
+Open https://passgen.decoded.dev/.`,
+    ),
+    [],
+  );
+  assert.notDeepEqual(
+    dockerDocFindings(
+      "docs/docker.md",
+      `${guide}
+Proxy to 10.0.0.5:8080.`,
+    ),
+    [],
+  );
+});
+
+for (const file of DOCKER_DOCS) {
+  test(`${file} never tells readers to publish a bare 8080:8080`, async () => {
+    const content = await readFile(join(ROOT, file), "utf8");
+    for (const block of [...content.matchAll(/```\w*\n([\s\S]*?)```/g)].map((match) => match[1] ?? ""))
+      assert.doesNotMatch(block, /(^|[\s"'[-])(?:0\.0\.0\.0:)?8080:8080\b/m);
+  });
+}
 
 const readme = readFileSync(join(ROOT, "README.md"), "utf8");
 for (const [label, content, expected] of [
@@ -201,7 +270,13 @@ for (const [label, content, expected] of [
   });
 }
 
-const TIMESTAMP_DOCS = ["README.md", "docs/self-hosting.md", "docs/install-release.md", "agent-setup/prompt.md"];
+const TIMESTAMP_DOCS = [
+  "README.md",
+  "docs/self-hosting.md",
+  "docs/install-release.md",
+  "docs/docker.md",
+  "agent-setup/prompt.md",
+];
 
 function checkTimestampCommands(file: string, content: string): void {
   const commands = [...content.matchAll(/\bfind\b[^\n`]*-exec\s+touch\b[^\n`]*/g)];

@@ -158,6 +158,27 @@ jobs:
           diff <(sed 's/^[0-9a-f]\{64\}  //' release/SHA256SUMS | LC_ALL=C sort) \
             <(cd dist && find . -type f | sed 's|^\./||' | LC_ALL=C sort)
           chmod -R u=rwX,go=rX dist deploy/container deploy/examples/nginx/passgen-headers.conf
+      - name: Refuse to replace a published version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          repository="${IMAGE#ghcr.io/}"
+          # X.Y.Z is immutable: only a definite 404 for the tag lets publishing continue.
+          # Any other status, a token failure or a transport failure stops the release.
+          token=$(printf 'user = "%s:%s"\n' "$GITHUB_ACTOR" "$GH_TOKEN" |
+            curl --fail --silent --show-error --config - "https://ghcr.io/token?scope=repository:$repository:pull" | jq -er .token)
+          status=$(printf 'header = "Authorization: Bearer %s"\n' "$token" |
+            curl --silent --show-error --config - --output /dev/null --write-out '%{http_code}' --head \
+              --header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json' \
+              "https://ghcr.io/v2/$repository/manifests/$RELEASE_VERSION") || status="transport failure"
+          if [ "$status" != 404 ]; then
+            echo "::error::$IMAGE:$RELEASE_VERSION lookup returned $status; published versions are never replaced"
+            exit 1
+          fi
+          echo "$IMAGE:$RELEASE_VERSION is not published yet"
       - name: Build once and push one multi-platform index under every tag
         id: push
         env:
@@ -167,18 +188,6 @@ jobs:
         run: |
           [[ "$RELEASE_VERSION" =~ ^([0-9]+)\.([0-9]+)\.[0-9]+$ ]]
           minor="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
-          repository="${IMAGE#ghcr.io/}"
-          # X.Y.Z is immutable: refuse to replace a version that is already published.
-          token=$(printf 'user = "%s:%s"\n' "$GITHUB_ACTOR" "$GH_TOKEN" |
-            curl --fail --silent --show-error --config - "https://ghcr.io/token?scope=repository:$repository:pull" | jq -er .token)
-          status=$(printf 'header = "Authorization: Bearer %s"\n' "$token" |
-            curl --silent --show-error --config - --output /dev/null --write-out '%{http_code}' --head \
-              --header 'Accept: application/vnd.oci.image.index.v1+json' \
-              "https://ghcr.io/v2/$repository/manifests/$RELEASE_VERSION")
-          if [ "$status" != 404 ]; then
-            echo "::error::$IMAGE:$RELEASE_VERSION lookup returned HTTP $status; published versions are never replaced"
-            exit 1
-          fi
           printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           epoch=$(git log -1 --format=%ct)
           docker buildx create --name passgen --driver docker-container --driver-opt "image=$BUILDKIT_IMAGE" >/dev/null

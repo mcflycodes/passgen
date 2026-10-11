@@ -13,6 +13,11 @@ already provided and ask only for what is missing:
 
 - Which server or host: Apache, nginx, Caddy, a static host/CDN such as Cloudflare
   Pages or Netlify, or something else? Which machine or hosting project?
+- Does the machine run Docker with Compose, and would you prefer the official
+  container image, behind Caddy or behind your existing proxy? If so, deploy it by
+  verified digest following the [Docker guide](../docs/docker.md) and
+  [HTTPS guide](../docs/docker-https.md) at the selected tag, in place of the
+  file-based install steps below; the same confirmation and safety rules apply.
 - What OS is it running? Do you have shell access, and sudo/root privileges?
 - What domain/hostname will serve PassGen, and what is the web root path?
 - Which user and group should own the files? The web server needs read access,

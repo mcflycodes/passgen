@@ -22,6 +22,7 @@ Plain TypeScript and Vite, no UI framework, no runtime dependencies.
 | `tests/e2e/` | Playwright and axe tests, run against the built files in `dist/`. |
 | `deploy/examples/` | Reference server configs, generated from `security/headers.ts`. Never edit by hand. |
 | `Dockerfile`, `deploy/container/` | Official container image and its nginx config, generated like the examples. Never edit `deploy/container/` by hand. |
+| `deploy/compose/` | Docker Compose recipes. Their `caddy/` and `httpd/` config folders are generated like the examples; never edit those by hand. |
 | `.github/workflows/` | CI. Every third-party action is pinned to a full commit SHA. |
 
 ## Gates

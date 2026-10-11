@@ -8,6 +8,12 @@ Versions follow Semantic Versioning.
 ### Added
 
 - An official container image: the release build served over plain HTTP on port 8080 by unprivileged nginx, for amd64 and arm64. Releases publish it to `ghcr.io/mcflycodes/passgen` as `X.Y.Z`, `X.Y` and `latest` from one build, with a signed build provenance attestation. It runs as UID/GID 101 with a read-only root filesystem, a small `/tmp` tmpfs and no capabilities, and sends all nine security headers on every response.
+- Docker Compose recipes in `deploy/compose/`: the image behind Caddy with automatic HTTPS (recommended), the image on `127.0.0.1:8080` for an existing proxy, and verified release files in the official Caddy or Apache httpd image. Every recipe is pinned by digest, hardened, and brought up and probed in CI on amd64 and arm64, including the headers on Caddy's own redirect and 502 responses.
+- `docs/docker.md` covers choosing a recipe, pinning and verifying the image by digest, updates and rollback, and the hardening settings. `docs/docker-https.md` covers HTTPS with Caddy, Traefik, nginx with Certbot, Cloudflare Tunnel and an existing Apache or nginx proxy.
+
+### Changed
+
+- The release image job's check that a version is not already published runs as its own step, accepts every manifest type, and is tested by running it against each registry answer: only a 404 lets publishing continue.
 
 ## [1.3.1] - 2026-10-10
 
