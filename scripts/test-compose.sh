@@ -24,6 +24,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Anonymous registry pulls are rate limited and shared between runners; retry with backoff.
+retry() {
+  local attempt
+  for attempt in 1 2 3 4 5; do
+    if "$@"; then return 0; fi
+    echo "Attempt $attempt failed: $*"
+    sleep $((attempt * 15))
+  done
+  echo "FAIL: $*"
+  return 1
+}
+
 # Each recipe runs from a copy with only its documented .env values and files added.
 start() {
   recipe=$1
@@ -38,7 +50,11 @@ start() {
   if [[ "$recipe" == *-files ]]; then cp -R dist "$work/$recipe/passgen"; fi
   chmod -R u=rwX,go=rX "$work/$recipe"
   compose config --quiet
-  compose up --detach --wait --wait-timeout 120
+  local pinned
+  for pinned in $(compose config --images); do
+    if [[ "$pinned" != "$image" ]]; then retry docker pull --quiet "$pinned" >/dev/null; fi
+  done
+  compose up --detach --wait --wait-timeout 120 --pull never
   echo "PASS $recipe: docker compose up --wait"
 }
 
@@ -86,7 +102,7 @@ not_exposed() {
 
 # The image is built exactly as the container job builds it, for this runner's platform only.
 chmod -R u=rwX,go=rX dist deploy/container deploy/examples/nginx/passgen-headers.conf
-docker build --quiet --tag "$image" . >/dev/null
+retry docker build --quiet --tag "$image" . >/dev/null
 
 start caddy-https
 caddy_ready caddy
@@ -122,7 +138,7 @@ for method in GET HEAD; do
     node scripts/check-compose.ts generated --response "$work/gateway" --status 502
   done
 done
-compose up --detach --wait --wait-timeout 120
+compose up --detach --wait --wait-timeout 120 --pull never
 curl --fail --silent --show-error --noproxy '*' --max-time 15 --cacert "$work/ca.pem" \
   --resolve "$domain:443:127.0.0.1" "https://$domain/" -o /dev/null
 echo "PASS PassGen serves through Caddy again after restarting"
