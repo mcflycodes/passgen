@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { DICTIONARY_COLLISIONS } from "./attribution-patterns.ts";
 
 export function parseWordlist(raw: string): { words: string[]; excluded: string[]; min: number; max: number } {
   const lines = raw.trimEnd().split("\n");
@@ -33,6 +34,11 @@ export function parseWordlist(raw: string): { words: string[]; excluded: string[
   return { words, excluded, min, max };
 }
 
+export const WORDLIST = {
+  id: "eff-large",
+  dictionaryExemptions: [DICTIONARY_COLLISIONS[0], DICTIONARY_COLLISIONS[2]],
+} as const;
+
 export const WORDLIST_SHA256 = "addd35536511597a02fa0a9ff1e5284677b8883b83e986e43f15a3db996b903e";
 export const WORDLIST_PATH = "vendor/eff_large_wordlist.txt";
 export const WORDLIST_MODULE_PATH = "src/core/wordlist.ts";
@@ -64,6 +70,7 @@ export function checkWordlist(root: string): void {
 export const EXTRA_WORDLISTS = [
   {
     id: "orchard-long",
+    dictionaryExemptions: [DICTIONARY_COLLISIONS[1], DICTIONARY_COLLISIONS[2]],
     file: "vendor/orchard-street-long.txt",
     module: "src/core/wordlist-orchard-long.ts",
     sha256: "21b00942246dc7f0ecf5321dc22bc4ce2326b51ea72ea55697d754601ca115d2",
@@ -76,6 +83,7 @@ export const EXTRA_WORDLISTS = [
   },
   {
     id: "orchard-medium",
+    dictionaryExemptions: [DICTIONARY_COLLISIONS[1]],
     file: "vendor/orchard-street-medium.txt",
     module: "src/core/wordlist-orchard-medium.ts",
     sha256: "c50d42781d5ac20eeed37f271df5a0fd3573de493812f319cd71dd4da9a8a38e",
@@ -88,6 +96,7 @@ export const EXTRA_WORDLISTS = [
   },
   {
     id: "eff-short1",
+    dictionaryExemptions: [],
     file: "vendor/eff_short_wordlist_1.txt",
     module: "src/core/wordlist-eff-short1.ts",
     sha256: "8f5ca830b8bffb6fe39c9736c024a00a6a6411adb3f83a9be8bfeeb6e067ae69",
@@ -100,6 +109,7 @@ export const EXTRA_WORDLISTS = [
   },
   {
     id: "eff-short2",
+    dictionaryExemptions: [DICTIONARY_COLLISIONS[3]],
     file: "vendor/eff_short_wordlist_2_0.txt",
     module: "src/core/wordlist-eff-short2.ts",
     sha256: "22b45c52e0bd0bbf03aa522240b111eb4c7c0c1d86c4e518e1be2a7eb2a625e4",

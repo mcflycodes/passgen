@@ -37,6 +37,10 @@ test("unique count matches brute-force balanced prefixes including round boundar
       for (const slots of [1, 2]) assert.equal(uniqueSymbolCount(n, gaps, slots), bruteSymbols(n, gaps, slots));
 });
 
+test("odd unique alphabet excludes the first slot across a round boundary", () => {
+  assert.equal(uniqueSymbolCount(3, 2, 2), 12n);
+});
+
 test("Random draws both slots independently and permits a repeated symbol", () => {
   const draw = (index: number) => topBits(index, 13);
   for (const second of [0, 1]) {
