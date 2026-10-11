@@ -183,10 +183,11 @@ export function createMeter(prefix: "pw" | "pp"): Meter {
       "Don't start with a symbol is skipped: these settings require only symbols.",
     ]);
   }
+  // Keep both cards aligned using the same wrapping-sized warning slot.
+  reserveText(warning, [
+    `This word-length range shrinks the pool to 88,888 words and provides less than ${config.meter.passphraseWarningBits} bits with these settings. Widen the range, add words or turn on number separators.`,
+  ]);
   if (prefix === "pp") {
-    reserveText(warning, [
-      `This word-length range shrinks the pool to 88,888 words and provides less than ${config.meter.passphraseWarningBits} bits with these settings. Widen the range, add words or turn on number separators.`,
-    ]);
     reserveText(byId("pp-unique-note", HTMLElement), [
       "All symbols are used before repeating; repeats are spread evenly.",
     ]);

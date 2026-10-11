@@ -70,7 +70,6 @@
               <button type="button" class="btn" id="pw-regen">Regenerate</button>
             </div>
           </div>
-          <p class="notice" id="pw-notice" role="status" hidden></p>
 
           <section class="meter" id="pw-meter" aria-labelledby="pw-meter-title" data-level="">
             <h3 class="sr-only" id="pw-meter-title">Password strength</h3>
@@ -82,13 +81,13 @@
               <span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span>
             </div>
             <p class="meter-headline" id="pw-headline"></p>
-            <p class="meter-warning" id="pw-meter-warning" hidden></p>
             <details class="meter-more">
               <summary>Other attack scenarios</summary>
               <div id="pw-scenarios"></div>
             </details>
             <p class="meter-quantum" id="pw-quantum"></p>
             <p class="meter-quantum" id="pw-future" hidden></p>
+            <p class="meter-warning" id="pw-meter-warning" hidden></p>
             <p class="sr-only" id="pw-meter-status" role="status" aria-live="polite" aria-atomic="true"></p>
           </section>
 
@@ -148,6 +147,7 @@
                 <label class="check"><input type="checkbox" id="pw-lookalikes" data-cfg-checked="password.excludeLookAlikes"><span class="box"></span><span class="check-text">No look-alike characters <code id="pw-lookalikes-chars"></code></span></label>
               </div>
             </fieldset>
+            <p class="notice" id="pw-notice" role="status" hidden></p>
           </div>
 
           <section class="more" id="pw-more" aria-labelledby="pw-more-title password-title" hidden>
@@ -171,7 +171,6 @@
             </div>
           </div>
           <p class="notice" id="pp-notice" role="status" hidden></p>
-          <p class="notice" id="pp-unique-note" role="status" hidden>All symbols are used before repeating; repeats are spread evenly.</p>
 
           <section class="meter" id="pp-meter" aria-labelledby="pp-meter-title" data-level="">
             <h3 class="sr-only" id="pp-meter-title">Passphrase strength</h3>
@@ -183,13 +182,13 @@
               <span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span>
             </div>
             <p class="meter-headline" id="pp-headline"></p>
-            <p class="meter-warning" id="pp-meter-warning" hidden></p>
             <details class="meter-more">
               <summary>Other attack scenarios</summary>
               <div id="pp-scenarios"></div>
             </details>
             <p class="meter-quantum" id="pp-quantum"></p>
             <p class="meter-quantum" id="pp-future" hidden></p>
+            <p class="meter-warning" id="pp-meter-warning" hidden></p>
             <p class="sr-only" id="pp-meter-status" role="status" aria-live="polite" aria-atomic="true"></p>
           </section>
 
@@ -252,6 +251,7 @@
                 <label class="check"><input type="checkbox" id="pp-lookalikes" data-cfg-checked="passphrase.separator.excludeLookAlikes"><span class="box"></span><span class="check-text">No look-alike characters <code data-cfg-text="passphrase.separator.lookAlikes"></code><span class="hint">Separator symbols only</span></span></label>
               </div>
             </fieldset>
+            <p class="notice" id="pp-unique-note" role="status" hidden>All symbols are used before repeating; repeats are spread evenly.</p>
           </div>
 
           <section class="more" id="pp-more" aria-labelledby="pp-more-title passphrase-title" hidden>
