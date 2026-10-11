@@ -1,0 +1,5 @@
+# The image needs only the built site and its generated server configuration.
+*
+!dist
+!deploy/container
+!deploy/examples/nginx/passgen-headers.conf
