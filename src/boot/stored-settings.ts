@@ -27,6 +27,7 @@ export interface StoredLimits {
   readonly length: { readonly min: number; readonly max: number };
   /** Passphrase word count bounds. */
   readonly words: { readonly min: number; readonly max: number };
+  readonly digits: readonly [number, number];
   /** Word length bounds of the list. */
   readonly wordLists: ReadonlyArray<{ readonly id: string; readonly min: number; readonly max: number }>;
   /** The Simple symbols, the only separators a passphrase may use (R14). */
@@ -191,7 +192,7 @@ function storedPassphrase(value: unknown, limits: StoredLimits): StoredSettings[
   const capitalize = p.capitalize;
   const numberDigits = p.numberDigits;
   const symbolPosition = p.symbolPosition;
-  if (!storedInteger(numberDigits, 1, 3)) return null;
+  if (!storedInteger(numberDigits, ...limits.digits)) return null;
   if (symbolPosition !== "both" && symbolPosition !== "before" && symbolPosition !== "after") return null;
   if (capitalize !== "off" && capitalize !== "random" && capitalize !== "every") return null;
   if (!storedInteger(words, limits.words.min, limits.words.max)) return null;

@@ -81,13 +81,14 @@ function generate(r: ReturnType<typeof rng>): unknown {
     dontStartWithSymbol: bool(),
     counts: { lowercase: count(), uppercase: count(), numbers: count(), symbols: count() },
   };
-  const minWord = int(required(limits.wordLists[0]).min, required(limits.wordLists[0]).max);
+  const wordList = r.pick(Object.keys(WORD_LISTS)) as keyof typeof WORD_LISTS;
+  const list = WORD_LISTS[wordList];
+  const minWord = int(list.min, list.max);
   const passphrase: Json = {
-    wordList: config.passphrase.wordLists.default,
+    wordList,
     words: int(limits.words.min, limits.words.max),
     minWordLength: minWord,
-    maxWordLength:
-      r.chance(0.9) && typeof minWord === "number" ? int(minWord, required(limits.wordLists[0]).max) : int(3, 9),
+    maxWordLength: r.chance(0.9) && typeof minWord === "number" ? int(minWord, list.max) : int(list.min, list.max),
     number: bool(),
     symbol: bool(),
     excludeLookAlikes: bool(),
@@ -119,10 +120,10 @@ describe("the shared stored-settings validator", () => {
   });
 
   /** The attributes the compiled boot script sets for a stored text. */
-  function boot(text: string | null): { theme?: string; style?: string } {
+  function boot(text: string | null, code = bootCode): { theme?: string; style?: string } {
     const dataset: Record<string, string> = {};
     const area = { getItem: (key: string) => (key === SETTINGS_STORAGE_KEY ? text : null) };
-    new Function("document", "localStorage", bootCode)({ documentElement: { dataset } }, area);
+    new Function("document", "localStorage", code)({ documentElement: { dataset } }, area);
     return dataset;
   }
 
@@ -143,8 +144,57 @@ describe("the shared stored-settings validator", () => {
         if (!isWordListId(id)) throw new Error("Unknown id");
         return { id, min: WORD_LISTS[id].min, max: WORD_LISTS[id].max };
       }),
+      digits: [config.passphrase.separator.numberDigits.min, config.passphrase.separator.numberDigits.max],
       separators: config.password.characters.simple,
     });
+  });
+
+  test("number-digit validation follows supplied config bounds", () => {
+    const copy = structuredClone(config);
+    copy.passphrase.separator.numberDigits.min = 2;
+    copy.passphrase.separator.numberDigits.max = 2;
+    const record = { version: SETTINGS_SCHEMA_VERSION, settings: defaultSettings(copy) };
+    assert.ok(readStoredSettings(record, storedLimits(copy)));
+    for (const digits of [1, 3]) {
+      record.settings.passphrase.numberDigits = digits;
+      assert.equal(readStoredSettings(record, storedLimits(copy)), null);
+    }
+  });
+
+  test("every list id is fuzzed, including a known unoffered id", async () => {
+    const copy = structuredClone(config);
+    copy.passphrase.wordLists.offered = copy.passphrase.wordLists.offered.filter((entry) => entry.id !== "eff-short2");
+    const offeredLimits = storedLimits(copy);
+    const compiled = await compileBootScript(ROOT, { ...bootDefaults, limits: offeredLimits });
+    const r = rng(0x12345678);
+    const seen = new Set<string>();
+    for (let i = 0; i < 8000; i++) {
+      const record = generate(r) as { settings?: { passphrase?: { wordList?: string } } };
+      const id = record?.settings?.passphrase?.wordList;
+      if (typeof id !== "string") continue;
+      seen.add(id);
+      const shared = readStoredSettings(record, offeredLimits);
+      assert.deepEqual(validateStoredSettings(record, copy), shared);
+      assert.deepEqual(boot(JSON.stringify(record), compiled.code), {
+        theme: shared?.theme ?? copy.theme,
+        style: shared?.style ?? copy.style.default,
+      });
+      if (id === "eff-short2") assert.equal(shared, null);
+    }
+    assert.deepEqual([...seen].sort(), Object.keys(WORD_LISTS).sort());
+    for (const id of Object.keys(WORD_LISTS)) {
+      const record = { version: SETTINGS_SCHEMA_VERSION, settings: defaultSettings(copy) };
+      const settings = {
+        ...record.settings,
+        passphrase: {
+          ...record.settings.passphrase,
+          wordList: id as keyof typeof WORD_LISTS,
+          minWordLength: 3,
+          maxWordLength: 5,
+        },
+      };
+      assert.equal(readStoredSettings({ ...record, settings }, offeredLimits) !== null, id !== "eff-short2");
+    }
   });
 
   test("every word-length range within the limits has words, so the pool check cannot refuse an accepted record", () => {

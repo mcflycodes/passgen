@@ -3,7 +3,7 @@ import { config, wordListCredits } from "../../src/config/validate.ts";
 import { expect, test } from "./fixtures.ts";
 import { chooseStyle, chooseTheme, openPage, STYLES } from "./helpers.ts";
 
-for (const width of [1440, 390]) {
+for (const width of [1440, 768, 390]) {
   for (const style of STYLES) {
     for (const theme of ["light", "dark"] as const) {
       test(`Credits readable panel: ${style}/${theme}/${width}`, async ({ page }) => {
@@ -46,7 +46,6 @@ for (const width of [1440, 390]) {
         const panel = await details.locator("ul").boundingBox();
         const footer = await page.locator(".foot").boundingBox();
         if (!panel || !footer) throw new Error("Missing Credits panel or footer");
-        console.log(`${style}/${theme}/${phone ? 390 : 1440}: panel=${panel.width}, footer=${footer.width}`);
         expect(panel.width).toBeGreaterThanOrEqual(footer.width * 0.8);
         expect(panel.x).toBeGreaterThanOrEqual(footer.x - 1);
         expect(panel.x + panel.width).toBeLessThanOrEqual(footer.x + footer.width + 1);

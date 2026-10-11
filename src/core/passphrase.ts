@@ -140,6 +140,7 @@ export function generatePassphrase(
   let result = "";
   for (let index = 0; index < options.words; index++) {
     if (index) {
+      let first = "";
       const nextSymbol = () => {
         if (!options.symbol) return "";
         if (separatorSymbol === "random") return pick(available, source);
@@ -153,7 +154,6 @@ export function generatePassphrase(
         }
         return separatorSymbol;
       };
-      let first = "";
       if (!options.number || options.symbolPosition !== "after") {
         first = nextSymbol();
         result += first;

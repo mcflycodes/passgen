@@ -236,9 +236,6 @@ export function validateConfig(value: unknown): asserts value is Config {
   }
   if (!isWordListId(wl.default) || !listIds.has(wl.default))
     fail("passphrase.wordLists.default", "must be an offered list");
-  const w = wl.offered.find(
-    (offered) => offered.id === wl.default,
-  ) as Config["passphrase"]["wordLists"]["offered"][number];
   // Letters and digits are fixed classes. The two symbol classes may hold any
   // printable ASCII punctuation (never space, never non-ASCII) under R7, with
   // the injection and parsing hazards of R7 confined to Complex.
@@ -332,10 +329,6 @@ export function validateConfig(value: unknown): asserts value is Config {
     fail("passphrase.separator.symbolPosition", "requires both, before or after");
   if (!["off", "random", "every"].includes(c.passphrase.capitalize))
     fail("passphrase.capitalize", "requires off, random or every");
-  const filteredCount = WORD_LISTS[wl.default].words.filter(
-    (word) => word.length >= w.defaultMin && word.length <= w.defaultMax,
-  ).length;
-  if (!filteredCount) fail("passphrase.wordLists", "default filter is empty");
   const gaps = c.passphrase.words.default - 1;
   let symbolBits = 0;
   if (s.symbol && ["random", "random-unique"].includes(s.defaultSymbol)) {
@@ -345,13 +338,20 @@ export function validateConfig(value: unknown): asserts value is Config {
         ? Math.log2(Number(uniqueSymbolCount(symbolCount, gaps, slots)))
         : gaps * slots * Math.log2(symbolCount);
   }
-  const bits =
-    symbolBits +
-    c.passphrase.words.default * Math.log2(filteredCount) +
-    (s.number ? (c.passphrase.words.default - 1) * s.numberDigits.default * Math.log2(10) : 0) +
-    (c.passphrase.capitalize === "random" ? c.passphrase.words.default : 0);
-  if (bits < strongBits)
-    fail("passphrase.words.default", "defaults must provide at least 80 bits and meet the configured Strong threshold");
+  for (const offered of wl.offered) {
+    if (!isWordListId(offered.id)) fail("passphrase.wordLists", "unknown list id");
+    const filteredCount = WORD_LISTS[offered.id].words.filter(
+      (word) => word.length >= offered.defaultMin && word.length <= offered.defaultMax,
+    ).length;
+    if (!filteredCount) fail("passphrase.wordLists", "default filter is empty");
+    const bits =
+      symbolBits +
+      c.passphrase.words.default * Math.log2(filteredCount) +
+      (s.number ? (c.passphrase.words.default - 1) * s.numberDigits.default * Math.log2(10) : 0) +
+      (c.passphrase.capitalize === "random" ? c.passphrase.words.default : 0);
+    if (bits < strongBits)
+      fail("passphrase.wordLists", "defaults must provide at least 80 bits and meet the configured Strong threshold");
+  }
   const fast = c.meter.attacks.fast;
   if (fast.hash !== "NTLM" || fast.gpus !== 8 || fast.guessesPerSecond < 2.4e12 || fast.averageKeyspaceFraction !== 0.5)
     fail("meter.attacks.fast", "requires NTLM, 8 GPUs, at least 2.4e12 guesses/second and half the keyspace");
