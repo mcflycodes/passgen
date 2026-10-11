@@ -9,7 +9,7 @@ Versions follow Semantic Versioning.
 
 ### Added
 
-- This release first publishes the official container image at `ghcr.io/mcflycodes/passgen`. It serves the release files with nginx over HTTP on port 8080, runs as a non-root user, and supports a read-only root filesystem. Each release publishes `X.Y.Z`, `X.Y` and `latest` tags for amd64 and arm64, with a signed build provenance attestation for the image digest.
+- This release first publishes the official container image at `ghcr.io/mcflycodes/passgen`. It serves the release files with nginx over HTTP on port 8080, runs as a non-root user, and supports a read-only root filesystem. Each release publishes `X.Y.Z`, `X.Y` and `latest` tags for amd64 and arm64, with a signed build provenance attestation for the image digest. It sends all nine security headers on every response and does not do HTTPS itself; put it behind an HTTPS reverse proxy.
 - Docker Compose recipes in `deploy/compose/`: `caddy-https`, the recommended default with automatic HTTPS; `localhost`, which exposes the image only on `127.0.0.1:8080` for an existing proxy; and `caddy-files` and `httpd-files`, which serve verified release files with the official Caddy or Apache httpd image. The recipes use digest-pinned images and read-only root filesystems.
 - A Docker guide covers choosing a recipe, verifying and pinning images by digest, updates, rollback and container security settings. A companion HTTPS guide covers Caddy, Traefik, nginx with Certbot, Cloudflare Tunnel and existing Apache or nginx proxies.
 
