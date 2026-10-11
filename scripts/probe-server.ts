@@ -13,6 +13,7 @@ try {
       redirect: { type: "boolean" },
       "local-http": { type: "boolean" },
       conditional: { type: "boolean" },
+      "conditional-date": { type: "boolean" },
     },
   });
   if (!values.url || !values.manifest) throw new Error("--url and --manifest required");
@@ -24,6 +25,7 @@ try {
     ...(values.redirect ? { redirect: true } : {}),
     ...(values["local-http"] ? { localHttp: true } : {}),
     ...(values.conditional ? { conditional: true } : {}),
+    ...(values["conditional-date"] ? { conditionalDate: true } : {}),
   });
 } catch (error) {
   console.error(`FAIL: ${(error as Error).message}`);

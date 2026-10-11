@@ -1,0 +1,54 @@
+# PassGen behind Caddy, which obtains and renews the HTTPS certificate.
+# Copy example.env to .env, fill it in, then run: docker compose up -d
+# Guide: docs/docker.md in the PassGen repository.
+services:
+  passgen:
+    # A verified reference: ghcr.io/mcflycodes/passgen:X.Y.Z@sha256:<index digest>.
+    image: ${PASSGEN_IMAGE:?Set PASSGEN_IMAGE to ghcr.io/mcflycodes/passgen:X.Y.Z@sha256:<digest>; see docs/docker.md}
+    user: "101:101"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # No ports: only Caddy reaches PassGen, over the internal network.
+    networks: [backend]
+    restart: unless-stopped
+
+  caddy:
+    # Official Caddy image; the same digest is published on Docker Hub as caddy:2.11.7.
+    image: public.ecr.aws/docker/library/caddy:2.11.7@sha256:f2a1290d0463aad60660d4ec134943f183ee2a5f6c3eb7bf32dd984f2f020772
+    depends_on: [passgen]
+    environment:
+      PASSGEN_DOMAIN: ${PASSGEN_DOMAIN:?Set PASSGEN_DOMAIN to the host name that serves only PassGen}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - type: bind
+        source: ./caddy
+        target: /etc/caddy
+        read_only: true
+        bind:
+          create_host_path: false
+      - caddy_data:/data
+      - caddy_config:/config
+    # The official image runs as root; it keeps only the capability to bind 80 and 443.
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    networks: [backend, edge]
+    restart: unless-stopped
+
+networks:
+  backend:
+    internal: true
+  edge: {}
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}

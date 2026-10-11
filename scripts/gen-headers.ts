@@ -1,9 +1,10 @@
-// Writes deploy/examples/ and deploy/container/ from security/headers.ts.
+// Writes deploy/examples/, deploy/container/ and the Compose recipes' configuration
+// folders under deploy/compose/ from security/headers.ts.
 // `--check` writes nothing and fails if the committed files differ from the definition.
 
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
-import { renderContainerConfigs } from "./lib/site-configs.ts";
+import { renderComposeConfigs, renderContainerConfigs } from "./lib/site-configs.ts";
 import { renderSnippets } from "./lib/snippets.ts";
 
 const DEPLOY = join(import.meta.dirname, "..", "deploy");
@@ -14,10 +15,22 @@ async function listFiles(dir: string): Promise<string[]> {
   return entries.filter((e) => e.isFile()).map((e) => relative(dir, join(e.parentPath, e.name)).split("\\").join("/"));
 }
 
+const snippets = renderSnippets();
 const outputs: [string, Map<string, string>][] = [
-  ["examples", renderSnippets()],
+  ["examples", snippets],
   ["container", renderContainerConfigs()],
 ];
+// Each recipe's configuration folder is generated in full; its compose.yaml is not.
+for (const [file, content] of renderComposeConfigs(snippets)) {
+  const folder = `compose/${dirname(file)}`;
+  const name = file.slice(dirname(file).length + 1);
+  let output = outputs.find(([existing]) => existing === folder);
+  if (!output) {
+    output = [folder, new Map()];
+    outputs.push(output);
+  }
+  output[1].set(name, content);
+}
 const problems: string[] = [];
 let written = 0;
 
@@ -47,7 +60,5 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(
-  check
-    ? "deploy/examples/ and deploy/container/ match security/headers.ts."
-    : `Wrote ${written} files to deploy/examples/ and deploy/container/.`,
+  check ? "Generated files under deploy/ match security/headers.ts." : `Wrote ${written} files under deploy/.`,
 );

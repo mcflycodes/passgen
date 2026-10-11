@@ -8,6 +8,9 @@ Use a trailing slash on subpath URLs so relative assets resolve correctly.
 Saved defaults belong to the browser's origin; changing domains resets them.
 Generated values are never saved.
 
+To run the official container image instead of copying files to a server, see
+[Running PassGen with Docker](docker.md).
+
 ## Before you start
 
 PassGen needs an origin that serves nothing else. A subpath is safe only if
