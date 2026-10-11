@@ -58,7 +58,7 @@ async function stationaryControls(page: Page) {
   await check();
 }
 
-for (const width of [1440, 1920]) {
+for (const width of [1440, 1920, 1100, 1024, 901]) {
   for (const style of STYLES) {
     for (const theme of ["light", "dark"] as const) {
       test(`Uniform card spacing: ${style}/${theme}/${width}`, async ({ page }) => {

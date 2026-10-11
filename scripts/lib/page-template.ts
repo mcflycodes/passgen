@@ -206,10 +206,11 @@ export function renderPage(html: string, config: PageConfig, build: BuildInfo): 
   out = marker(
     out,
     "word-list-credits",
+    // Separators stay with the preceding text and counts with their label.
     wordListCredits(config)
       .map(
         ({ id, name, count, source }) =>
-          `<li data-word-list="${id}">${escapeHtml(name)} — ${escapeHtml(source.author)} · <a data-wordlist-credit="license" href="${source.licenseUrl}" rel="noopener noreferrer">${source.license}</a> · <a data-wordlist-credit="source" href="${source.url}" rel="noopener noreferrer">Source</a> · ${count.toLocaleString("en-US")} usable words</li>`,
+          `<li data-word-list="${id}">${escapeHtml(name)}&nbsp;— ${escapeHtml(source.author)}&nbsp;· <span class="credit-keep"><a data-wordlist-credit="license" href="${source.licenseUrl}" rel="noopener noreferrer">${source.license}</a>&nbsp;·</span> <span class="credit-keep"><a data-wordlist-credit="source" href="${source.url}" rel="noopener noreferrer">Source</a>&nbsp;·</span> <span class="credit-keep">${count.toLocaleString("en-US")} usable words</span></li>`,
       )
       .join(""),
   );
