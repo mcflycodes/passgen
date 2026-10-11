@@ -157,7 +157,7 @@ jobs:
           (cd dist && sha256sum --check --strict --quiet ../release/SHA256SUMS)
           diff <(sed 's/^[0-9a-f]\{64\}  //' release/SHA256SUMS | LC_ALL=C sort) \
             <(cd dist && find . -type f | sed 's|^\./||' | LC_ALL=C sort)
-          chmod -R u=rwX,go=rX dist
+          chmod -R u=rwX,go=rX dist deploy/container deploy/examples/nginx/passgen-headers.conf
       - name: Build once and push one multi-platform index under every tag
         id: push
         env:

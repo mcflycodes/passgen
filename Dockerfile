@@ -34,11 +34,12 @@ LABEL maintainer="" \
 
 # The base image lets the nginx user write /etc/nginx; PassGen's configuration
 # lives in a root-owned directory instead, and the base's default site is unused.
+# Context files keep their modes (the build normalises them to u=rwX,go=rX).
+# --chmod is used only for the base's group-writable mime.types, once
+# /etc/passgen exists: on a COPY that creates directories it applies to them too.
+COPY --chown=0:0 deploy/container/ /etc/passgen/
+COPY --chown=0:0 deploy/examples/nginx/passgen-headers.conf /etc/passgen/passgen-headers.conf
 COPY --from=upstream --chown=0:0 --chmod=0644 /etc/nginx/mime.types /etc/passgen/mime.types
-# One file per COPY: --chmod on a directory destination would apply to the directory too.
-COPY --chown=0:0 --chmod=0644 deploy/container/nginx.conf /etc/passgen/nginx.conf
-COPY --chown=0:0 --chmod=0644 deploy/container/passgen-site.conf /etc/passgen/passgen-site.conf
-COPY --chown=0:0 --chmod=0644 deploy/examples/nginx/passgen-headers.conf /etc/passgen/passgen-headers.conf
 COPY --chown=0:0 dist/ /srv/passgen/
 
 USER 101:101

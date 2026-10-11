@@ -253,6 +253,7 @@ function checkImageJob(image: string) {
   assert.match(image, /sha256sum --check --strict "passgen-\$RELEASE_VERSION\.zip\.sha256"/);
   assert.match(image, /sha256sum --check --strict --quiet \.\.\/release\/SHA256SUMS/);
   assert.match(image, /test "\$\(git rev-parse HEAD\)" = "\$RELEASE_COMMIT"/);
+  assert.match(image, /chmod -R u=rwX,go=rX dist deploy\/container deploy\/examples\/nginx\/passgen-headers\.conf\n/);
   // Tags come only from the validated version, all from one build.
   assert.match(image, /RELEASE_VERSION: \$\{\{ needs\.validate\.outputs\.version \}\}/);
   assert.doesNotMatch(image, /github\.ref|GITHUB_REF/, "Tags must come from the validated version");

@@ -23,7 +23,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Same builder, arguments and annotations as the release workflow's image job.
-chmod -R u=rwX,go=rX dist
+chmod -R u=rwX,go=rX dist deploy/container deploy/examples/nginx/passgen-headers.conf
 docker buildx create --name "$name" --driver docker-container --driver-opt "image=$BUILDKIT_IMAGE" >/dev/null
 build=(docker buildx build --builder "$name" --provenance=false --sbom=false
   --build-arg "PASSGEN_VERSION=$version" --build-arg "PASSGEN_REVISION=$revision"
@@ -45,6 +45,14 @@ SOURCE_DATE_EPOCH=$epoch "${build[@]}" --platform "linux/$architecture" --load -
 docker image inspect "$image" > "$work/inspect.json"
 node scripts/check-container.ts --work "$work" --version "$version" --revision "$revision" \
   --architecture "$architecture" image
+docker run --rm --entrypoint sh "$image" -c 'ls -ldn /etc/passgen /etc/passgen/* /srv/passgen'
+unsafe=$(docker run --rm --entrypoint find "$image" /srv/passgen /etc/passgen \
+  \( ! -user 0 -o ! -group 0 -o -perm -020 -o -perm -002 -o \( ! -type f ! -type d \) \) -print)
+test -z "$unsafe" || { echo "FAIL: not root-owned, writable or special: $unsafe"; exit 1; }
+traverse=$(docker run --rm --entrypoint find "$image" /srv/passgen /etc/passgen \
+  \( \( -type d ! -perm -005 \) -o \( -type f ! -perm -004 \) \) -print)
+test -z "$traverse" || { echo "FAIL: not readable by the nginx user: $traverse"; exit 1; }
+echo "PASS site and configuration are root-owned, readable and not writable by the nginx user"
 
 docker run --rm "${hardened[@]}" "$image" -t
 echo "PASS nginx -t with the hardened runtime flags"
@@ -76,10 +84,6 @@ sed 's/^[0-9a-f]\{64\}  //' dist-manifest/SHA256SUMS | LC_ALL=C sort > "$work/ma
 diff "$work/manifest-files" "$work/image-files"
 docker exec -i "$name" sh -c 'cd /srv/passgen && sha256sum -c -s' < dist-manifest/SHA256SUMS
 echo "PASS image holds exactly the manifest's files with matching SHA-256"
-unsafe=$(docker exec "$name" find /srv/passgen /etc/passgen \
-  \( ! -user 0 -o ! -group 0 -o -perm -020 -o -perm -002 -o \( ! -type f ! -type d \) \) -print)
-test -z "$unsafe" || { echo "FAIL: not root-owned, writable or special: $unsafe"; exit 1; }
-echo "PASS site and configuration are root-owned regular files, not writable by the nginx user"
 for path in /srv/passgen/probe /etc/passgen/probe /etc/nginx/probe /probe; do
   if docker exec "$name" touch "$path" 2>/dev/null; then echo "FAIL: $path is writable"; exit 1; fi
 done
