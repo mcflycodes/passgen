@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import { PR_PROJECTS, PROJECTS } from "../../playwright.config.ts";
+import { checkPublishedVersionGuard } from "./published-version.ts";
 
 const workflow = readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
 const fullWorkflow = readFileSync(new URL("../../.github/workflows/full-suite.yml", import.meta.url), "utf8");
@@ -270,7 +271,7 @@ function checkImageJob(image: string) {
   for (const annotation of IMAGE_ANNOTATIONS) assert.ok(image.includes(annotation), annotation);
   assert.doesNotMatch(image, /imagetools create|docker tag|docker push/, "Aliases must not be rebuilt or retagged");
   assert.match(image, /for tag in "\$RELEASE_VERSION" "\$minor" latest; do\n.*= "\$digest"/);
-  assert.match(image, /if \[ "\$status" != 404 \]; then/, "Never replace a published version");
+  checkPublishedVersionGuard(image);
   assert.match(image, /--password-stdin/);
   assert.match(image, /echo "digest=\$digest" >> "\$GITHUB_OUTPUT"/);
   const attest = image.split("      - name: Attest the pushed index digest\n")[1];
@@ -470,7 +471,7 @@ function checkFast(configuration: string) {
   checkContainer(browser, playwrightVersion);
   assert.match(browser, /^ {6}options: --init --ipc=host --user 1001$/m);
   assert.doesNotMatch(configuration, /secrets\.|pull_request_target|contents: write/);
-  for (const name of ["e2e", "server-configs", "container"]) {
+  for (const name of ["e2e", "server-configs", "container", "compose"]) {
     const block = jobBlock(configuration, name);
     assert.match(block, /^ {4}needs: changes$/m);
     assert.match(block, /^ {4}if: needs.changes.outputs.code == 'true'$/m);
@@ -496,14 +497,16 @@ function runSummary(configuration: string, code: string, overrides: Record<strin
   const summary = jobBlock(configuration, "result");
   const script = summary.split("node <<'JS'\n")[1]?.split("          JS")[0];
   assert.ok(script);
-  const names = ["changes", "static", "build", "e2e", "supply-chain", "server-configs", "container"];
+  const names = ["changes", "static", "build", "e2e", "supply-chain", "server-configs", "container", "compose"];
   const results = Object.fromEntries(
     names.map((name) => [
       name,
       {
         result:
           overrides[name] ??
-          (code === "false" && ["e2e", "server-configs", "container"].includes(name) ? "skipped" : "success"),
+          (code === "false" && ["e2e", "server-configs", "container", "compose"].includes(name)
+            ? "skipped"
+            : "success"),
         outputs: name === "changes" ? { code } : {},
       },
     ]),
@@ -546,9 +549,10 @@ test("fast CI guards reject mobile projects, missing needs, skipped mandatory jo
     workflow.replace("$PLAYWRIGHT_SHARD/2", "1/2"),
     workflow.replace(" && matrix.shard == 1", ""),
     workflow.replace(
+      "[changes, static, build, e2e, supply-chain, server-configs, container, compose]",
       "[changes, static, build, e2e, supply-chain, server-configs, container]",
-      "[changes, static, build, e2e, supply-chain, server-configs]",
     ),
+    workflow.replace("  compose:\n    needs: changes\n", "  compose:\n"),
     workflow.replace("  static:\n", "  static:\n    if: needs.changes.outputs.code == 'true'\n"),
     workflow.replace("PASSGEN_E2E_MODE: pr", "PASSGEN_E2E_MODE: full"),
     workflow.replace("matrix.project == 'chromium'", "always()"),
@@ -575,11 +579,20 @@ test("summary permits only planned skips and rejects every failed or cancelled j
   runSummary(workflow, "false");
   assert.throws(() => runSummary(workflow, ""));
   for (const code of ["true", "false"]) {
-    for (const name of ["changes", "static", "build", "e2e", "supply-chain", "server-configs", "container"]) {
+    for (const name of [
+      "changes",
+      "static",
+      "build",
+      "e2e",
+      "supply-chain",
+      "server-configs",
+      "container",
+      "compose",
+    ]) {
       assert.throws(() => runSummary(workflow, code, {}, name));
       for (const result of ["failure", "cancelled"])
         assert.throws(() => runSummary(workflow, code, { [name]: result }));
-      if (code === "true" || !["e2e", "server-configs", "container"].includes(name))
+      if (code === "true" || !["e2e", "server-configs", "container", "compose"].includes(name))
         assert.throws(() => runSummary(workflow, code, { [name]: "skipped" }));
     }
   }
@@ -715,5 +728,95 @@ test("container CI guard rejects publishing, unpinned or Docker Hub builders, on
   ]) {
     assert.notEqual(broken, workflow);
     assert.throws(() => checkContainerJob(broken));
+  }
+});
+
+function checkComposeJob(configuration: string) {
+  const job = jobBlock(configuration, "compose");
+  assert.match(job, /^ {4}needs: changes$/m);
+  assert.match(job, /^ {4}if: needs\.changes\.outputs\.code == 'true'$/m);
+  assert.deepEqual(JSON.parse(job.match(/^ {8}include: (\[.*\])$/m)?.[1] ?? "[]"), [
+    { arch: "amd64", runner: "ubuntu-24.04" },
+    { arch: "arm64", runner: "ubuntu-24.04-arm" },
+  ]);
+  assert.match(job, /^ {4}runs-on: \$\{\{ matrix\.runner \}\}$/m);
+  assert.doesNotMatch(
+    job,
+    /permissions:|cache:|actions\/cache|secrets\.|^ {4}container:|self-hosted|docker login|--push/m,
+  );
+  for (const run of job.matchAll(/run:.*(?:\n {10}.*)*/g)) assert.doesNotMatch(run[0], /\$\{\{/);
+  for (const action of job.matchAll(/uses: (\S+)/g)) assert.match(action[1] ?? "", /@[a-f0-9]{40}$/);
+  assert.match(job, /persist-credentials: false/);
+  assert.equal((job.match(/pnpm build/g) ?? []).length, 1);
+  for (const command of ["pnpm headers:check", "pnpm verify:dist", "pnpm manifest", "bash scripts/test-compose.sh"])
+    assert.ok(job.includes(command), command);
+  const script = read("scripts/test-compose.sh");
+  for (const recipe of ["caddy-https", "localhost", "caddy-files", "httpd-files"])
+    assert.match(script, new RegExp(`^start ${recipe}$`, "m"), `${recipe} must be brought up`);
+  for (const probe of [
+    "--address 127.0.0.1 --redirect --conditional",
+    'node scripts/verify-live.ts --url "https://$domain/"',
+    "node scripts/verify-live.ts --url http://127.0.0.1:8080/",
+    "probe_loopback --conditional\n",
+    "probe_loopback --conditional-date\n",
+    "check-compose.ts generated --response",
+    "--status 502",
+    "check-compose.ts redirect",
+    "check-compose.ts internal",
+  ])
+    assert.ok(script.includes(probe), probe);
+  assert.doesNotMatch(script, /acme_ca|acme_dns|letsencrypt|acme-v02/i, "No real ACME in CI");
+}
+
+test("compose CI brings up every recipe natively on both architectures with no publishing", () => {
+  checkComposeJob(workflow);
+});
+
+test("compose CI guard rejects a missing architecture, publishing, interpolation and skipped recipes", () => {
+  for (const broken of [
+    workflow.replace(
+      `name: Compose recipes (\${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each architecture builds the PassGen image and runs the recipes natively.
+        include: [{"arch":"amd64","runner":"ubuntu-24.04"},{"arch":"arm64","runner":"ubuntu-24.04-arm"}]`,
+      `name: Compose recipes (\${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each architecture builds the PassGen image and runs the recipes natively.
+        include: [{"arch":"amd64","runner":"ubuntu-24.04"}]`,
+    ),
+    workflow.replace(
+      "  compose:\n    needs: changes\n",
+      "  compose:\n    needs: changes\n    permissions:\n      packages: write\n",
+    ),
+    workflow.replace("bash scripts/test-compose.sh", `bash scripts/test-compose.sh \${{ github.head_ref }}`),
+    workflow.replace("bash scripts/test-compose.sh", "echo skipped"),
+  ]) {
+    assert.notEqual(broken, workflow);
+    assert.throws(() => checkComposeJob(broken));
+  }
+});
+
+test("published-version guard executes the step and rejects any path that would replace X.Y.Z", () => {
+  const image = jobBlock(releaseWorkflow, "image");
+  checkPublishedVersionGuard(image);
+  for (const broken of [
+    // An existing tag (200) or an auth failure (401/403) would no longer stop the release.
+    image.replace('if [ "$status" != 404 ]; then', 'if [ "$status" -ge 500 ]; then'),
+    image.replace('if [ "$status" != 404 ]; then', 'if [ "$status" = 200 ]; then'),
+    // A transport failure would count as "not published".
+    image.replace('|| status="transport failure"', "|| status=404"),
+    // A failed token request would fall through to an anonymous lookup.
+    image.replace("set -euo pipefail\n", "").replace("jq -er .token", "jq -r .token"),
+    // Tags whose manifest is not an OCI index would look missing.
+    image.replace(/--header 'Accept: [^']+'/, "--header 'Accept: application/vnd.oci.image.index.v1+json'"),
+    // The check must run before anything is pushed.
+    image.replace("      - name: Refuse to replace a published version\n", "      - name: Check later\n"),
+  ]) {
+    assert.notEqual(broken, image);
+    assert.throws(() => checkPublishedVersionGuard(broken));
   }
 });

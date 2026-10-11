@@ -1,0 +1,18 @@
+# The PassGen image on 127.0.0.1:8080, for an HTTPS reverse proxy already
+# running on this host. Copy example.env to .env, fill it in, then run:
+# docker compose up -d
+# Guide: docs/docker.md in the PassGen repository.
+services:
+  passgen:
+    # A verified reference: ghcr.io/mcflycodes/passgen:X.Y.Z@sha256:<index digest>.
+    image: ${PASSGEN_IMAGE:?Set PASSGEN_IMAGE to ghcr.io/mcflycodes/passgen:X.Y.Z@sha256:<digest>; see docs/docker.md}
+    user: "101:101"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # Loopback only. Never publish a bare 8080:8080, which listens on every interface.
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped

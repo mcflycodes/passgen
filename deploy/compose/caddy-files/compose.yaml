@@ -1,0 +1,42 @@
+# Verified PassGen release files served by the official Caddy image, which also
+# obtains and renews the HTTPS certificate. No PassGen image is used.
+# Unpack a verified release into ./passgen, copy example.env to .env, fill it
+# in, then run: docker compose up -d
+# Guide: docs/docker.md in the PassGen repository.
+services:
+  passgen:
+    # Official Caddy image; the same digest is published on Docker Hub as caddy:2.11.7.
+    image: public.ecr.aws/docker/library/caddy:2.11.7@sha256:f2a1290d0463aad60660d4ec134943f183ee2a5f6c3eb7bf32dd984f2f020772
+    environment:
+      PASSGEN_DOMAIN: ${PASSGEN_DOMAIN:?Set PASSGEN_DOMAIN to the host name that serves only PassGen}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - type: bind
+        source: ./caddy
+        target: /etc/caddy
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./passgen
+        target: /srv/passgen
+        read_only: true
+        bind:
+          create_host_path: false
+      - caddy_data:/data
+      - caddy_config:/config
+    # The official image runs as root; it keeps only the capability to bind 80 and 443.
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}

@@ -236,9 +236,42 @@ jobs:
           mkdir -p "$RUNNER_TEMP/passgen-container"
           TMPDIR="$RUNNER_TEMP/passgen-container" bash scripts/test-container.sh
 
+  compose:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    name: Compose recipes (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each architecture builds the PassGen image and runs the recipes natively.
+        include: [{"arch":"amd64","runner":"ubuntu-24.04"},{"arch":"arm64","runner":"ubuntu-24.04-arm"}]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build once without cache and check the generated configuration
+        run: |
+          pnpm headers:check
+          pnpm build
+          pnpm verify:dist
+          pnpm manifest
+      - name: Bring up and probe each Compose recipe with a locally built PassGen image
+        run: |
+          echo '127.0.0.1 passgen.localhost' | sudo tee -a /etc/hosts
+          docker compose version
+          mkdir -p "$RUNNER_TEMP/passgen-compose"
+          TMPDIR="$RUNNER_TEMP/passgen-compose" bash scripts/test-compose.sh
+
   result:
     name: CI result
-    needs: [changes, static, build, e2e, supply-chain, server-configs, container]
+    needs: [changes, static, build, e2e, supply-chain, server-configs, container, compose]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -249,12 +282,12 @@ jobs:
         run: |
           node <<'JS'
           const jobs = JSON.parse(process.env.RESULTS);
-          const required = ['changes', 'static', 'build', 'e2e', 'supply-chain', 'server-configs', 'container'];
+          const required = ['changes', 'static', 'build', 'e2e', 'supply-chain', 'server-configs', 'container', 'compose'];
           if (Object.keys(jobs).length !== required.length || required.some(name => !jobs[name])) process.exit(1);
           const code = jobs.changes.outputs.code;
           if (!['true', 'false'].includes(code)) process.exit(1);
           for (const [name, job] of Object.entries(jobs)) {
-            const plannedSkip = code === 'false' && ['e2e', 'server-configs', 'container'].includes(name);
+            const plannedSkip = code === 'false' && ['e2e', 'server-configs', 'container', 'compose'].includes(name);
             if (job.result !== 'success' && !(plannedSkip && job.result === 'skipped')) {
               console.error(`${name}: ${job.result}`);
               process.exitCode = 1;

@@ -1,0 +1,34 @@
+# Verified PassGen release files served by the official Apache httpd image on
+# 127.0.0.1:8080, for an HTTPS reverse proxy already running on this host.
+# No PassGen image is used. Unpack a verified release into ./passgen, then run:
+# docker compose up -d
+# Guide: docs/docker.md in the PassGen repository.
+services:
+  passgen:
+    # Official httpd image; the same digest is published on Docker Hub as httpd:2.4.69.
+    image: public.ecr.aws/docker/library/httpd:2.4.69@sha256:c842ac797bd1fe8b3cd26d002ac9d948aa2814097544600600b35aef42e6785a
+    # Bypasses the image's httpd-foreground wrapper, which writes under /usr/local/apache2.
+    command: ["httpd", "-D", "FOREGROUND", "-f", "/etc/passgen/httpd.conf"]
+    user: "65534:65534"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - type: bind
+        source: ./httpd
+        target: /etc/passgen
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./passgen
+        target: /srv/passgen
+        read_only: true
+        bind:
+          create_host_path: false
+    # Loopback only. Never publish a bare 8080:8080, which listens on every interface.
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped

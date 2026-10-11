@@ -64,6 +64,7 @@ export async function probeServer(options: {
   redirect?: boolean;
   localHttp?: boolean;
   conditional?: boolean;
+  conditionalDate?: boolean;
 }) {
   const base = new URL(options.url);
   if (options.localHttp) {
@@ -106,15 +107,20 @@ export async function probeServer(options: {
     checkSecurity(await request(path), path === "assets/" ? [403, 404] : [403], "no-cache");
     console.log(`PASS refused ${path}`);
   }
-  if (options.conditional) {
+  // --conditional-date is for servers configured without ETags, such as the Apache examples.
+  assert.ok(!(options.conditional && options.conditionalDate), "--conditional already covers --conditional-date");
+  if (options.conditional || options.conditionalDate) {
     for (const path of ["", ...files.keys()]) {
       const fresh = parseResponse(await request(path));
-      const etag = fresh.headers.get("etag");
       const modified = fresh.headers.get("last-modified");
-      assert.ok(etag?.length === 1 && modified?.length === 1, `${path || "/"}: needs one ETag and Last-Modified`);
-      checkSecurity(await request(path, "GET", false, [`If-None-Match: ${etag[0]}`]), [304], cacheFor(path));
+      assert.ok(modified?.length === 1, `${path || "/"}: needs one Last-Modified`);
+      if (options.conditional) {
+        const etag = fresh.headers.get("etag");
+        assert.ok(etag?.length === 1, `${path || "/"}: needs one ETag`);
+        checkSecurity(await request(path, "GET", false, [`If-None-Match: ${etag[0]}`]), [304], cacheFor(path));
+      }
       checkSecurity(await request(path, "GET", false, [`If-Modified-Since: ${modified[0]}`]), [304], cacheFor(path));
-      console.log(`PASS 304 headers and cache: ${path || "/"}`);
+      console.log(`PASS 304 headers and cache${options.conditional ? "" : " (If-Modified-Since)"}: ${path || "/"}`);
     }
   }
   if (options.redirect) {

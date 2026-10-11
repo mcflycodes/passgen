@@ -127,6 +127,12 @@ docker buildx imagetools inspect mirror.gcr.io/moby/buildkit:vX.Y.Z
 docker buildx imagetools inspect public.ecr.aws/nginx/nginx-unprivileged:X.Y.Z-alpine-slim
 ```
 
+The Compose recipes in `deploy/compose/` pin the official Caddy and httpd images
+from AWS ECR Public's copy of Docker's official images, by version and digest.
+Refresh them the same way: check that Docker Hub reports the same digest for the
+version tag, update every recipe that uses the image in one reviewed PR, and
+require the Compose CI job to pass on both architectures.
+
 ## Recover a failed publication
 
 If a rerun reports "release already exists", inspect the existing release and
