@@ -111,9 +111,10 @@ for (const width of [1440, 1920, 1100, 1024, 901]) {
         for (let i = 0; i < password.tops.length; i++)
           expect(Math.abs((password.tops[i] ?? 0) - (passphrase.tops[i] ?? 0)), `row ${i}`).toBeLessThanOrEqual(1);
         // Bound the visible gaps, including any reserved text and margins.
+        // Allow half a pixel for Firefox's sub-pixel DOMRect rounding.
         for (const card of cards) {
-          expect(card.resultGap, "result to strength label: maximum 12px").toBeLessThanOrEqual(12);
-          expect(card.attackGap, "crack-time line to attack summary: maximum 16px").toBeLessThanOrEqual(16);
+          expect(card.resultGap, "result to strength label: maximum 12px").toBeLessThanOrEqual(12.5);
+          expect(card.attackGap, "crack-time line to attack summary: maximum 16px").toBeLessThanOrEqual(16.5);
         }
         await stationaryControls(page);
       });
