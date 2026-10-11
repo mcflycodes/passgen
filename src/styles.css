@@ -421,13 +421,10 @@ main {
   overflow-wrap: anywhere;
   /* Fill each line consistently even when random punctuation changes breaks. */
   line-break: anywhere;
-  /* Two lines, block padding, and one pixel for fractional line rounding. */
-  min-height: calc(2lh + 33px);
-  color: var(--text);
-}
-/* Five words from the longest offered list, with separators, fit in three lines. */
-#pp-value {
+  /* Both cards reserve five longest-list words: three lines, padding and
+     one pixel for fractional rounding. Shorter outputs keep controls still. */
   min-height: calc(3lh + 33px);
+  color: var(--text);
 }
 .result-actions {
   display: flex;
@@ -520,11 +517,19 @@ main {
   margin-top: -10px;
 }
 
+.controls .notice {
+  margin-top: 8px;
+}
+
 /* ---------- Meter (markup for item 12; see src/ui/meter.ts) ---------- */
 .meter {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
+}
+/* Notices live beside their settings; keep the output-to-meter gap compact. */
+.gen > .meter {
+  margin-top: -10px;
 }
 .meter-head {
   display: flex;
@@ -965,7 +970,9 @@ select {
   left: calc(100% - 100cqw);
   min-width: 0;
   margin-top: 12px;
-  padding-left: 20px;
+  padding-left: 0;
+  list-style: none;
+  text-align: right;
   white-space: normal;
   overflow-wrap: break-word;
   word-break: normal;
@@ -1085,7 +1092,7 @@ select {
 
 .meter-more summary {
   cursor: pointer;
-  padding-block: 0.5rem;
+  padding-block: 0.25rem;
   font-size: 0.875rem;
 }
 .meter-more p,
@@ -1100,6 +1107,7 @@ select {
   color: var(--muted);
 }
 .meter-warning {
+  margin-block: 0;
   color: var(--text);
   border-inline-start: 3px solid var(--warn);
   padding-inline-start: 0.75rem;
