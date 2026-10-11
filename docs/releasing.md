@@ -66,6 +66,67 @@ uncompressed ZIP to avoid compressor-dependent bytes. The file manifest stays
 outside the public root. A release uses the tagged build configuration; custom
 configuration requires your own build and manifest.
 
+## Container image
+
+The Release workflow's `image` job publishes `ghcr.io/mcflycodes/passgen`. It is
+the only job with `packages: write`, `id-token: write` and `attestations: write`,
+and it runs only after tag validation, the full suite and the release build
+succeed. It runs no project build tooling: it checks out the validated commit
+for the `Dockerfile` and generated nginx configuration, unpacks the verified
+release archive into `dist/`, checks every file against `SHA256SUMS`, and runs
+`docker buildx` once for `linux/amd64` and `linux/arm64`. The one pushed index
+gets the tags `X.Y.Z`, `X.Y` and `latest`; the job checks that all three resolve
+to the same digest, then attests that digest with `actions/attest`, stored in
+the registry. The job log prints the published digest.
+
+`X.Y.Z` is immutable by policy: the job refuses to push a version that already
+exists, and nobody replaces it by hand. `X.Y` and `latest` are moving aliases.
+A base image security refresh ships as a new patch version: merge the reviewed
+`Dockerfile` update (Dependabot is configured to propose one weekly), bump the version, and cut
+a release as above. If the job fails after pushing, for example while attesting,
+a rerun refuses the existing version; cut a new patch version instead.
+
+### Make the package public once
+
+GitHub creates the package as private on its first publication, even for a
+public repository. After the first release that publishes an image, open the
+package from the repository's **Packages** list, then in **Package settings**
+change its visibility to **Public**. Anonymous pulls work after that. Check that
+the package settings show this repository with Actions access; the release
+workflow's token needs it to push later versions.
+
+### Verify a published image
+
+Resolve the tag to its index digest, then verify the attestation for that exact
+digest and the reviewed release commit:
+
+```sh
+docker buildx imagetools inspect ghcr.io/mcflycodes/passgen:X.Y.Z
+gh attestation verify oci://ghcr.io/mcflycodes/passgen@sha256:<index-digest> \
+  --repo mcflycodes/passgen \
+  --signer-workflow mcflycodes/passgen/.github/workflows/release.yml \
+  --source-digest <release-commit>
+```
+
+Use the top-level `Digest` from the first command. If `gh` cannot read the
+registry, run `docker login ghcr.io` first. Deploy by that digest, not by a
+moving tag. The attestation shows which workflow built the image from which
+commit; it does not prove the base image is free of vulnerabilities.
+
+### Refresh pinned images
+
+Dependabot does not update the BuildKit image digest stored in the CI and
+Release workflows. Both pull it from Google's Docker Hub mirror, and the base
+image comes from nginx's AWS ECR Public copy, to avoid Docker Hub's anonymous
+pull limit. To refresh a pin, look up the tag's index digest, confirm Docker Hub
+reports the same digest, update every copy in one reviewed PR, and require the
+container CI job to pass on both architectures:
+
+```sh
+docker buildx imagetools inspect mirror.gcr.io/moby/buildkit:vX.Y.Z
+docker buildx imagetools inspect public.ecr.aws/nginx/nginx-unprivileged:X.Y.Z-alpine-slim
+```
+
 ## Recover a failed publication
 
 If a rerun reports "release already exists", inspect the existing release and

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  cacheFor,
   checkFileResponse,
   checkHostileBaseline,
+  checkLocalHttpBase,
   checkSecurity,
   parseResponse,
 } from "../../scripts/lib/server-probes.ts";
@@ -49,6 +51,19 @@ test("every non-asset file, including favicon, must have no-cache", () => {
   }
   checkFileResponse(immutable, "assets/app-12345678.js");
   assert.throws(() => checkFileResponse(response(), "assets/app-12345678.js"), /Cache-Control/);
+});
+
+test("local HTTP probing is limited to loopback hosts", () => {
+  for (const url of ["http://127.0.0.1:8080/", "http://localhost:8080/", "http://[::1]:8080/"])
+    checkLocalHttpBase(new URL(url));
+  for (const url of ["https://127.0.0.1:8080/", "http://example.com/", "http://10.0.0.1:8080/"])
+    assert.throws(() => checkLocalHttpBase(new URL(url)));
+});
+
+test("conditional and full responses share one cache policy per path", () => {
+  assert.equal(cacheFor("assets/app-12345678.js"), "public, max-age=31536000, immutable");
+  for (const path of ["", "index.html", "favicon.svg"]) assert.equal(cacheFor(path), "no-cache");
+  checkSecurity(response().replace("200 Test", "304 Not Modified"), [304], cacheFor("index.html"));
 });
 
 test("hostile baseline control must prove conflicting headers and directory listing are active", () => {

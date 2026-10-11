@@ -34,7 +34,7 @@ export function checkSecurity(raw: string, statuses: number[], cache?: string) {
 }
 
 export function checkFileResponse(raw: string, path: string) {
-  checkSecurity(raw, [200], path.startsWith("assets/") ? "public, max-age=31536000, immutable" : "no-cache");
+  checkSecurity(raw, [200], cacheFor(path));
 }
 
 // The control vhost deliberately inherits the hostile defaults outside PassGen's scope.
@@ -47,18 +47,32 @@ export function checkHostileBaseline(raw: string) {
   assert.match(response.body, /baseline-marker\.txt/);
 }
 
+export function cacheFor(path: string): string {
+  return path.startsWith("assets/") ? "public, max-age=31536000, immutable" : "no-cache";
+}
+
+export function checkLocalHttpBase(base: URL) {
+  assert.equal(base.protocol, "http:", "--local-http requires an http: URL");
+  assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(base.hostname), "--local-http requires a loopback host");
+}
+
 export async function probeServer(options: {
   url: string;
   manifest: string;
   caFile?: string;
   address?: string;
   redirect?: boolean;
+  localHttp?: boolean;
+  conditional?: boolean;
 }) {
   const base = new URL(options.url);
-  assert.equal(base.protocol, "https:");
+  if (options.localHttp) {
+    checkLocalHttpBase(base);
+    assert.ok(!options.redirect, "--redirect needs HTTPS");
+  } else assert.equal(base.protocol, "https:");
   if (!base.pathname.endsWith("/")) base.pathname += "/";
   const run = promisify(execFile);
-  async function request(path: string, method = "GET", http = false) {
+  async function request(path: string, method = "GET", http = false, headers: string[] = []) {
     const url = new URL(path, base);
     if (http) {
       url.protocol = "http:";
@@ -67,6 +81,7 @@ export async function probeServer(options: {
     const args = ["--silent", "--show-error", "--noproxy", "*", "--max-time", "15", "--include"];
     if (method === "HEAD") args.push("--head");
     else args.push("--request", method);
+    for (const header of headers) args.push("--header", header);
     if (options.caFile) args.push("--cacert", options.caFile);
     if (options.address)
       args.push("--resolve", `${url.hostname}:${url.port || (http ? "80" : "443")}:${options.address}`);
@@ -91,10 +106,22 @@ export async function probeServer(options: {
     checkSecurity(await request(path), path === "assets/" ? [403, 404] : [403], "no-cache");
     console.log(`PASS refused ${path}`);
   }
+  if (options.conditional) {
+    for (const path of ["", ...files.keys()]) {
+      const fresh = parseResponse(await request(path));
+      const etag = fresh.headers.get("etag");
+      const modified = fresh.headers.get("last-modified");
+      assert.ok(etag?.length === 1 && modified?.length === 1, `${path || "/"}: needs one ETag and Last-Modified`);
+      checkSecurity(await request(path, "GET", false, [`If-None-Match: ${etag[0]}`]), [304], cacheFor(path));
+      checkSecurity(await request(path, "GET", false, [`If-Modified-Since: ${modified[0]}`]), [304], cacheFor(path));
+      console.log(`PASS 304 headers and cache: ${path || "/"}`);
+    }
+  }
   if (options.redirect) {
     const response = parseResponse(await request("index.html?probe=1", "GET", true));
     assert.ok([301, 308].includes(response.status), "HTTP must permanently redirect");
     assert.deepEqual(response.headers.get("location"), [new URL("index.html?probe=1", base).href]);
     console.log("PASS HTTP redirects to HTTPS");
-  } else console.log("NOT TESTED: HTTP redirect (Apache/nginx examples require an operator-supplied listener)");
+  } else if (options.localHttp) console.log("NOT APPLICABLE: HTTP redirect (plain-HTTP server behind a proxy)");
+  else console.log("NOT TESTED: HTTP redirect (Apache/nginx examples require an operator-supplied listener)");
 }

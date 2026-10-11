@@ -202,9 +202,43 @@ jobs:
           mkdir -p "$RUNNER_TEMP/passgen-configs"
           TMPDIR="$RUNNER_TEMP/passgen-configs" bash scripts/test-server-configs.sh
 
+  container:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    name: Container image (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each architecture builds and runs natively on its own hosted runner.
+        include: [{"arch":"amd64","runner":"ubuntu-24.04"},{"arch":"arm64","runner":"ubuntu-24.04-arm"}]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build once without cache and check the generated configuration
+        run: |
+          pnpm headers:check
+          pnpm build
+          pnpm verify:dist
+          pnpm manifest
+      - name: Build the image and probe it with the hardened runtime flags
+        env:
+          # Google's Docker Hub mirror avoids Docker Hub's anonymous pull limit; the digest pins the bytes.
+          BUILDKIT_IMAGE: mirror.gcr.io/moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+        run: |
+          mkdir -p "$RUNNER_TEMP/passgen-container"
+          TMPDIR="$RUNNER_TEMP/passgen-container" bash scripts/test-container.sh
+
   result:
     name: CI result
-    needs: [changes, static, build, e2e, supply-chain, server-configs]
+    needs: [changes, static, build, e2e, supply-chain, server-configs, container]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -215,12 +249,12 @@ jobs:
         run: |
           node <<'JS'
           const jobs = JSON.parse(process.env.RESULTS);
-          const required = ['changes', 'static', 'build', 'e2e', 'supply-chain', 'server-configs'];
+          const required = ['changes', 'static', 'build', 'e2e', 'supply-chain', 'server-configs', 'container'];
           if (Object.keys(jobs).length !== required.length || required.some(name => !jobs[name])) process.exit(1);
           const code = jobs.changes.outputs.code;
           if (!['true', 'false'].includes(code)) process.exit(1);
           for (const [name, job] of Object.entries(jobs)) {
-            const plannedSkip = code === 'false' && ['e2e', 'server-configs'].includes(name);
+            const plannedSkip = code === 'false' && ['e2e', 'server-configs', 'container'].includes(name);
             if (job.result !== 'success' && !(plannedSkip && job.result === 'skipped')) {
               console.error(`${name}: ${job.result}`);
               process.exitCode = 1;

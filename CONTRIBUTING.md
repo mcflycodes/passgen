@@ -31,7 +31,7 @@ and WebKit, the full accessibility matrix in Chromium, and one accessibility
 matrix smoke case in each other engine. Chromium uses two shards because its
 full matrix exceeds five minutes unsharded; the other engines use one job each.
 Combined-gate regressions run once.
-Known documentation-only changes skip the `e2e` and `server-configs` jobs; static,
+Known documentation-only changes skip the `e2e`, `server-configs` and `container` jobs; static,
 build, supply-chain and attribution checks still run. Unknown paths count as code.
 The required checks are `CI result` and `No attribution`.
 
