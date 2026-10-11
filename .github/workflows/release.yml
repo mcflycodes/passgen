@@ -117,3 +117,93 @@ jobs:
           test "$type" = commit
           test "$sha" = "$RELEASE_COMMIT"
           gh release create "v$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --verify-tag --title "PassGen $RELEASE_VERSION" --notes-file release/notes.md "release/passgen-$RELEASE_VERSION.zip" release/SHA256SUMS "release/passgen-$RELEASE_VERSION.zip.sha256" release/passgen.zip release/passgen.zip.sha256
+
+  image:
+    # The only job that can write packages or sign attestations. It runs no project
+    # build tooling: it unpacks the verified release archive and runs docker buildx
+    # on the reviewed Dockerfile from the validated commit.
+    needs: [validate, full-suite, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      IMAGE: ghcr.io/mcflycodes/passgen
+      # Google's Docker Hub mirror avoids Docker Hub's anonymous pull limit; the digest pins the bytes.
+      BUILDKIT_IMAGE: mirror.gcr.io/moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.commit }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: passgen-release
+          path: release/
+      - name: Unpack the verified release files into dist/
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          RELEASE_COMMIT: ${{ needs.validate.outputs.commit }}
+        run: |
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
+          (cd release && sha256sum --check --strict "passgen-$RELEASE_VERSION.zip.sha256")
+          test ! -e dist
+          unzip -q "release/passgen-$RELEASE_VERSION.zip" -d dist
+          test -z "$(find dist ! -type f ! -type d -print)"
+          (cd dist && sha256sum --check --strict --quiet ../release/SHA256SUMS)
+          diff <(sed 's/^[0-9a-f]\{64\}  //' release/SHA256SUMS | LC_ALL=C sort) \
+            <(cd dist && find . -type f | sed 's|^\./||' | LC_ALL=C sort)
+          chmod -R u=rwX,go=rX dist
+      - name: Build once and push one multi-platform index under every tag
+        id: push
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          RELEASE_COMMIT: ${{ needs.validate.outputs.commit }}
+        run: |
+          [[ "$RELEASE_VERSION" =~ ^([0-9]+)\.([0-9]+)\.[0-9]+$ ]]
+          minor="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+          repository="${IMAGE#ghcr.io/}"
+          # X.Y.Z is immutable: refuse to replace a version that is already published.
+          token=$(printf 'user = "%s:%s"\n' "$GITHUB_ACTOR" "$GH_TOKEN" |
+            curl --fail --silent --show-error --config - "https://ghcr.io/token?scope=repository:$repository:pull" | jq -er .token)
+          status=$(printf 'header = "Authorization: Bearer %s"\n' "$token" |
+            curl --silent --show-error --config - --output /dev/null --write-out '%{http_code}' --head \
+              --header 'Accept: application/vnd.oci.image.index.v1+json' \
+              "https://ghcr.io/v2/$repository/manifests/$RELEASE_VERSION")
+          if [ "$status" != 404 ]; then
+            echo "::error::$IMAGE:$RELEASE_VERSION lookup returned HTTP $status; published versions are never replaced"
+            exit 1
+          fi
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          epoch=$(git log -1 --format=%ct)
+          docker buildx create --name passgen --driver docker-container --driver-opt "image=$BUILDKIT_IMAGE" >/dev/null
+          SOURCE_DATE_EPOCH=$epoch docker buildx build --builder passgen --provenance=false --sbom=false \
+            --build-arg "PASSGEN_VERSION=$RELEASE_VERSION" --build-arg "PASSGEN_REVISION=$RELEASE_COMMIT" \
+            --build-arg "PASSGEN_CREATED=$(date -u -d "@$epoch" +%Y-%m-%dT%H:%M:%SZ)" \
+            --annotation "index:org.opencontainers.image.source=https://github.com/mcflycodes/passgen" \
+            --annotation "index:org.opencontainers.image.licenses=Apache-2.0" \
+            --annotation "index:org.opencontainers.image.description=Client-side password and passphrase generator served over HTTP on port 8080 by unprivileged nginx" \
+            --platform linux/amd64,linux/arm64 \
+            --tag "$IMAGE:$RELEASE_VERSION" --tag "$IMAGE:$minor" --tag "$IMAGE:latest" \
+            --metadata-file "$RUNNER_TEMP/image-metadata.json" --push .
+          digest=$(jq -er '."containerimage.digest"' "$RUNNER_TEMP/image-metadata.json")
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          for tag in "$RELEASE_VERSION" "$minor" latest; do
+            test "$(docker buildx imagetools inspect "$IMAGE:$tag" --format '{{json .Manifest}}' | jq -er .digest)" = "$digest"
+          done
+          test "$(docker buildx imagetools inspect "$IMAGE@$digest" --format '{{json .Manifest}}' |
+            jq -cr '[.manifests[].platform | "\(.os)/\(.architecture)"] | sort | join(",")')" = linux/amd64,linux/arm64
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "Published $IMAGE@$digest as $RELEASE_VERSION, $minor and latest"
+      - name: Attest the pushed index digest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ghcr.io/mcflycodes/passgen
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false

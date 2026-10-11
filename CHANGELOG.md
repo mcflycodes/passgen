@@ -5,6 +5,10 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- An official container image: the release build served over plain HTTP on port 8080 by unprivileged nginx, for amd64 and arm64. Releases publish it to `ghcr.io/mcflycodes/passgen` as `X.Y.Z`, `X.Y` and `latest` from one build, with a signed build provenance attestation. It runs as UID/GID 101 with a read-only root filesystem, a small `/tmp` tmpfs and no capabilities, and sends all nine security headers on every response.
+
 ## [1.3.1] - 2026-10-10
 
 ### Changed

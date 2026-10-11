@@ -12,7 +12,7 @@ test("permissions policy omits the unrecognised web-share directive", () => {
   );
 });
 
-for (const ecosystem of ["github-actions", "npm"])
+for (const ecosystem of ["github-actions", "npm", "docker"])
   test(`Dependabot ${ecosystem} updates are weekly with a seven-day cooldown`, () => {
     const sections = read(".github/dependabot.yml").split("  - package-ecosystem: ");
     const section = sections.find((value) => value.startsWith(`${ecosystem}\n`));

@@ -175,8 +175,11 @@ function checkReleaseWorkflow(configuration: string) {
   assert.match(configuration, /^permissions: \{\}$/m);
   const jobs = (configuration.split("jobs:\n")[1] ?? "").split(/^ {2}(?=[\w-]+:\n)/m).slice(1);
   assert.equal(configuration.match(/^on:\n([\s\S]*?)(?=^\S)/m)?.[1], "  push:\n    tags: ['v*.*.*']\n\n");
-  assert.equal(jobs.length, 4);
-  const [validate = "", full = "", build = "", publish = ""] = jobs;
+  assert.equal(jobs.length, 5);
+  const [validate = "", full = "", build = "", publish = "", image = ""] = jobs;
+  checkImageJob(image);
+  for (const job of [validate, full, build, publish])
+    assert.doesNotMatch(job, /packages:|id-token:|attestations:/, "Only the image job may publish or sign");
   assert.match(full, /^full-suite:\n {4}needs: validate\n/);
   assert.match(full, /uses: \.\/\.github\/workflows\/full-suite\.yml/);
   assert.match(full, /commit: \$\{\{ needs\.validate\.outputs\.commit \}\}/);
@@ -217,6 +220,65 @@ function checkReleaseWorkflow(configuration: string) {
   assert.match(configuration, /gh release create .*--verify-tag.*--notes-file/);
   assert.doesNotMatch(configuration, /--draft|--prerelease/);
   for (const run of configuration.matchAll(/run:.*(?:\n {10}.*)*/g)) assert.doesNotMatch(run[0], /\$\{\{/);
+}
+
+const BUILDKIT_IMAGE = /^ {6,10}BUILDKIT_IMAGE: mirror\.gcr\.io\/moby\/buildkit:v\d+\.\d+\.\d+@sha256:[a-f0-9]{64}$/m;
+const IMAGE_ANNOTATIONS = [
+  '--annotation "index:org.opencontainers.image.source=https://github.com/mcflycodes/passgen"',
+  '--annotation "index:org.opencontainers.image.licenses=Apache-2.0"',
+  '--annotation "index:org.opencontainers.image.description=Client-side password and passphrase generator served over HTTP on port 8080 by unprivileged nginx"',
+];
+
+function checkImageJob(image: string) {
+  assert.match(image, /^image:\n/);
+  assert.match(image, /^ {4}needs: \[validate, full-suite, build\]$/m, "Image publishing needs every release gate");
+  assert.doesNotMatch(image, /^ {4}if:/m);
+  assert.match(image, /^ {4}runs-on: ubuntu-24\.04$/m);
+  assert.equal(
+    image.match(/^ {4}permissions:\n((?: {6}.+\n)+)/m)?.[1],
+    "      contents: read\n      packages: write\n      id-token: write\n      attestations: write\n",
+    "Image job permissions must be exactly these",
+  );
+  assert.doesNotMatch(
+    image,
+    /setup-node|action-setup|\bpnpm\b|\bnpm\b|\bnode\b|\bpython3?\b|scripts\//,
+    "No project build tooling with publish permissions",
+  );
+  assert.match(image, /persist-credentials: false/);
+  assert.match(image, /ref: \$\{\{ needs\.validate\.outputs\.commit \}\}/);
+  assert.match(image, /^ {6}IMAGE: ghcr\.io\/mcflycodes\/passgen$/m);
+  assert.match(image, BUILDKIT_IMAGE);
+  assert.match(image, /^ {10}name: passgen-release$/m);
+  // Release files: archive checksum, exact manifest match, then the build.
+  assert.match(image, /sha256sum --check --strict "passgen-\$RELEASE_VERSION\.zip\.sha256"/);
+  assert.match(image, /sha256sum --check --strict --quiet \.\.\/release\/SHA256SUMS/);
+  assert.match(image, /test "\$\(git rev-parse HEAD\)" = "\$RELEASE_COMMIT"/);
+  // Tags come only from the validated version, all from one build.
+  assert.match(image, /RELEASE_VERSION: \$\{\{ needs\.validate\.outputs\.version \}\}/);
+  assert.doesNotMatch(image, /github\.ref|GITHUB_REF/, "Tags must come from the validated version");
+  assert.match(image, /\[\[ "\$RELEASE_VERSION" =~ \^\(\[0-9\]\+\)\\\.\(\[0-9\]\+\)\\\.\[0-9\]\+\$ \]\]/);
+  assert.match(image, /minor="\$\{BASH_REMATCH\[1\]\}\.\$\{BASH_REMATCH\[2\]\}"/);
+  const builds = image.match(/docker buildx build /g) ?? [];
+  assert.equal(builds.length, 1, "Build exactly once");
+  assert.match(image, /--platform linux\/amd64,linux\/arm64 \\\n/);
+  assert.match(
+    image,
+    /--tag "\$IMAGE:\$RELEASE_VERSION" --tag "\$IMAGE:\$minor" --tag "\$IMAGE:latest" \\\n {12}--metadata-file "\$RUNNER_TEMP\/image-metadata\.json" --push \.\n/,
+  );
+  assert.match(image, /--provenance=false --sbom=false/);
+  for (const annotation of IMAGE_ANNOTATIONS) assert.ok(image.includes(annotation), annotation);
+  assert.doesNotMatch(image, /imagetools create|docker tag|docker push/, "Aliases must not be rebuilt or retagged");
+  assert.match(image, /for tag in "\$RELEASE_VERSION" "\$minor" latest; do\n.*= "\$digest"/);
+  assert.match(image, /if \[ "\$status" != 404 \]; then/, "Never replace a published version");
+  assert.match(image, /--password-stdin/);
+  assert.match(image, /echo "digest=\$digest" >> "\$GITHUB_OUTPUT"/);
+  const attest = image.split("      - name: Attest the pushed index digest\n")[1];
+  assert.ok(attest, "Attest the pushed digest");
+  assert.match(attest, /^ {8}uses: actions\/attest@[a-f0-9]{40} # v\d+\.\d+\.\d+$/m);
+  assert.match(attest, /^ {10}subject-name: ghcr\.io\/mcflycodes\/passgen$/m);
+  assert.match(attest, /^ {10}subject-digest: \$\{\{ steps\.push\.outputs\.digest \}\}$/m);
+  assert.match(attest, /^ {10}push-to-registry: true$/m);
+  assert.doesNotMatch(image, /secrets\.|cache-from|cache-to|type=gha/);
 }
 
 const releaseWorkflow = read(".github/workflows/release.yml");
@@ -407,7 +469,7 @@ function checkFast(configuration: string) {
   checkContainer(browser, playwrightVersion);
   assert.match(browser, /^ {6}options: --init --ipc=host --user 1001$/m);
   assert.doesNotMatch(configuration, /secrets\.|pull_request_target|contents: write/);
-  for (const name of ["e2e", "server-configs"]) {
+  for (const name of ["e2e", "server-configs", "container"]) {
     const block = jobBlock(configuration, name);
     assert.match(block, /^ {4}needs: changes$/m);
     assert.match(block, /^ {4}if: needs.changes.outputs.code == 'true'$/m);
@@ -433,13 +495,14 @@ function runSummary(configuration: string, code: string, overrides: Record<strin
   const summary = jobBlock(configuration, "result");
   const script = summary.split("node <<'JS'\n")[1]?.split("          JS")[0];
   assert.ok(script);
-  const names = ["changes", "static", "build", "e2e", "supply-chain", "server-configs"];
+  const names = ["changes", "static", "build", "e2e", "supply-chain", "server-configs", "container"];
   const results = Object.fromEntries(
     names.map((name) => [
       name,
       {
         result:
-          overrides[name] ?? (code === "false" && ["e2e", "server-configs"].includes(name) ? "skipped" : "success"),
+          overrides[name] ??
+          (code === "false" && ["e2e", "server-configs", "container"].includes(name) ? "skipped" : "success"),
         outputs: name === "changes" ? { code } : {},
       },
     ]),
@@ -482,8 +545,8 @@ test("fast CI guards reject mobile projects, missing needs, skipped mandatory jo
     workflow.replace("$PLAYWRIGHT_SHARD/2", "1/2"),
     workflow.replace(" && matrix.shard == 1", ""),
     workflow.replace(
+      "[changes, static, build, e2e, supply-chain, server-configs, container]",
       "[changes, static, build, e2e, supply-chain, server-configs]",
-      "[changes, static, build, e2e, supply-chain]",
     ),
     workflow.replace("  static:\n", "  static:\n    if: needs.changes.outputs.code == 'true'\n"),
     workflow.replace("PASSGEN_E2E_MODE: pr", "PASSGEN_E2E_MODE: full"),
@@ -511,11 +574,11 @@ test("summary permits only planned skips and rejects every failed or cancelled j
   runSummary(workflow, "false");
   assert.throws(() => runSummary(workflow, ""));
   for (const code of ["true", "false"]) {
-    for (const name of ["changes", "static", "build", "e2e", "supply-chain", "server-configs"]) {
+    for (const name of ["changes", "static", "build", "e2e", "supply-chain", "server-configs", "container"]) {
       assert.throws(() => runSummary(workflow, code, {}, name));
       for (const result of ["failure", "cancelled"])
         assert.throws(() => runSummary(workflow, code, { [name]: result }));
-      if (code === "true" || !["e2e", "server-configs"].includes(name))
+      if (code === "true" || !["e2e", "server-configs", "container"].includes(name))
         assert.throws(() => runSummary(workflow, code, { [name]: "skipped" }));
     }
   }
@@ -541,4 +604,115 @@ test("release guard rejects bypassing the full suite or testing a different comm
     releaseWorkflow.replace("  full-suite:\n", "  full-suite:\n    if: always()\n"),
   ])
     assert.throws(() => checkReleaseWorkflow(broken));
+});
+
+test("release image guard rejects weaker gates, wider permissions, tooling, rebuilds and unpinned images", () => {
+  const imageStart = releaseWorkflow.indexOf("  image:\n");
+  const before = releaseWorkflow.slice(0, imageStart);
+  const image = releaseWorkflow.slice(imageStart);
+  const inImage = (from: string | RegExp, to: string) => before + image.replace(from, to);
+  for (const broken of [
+    inImage("needs: [validate, full-suite, build]", "needs: [validate, build]"),
+    inImage("needs: [validate, full-suite, build]", "needs: [validate, full-suite]"),
+    inImage("    permissions:\n", "    if: always()\n    permissions:\n"),
+    inImage("      attestations: write\n", "      attestations: write\n      contents: write\n"),
+    inImage("      contents: read\n", "      contents: read\n      actions: write\n"),
+    before.replace(
+      "    permissions:\n      contents: read\n",
+      "    permissions:\n      contents: read\n      packages: write\n",
+    ) + image,
+    before.replace("      contents: write\n", "      contents: write\n      id-token: write\n") + image,
+    inImage(
+      "      - name: Build once",
+      "      - run: pnpm install --frozen-lockfile --ignore-scripts\n      - name: Build once",
+    ),
+    inImage(
+      "      - name: Build once",
+      "      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020\n      - name: Build once",
+    ),
+    inImage('--tag "$IMAGE:$minor" ', ""),
+    inImage('--tag "$IMAGE:latest"', '--tag "$IMAGE:$GITHUB_REF_NAME"'),
+    inImage(
+      'echo "digest=$digest"',
+      'docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE@$digest"\n          echo "digest=$digest"',
+    ),
+    inImage("--platform linux/amd64,linux/arm64", "--platform linux/amd64"),
+    inImage(/BUILDKIT_IMAGE: (\S+)@sha256:[a-f0-9]{64}/, "BUILDKIT_IMAGE: $1"),
+    inImage(/BUILDKIT_IMAGE: mirror\.gcr\.io\/moby/, "BUILDKIT_IMAGE: moby"),
+    inImage(/actions\/attest@[a-f0-9]{40}/, "actions/attest@v4"),
+    inImage("push-to-registry: true", "push-to-registry: false"),
+    inImage(`subject-digest: \${{ steps.push.outputs.digest }}`, "subject-digest: sha256:latest"),
+    inImage('if [ "$status" != 404 ]; then', 'if [ "$status" = 200 ]; then'),
+    inImage('--metadata-file "$RUNNER_TEMP/image-metadata.json"', `--label x=\${{ github.ref_name }}`),
+    inImage("--provenance=false", "--provenance=false --cache-to type=gha"),
+    inImage("          (cd dist && sha256sum --check --strict --quiet ../release/SHA256SUMS)\n", ""),
+  ]) {
+    assert.notEqual(broken, releaseWorkflow);
+    assert.throws(() => checkReleaseWorkflow(broken));
+  }
+});
+
+function checkContainerJob(configuration: string) {
+  const job = jobBlock(configuration, "container");
+  assert.match(job, /^ {4}needs: changes$/m);
+  assert.match(job, /^ {4}if: needs\.changes\.outputs\.code == 'true'$/m);
+  assert.deepEqual(JSON.parse(job.match(/^ {8}include: (\[.*\])$/m)?.[1] ?? "[]"), [
+    { arch: "amd64", runner: "ubuntu-24.04" },
+    { arch: "arm64", runner: "ubuntu-24.04-arm" },
+  ]);
+  assert.match(job, /^ {4}runs-on: \$\{\{ matrix\.runner \}\}$/m);
+  assert.match(job, /^ {6}fail-fast: false$/m);
+  assert.doesNotMatch(
+    job,
+    /permissions:|cache:|actions\/cache|secrets\.|^ {4}container:|self-hosted|docker login|--push/m,
+  );
+  assert.match(job, BUILDKIT_IMAGE);
+  for (const run of job.matchAll(/run:.*(?:\n {10}.*)*/g)) assert.doesNotMatch(run[0], /\$\{\{/);
+  for (const action of job.matchAll(/uses: (\S+)/g)) assert.match(action[1] ?? "", /@[a-f0-9]{40}$/);
+  assert.match(job, /persist-credentials: false/);
+  assert.equal((job.match(/pnpm build/g) ?? []).length, 1);
+  for (const command of ["pnpm headers:check", "pnpm verify:dist", "pnpm manifest", "bash scripts/test-container.sh"])
+    assert.ok(job.includes(command), command);
+  // CI builds with the same builder image and annotations the release publishes with.
+  const release = jobBlock(releaseWorkflow, "image");
+  assert.equal(job.match(BUILDKIT_IMAGE)?.[0]?.trim(), release.match(BUILDKIT_IMAGE)?.[0]?.trim());
+  const script = read("scripts/test-container.sh");
+  for (const annotation of IMAGE_ANNOTATIONS) assert.ok(script.includes(annotation), annotation);
+  assert.match(script, /"\$\{annotations\[@\]\}" --platform linux\/amd64,linux\/arm64 \\\n\s+--output "type=oci/);
+  assert.match(
+    script,
+    /--read-only --tmpfs \/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777\n\s+--cap-drop ALL --security-opt no-new-privileges:true\)/,
+  );
+  for (const probe of [
+    'node scripts/probe-server.ts --url "$url" --manifest dist-manifest/SHA256SUMS --local-http --conditional',
+    'node scripts/verify-live.ts --url "$url" --manifest dist-manifest/SHA256SUMS --release-dir dist --local-http',
+  ])
+    assert.ok(script.includes(probe), probe);
+  for (const step of ["image", "responses", "processes", "logs"])
+    assert.match(script, new RegExp(`node scripts/check-container\\.ts (?:.*\\\\\\n)*.*\\b${step}$`, "m"), step);
+}
+
+test("container CI builds and probes both architectures natively with pinned images and no publishing", () => {
+  checkContainerJob(workflow);
+});
+
+test("container CI guard rejects publishing, unpinned or Docker Hub builders, one architecture and interpolation", () => {
+  for (const broken of [
+    workflow.replace(',{"arch":"arm64","runner":"ubuntu-24.04-arm"}', ""),
+    workflow.replace('"runner":"ubuntu-24.04-arm"', '"runner":"self-hosted"'),
+    workflow.replace(/(BUILDKIT_IMAGE: \S+)@sha256:[a-f0-9]{64}/, "$1"),
+    workflow.replace(/BUILDKIT_IMAGE: mirror\.gcr\.io\/moby/, "BUILDKIT_IMAGE: moby"),
+    workflow.replace(
+      "  container:\n    needs: changes\n",
+      "  container:\n    needs: changes\n    permissions:\n      packages: write\n",
+    ),
+    workflow.replace("bash scripts/test-container.sh", `bash scripts/test-container.sh \${{ github.head_ref }}`),
+    workflow.replace(
+      "  container:\n    needs: changes\n    if: needs.changes.outputs.code == 'true'\n",
+      "  container:\n    needs: changes\n",
+    ),
+  ]) {
+    assert.notEqual(broken, workflow);
+    assert.throws(() => checkContainerJob(broken));
+  }
 });

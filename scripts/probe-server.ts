@@ -1,4 +1,5 @@
 // Runnable against any HTTPS URL; --address selects curl's --resolve target.
+// --local-http allows plain HTTP on loopback only, for the container image test.
 import { parseArgs } from "node:util";
 import { probeServer } from "./lib/server-probes.ts";
 
@@ -10,6 +11,8 @@ try {
       "ca-file": { type: "string" },
       address: { type: "string" },
       redirect: { type: "boolean" },
+      "local-http": { type: "boolean" },
+      conditional: { type: "boolean" },
     },
   });
   if (!values.url || !values.manifest) throw new Error("--url and --manifest required");
@@ -19,6 +22,8 @@ try {
     ...(values["ca-file"] ? { caFile: values["ca-file"] } : {}),
     ...(values.address ? { address: values.address } : {}),
     ...(values.redirect ? { redirect: true } : {}),
+    ...(values["local-http"] ? { localHttp: true } : {}),
+    ...(values.conditional ? { conditional: true } : {}),
   });
 } catch (error) {
   console.error(`FAIL: ${(error as Error).message}`);
