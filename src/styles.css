@@ -918,27 +918,30 @@ select {
 .foot {
   margin: 0 clamp(20px, 4vw, 72px);
   padding: 28px 0 40px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
   align-items: flex-start;
-  gap: 12px 8px;
+  gap: 12px 32px;
   color: var(--text-2);
   font-size: 13px;
+  container-type: inline-size;
 }
 .foot-text {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-right: 24px;
+  /* Give spare width to the caption on a shared row. On a wrapped row,
+     metadata can fill the footer so its list has the same left edge. */
+  flex: 1000000 1 420px;
   min-width: 0;
 }
 .foot-meta {
   display: grid;
-  grid-template-columns: repeat(4, auto);
+  grid-template-columns: repeat(4, max-content) minmax(max-content, 1fr);
+  flex: 1 1 max-content;
   align-items: center;
   gap: 8px;
-  /* Keep the collapsed row's existing height after moving Credits out. */
-  padding-bottom: 8px;
   font-family: var(--mono);
   font-size: 12px;
   letter-spacing: 0.04em;
@@ -947,40 +950,27 @@ select {
   display: contents;
 }
 .wordlist-credits::details-content {
-  /* A closed content wrapper must not reserve an empty footer grid row. */
-  display: none;
-}
-.wordlist-credits[open]::details-content {
-  /* Let the list span the footer, through the browser's content wrapper. */
-  display: contents;
+  grid-column: 1 / -1;
+  contain: inline-size;
 }
 .wordlist-credits summary {
+  justify-self: start;
   cursor: pointer;
   min-height: 24px;
   border-radius: var(--radius-sm);
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
 }
 .wordlist-credits ul {
-  grid-column: 1 / -1;
+  position: relative;
+  width: 100cqw;
+  left: calc(100% - 100cqw);
   min-width: 0;
+  margin-top: 12px;
   padding-left: 20px;
   white-space: normal;
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
   word-break: normal;
   font-family: var(--sans);
-  font-size: 12px;
   letter-spacing: normal;
-}
-@media (max-width: 800px) {
-  .foot {
-    grid-template-columns: auto auto minmax(0, 1fr);
-  }
-  .foot-text {
-    grid-column: 1 / -1;
-    margin-right: 0;
-  }
 }
 .wordlist-credits a {
   display: inline-block;
