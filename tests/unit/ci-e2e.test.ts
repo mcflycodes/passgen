@@ -678,7 +678,7 @@ function checkContainerJob(configuration: string) {
   assert.equal(job.match(BUILDKIT_IMAGE)?.[0]?.trim(), release.match(BUILDKIT_IMAGE)?.[0]?.trim());
   const script = read("scripts/test-container.sh");
   for (const annotation of IMAGE_ANNOTATIONS) assert.ok(script.includes(annotation), annotation);
-  assert.match(script, /--platform linux\/amd64,linux\/arm64 --output "type=oci/);
+  assert.match(script, /"\$\{annotations\[@\]\}" --platform linux\/amd64,linux\/arm64 \\\n\s+--output "type=oci/);
   assert.match(
     script,
     /--read-only --tmpfs \/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777\n\s+--cap-drop ALL --security-opt no-new-privileges:true\)/,

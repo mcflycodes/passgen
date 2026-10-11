@@ -27,12 +27,14 @@ chmod -R u=rwX,go=rX dist
 docker buildx create --name "$name" --driver docker-container --driver-opt "image=$BUILDKIT_IMAGE" >/dev/null
 build=(docker buildx build --builder "$name" --provenance=false --sbom=false
   --build-arg "PASSGEN_VERSION=$version" --build-arg "PASSGEN_REVISION=$revision"
-  --build-arg "PASSGEN_CREATED=$created"
-  --annotation "index:org.opencontainers.image.source=https://github.com/mcflycodes/passgen"
+  --build-arg "PASSGEN_CREATED=$created")
+# Index annotations apply only to multi-platform output.
+annotations=(--annotation "index:org.opencontainers.image.source=https://github.com/mcflycodes/passgen"
   --annotation "index:org.opencontainers.image.licenses=Apache-2.0"
   --annotation "index:org.opencontainers.image.description=Client-side password and passphrase generator served over HTTP on port 8080 by unprivileged nginx")
 if [[ "$architecture" == amd64 ]]; then
-  SOURCE_DATE_EPOCH=$epoch "${build[@]}" --platform linux/amd64,linux/arm64 --output "type=oci,dest=$work/index.tar" .
+  SOURCE_DATE_EPOCH=$epoch "${build[@]}" "${annotations[@]}" --platform linux/amd64,linux/arm64 \
+    --output "type=oci,dest=$work/index.tar" .
   index=$(tar -xOf "$work/index.tar" index.json | jq -er '.manifests | select(length == 1) | .[0].digest | sub("^sha256:"; "")')
   tar -xOf "$work/index.tar" "blobs/sha256/$index" > "$work/index.json"
   test "$(jq -cr '[.manifests[].platform | "\(.os)/\(.architecture)"] | sort | join(",")' "$work/index.json")" = linux/amd64,linux/arm64
