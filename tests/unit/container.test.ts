@@ -44,7 +44,8 @@ function checkDockerfile(text: string) {
     lines.filter((line) => line.startsWith("COPY ")),
     [
       `COPY --from=upstream --chown=0:0 --chmod=0644 /etc/nginx/mime.types ${CONTAINER_PATHS.mimeTypes}`,
-      `COPY --chown=0:0 --chmod=0644 deploy/container/nginx.conf deploy/container/passgen-site.conf ${CONTAINER_PATHS.config}/`,
+      `COPY --chown=0:0 --chmod=0644 deploy/container/nginx.conf ${CONTAINER_PATHS.config}/nginx.conf`,
+      `COPY --chown=0:0 --chmod=0644 deploy/container/passgen-site.conf ${CONTAINER_PATHS.site}`,
       `COPY --chown=0:0 --chmod=0644 deploy/examples/nginx/passgen-headers.conf ${CONTAINER_PATHS.headers}`,
       `COPY --chown=0:0 dist/ ${CONTAINER_PATHS.root}/`,
     ],
