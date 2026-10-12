@@ -8,7 +8,7 @@
 import type { Browser, Page } from "@playwright/test";
 import { BASELINE, encodeSettingsCode } from "../../src/core/settings-code.ts";
 import { CODE_APPLIED_STATUS, CODE_ERROR_STATUS, CODE_READY_STATUS } from "../../src/ui/settings-code.ts";
-import { expect, test } from "./fixtures.ts";
+import { expect, expectNoRequestsAfterLoad, test } from "./fixtures.ts";
 import { chooseStyle, chooseTheme, openPage, setNumber, setRange } from "./helpers.ts";
 
 const get = (page: Page) => page.locator("#get-settings-code");
@@ -146,7 +146,7 @@ test.describe("settings code", () => {
     ]);
     expect(page.url()).toBe(url);
     expect(await page.evaluate(() => window.history.length)).toBe(historyLength);
-    expect(watched.afterLoad).toEqual([]);
+    await expectNoRequestsAfterLoad(page, watched);
     expect(watched.problems).toEqual([]);
     expect(await watched.violations()).toEqual([]);
   });
@@ -213,7 +213,7 @@ test.describe("settings code", () => {
       await page.keyboard.type("x");
       await expect(input(page)).not.toHaveAttribute("aria-invalid");
       expect(await writes(page)).toEqual([]);
-      expect(watched.afterLoad).toEqual([]);
+      await expectNoRequestsAfterLoad(page, watched);
       expect(watched.problems).toEqual([]);
     });
   }
