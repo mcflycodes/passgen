@@ -412,3 +412,37 @@ test("README links the install pages and keeps the agent one-liner", () => {
   assert.match(readme, /## Install with an AI agent\n/);
   assert.ok(readme.includes(`${RAW_MAIN}agent-setup/prompt.md`));
 });
+
+// Server pages back up every file before replacing it. The install commands sit
+// in the same block, after the backups, and run only if every backup succeeded.
+function checkGuardedInstall(file: string, content: string): void {
+  const installs = shellBlocks(content).filter((block) => /\bsudo install\b/.test(block));
+  assert.ok(installs.length > 0, `${file}: no install block`);
+  for (const block of installs) {
+    assert.match(
+      block,
+      /sudo test -e "\$f\.previous" \|\| sudo test -L "\$f\.previous"/,
+      `${file}: the stale-backup check must also catch broken links`,
+    );
+    assert.match(
+      block,
+      /if sudo cp -a "\$f" "\$f\.previous"; then [^\n]*; else echo "Stop: [^"\n]*"; ok=no; break; fi/,
+      `${file}: a failed backup must stop the run`,
+    );
+    const guard = block.lastIndexOf('if [ "$ok" = yes ]; then');
+    assert.ok(guard > block.lastIndexOf("cp -a"), `${file}: the install must be guarded after every backup`);
+    for (const change of block.matchAll(/sudo (?:install|sed -i|tee|a2en)/g))
+      assert.ok((change.index ?? 0) > guard, `${file}: ${change[0]} runs before the backup guard`);
+    assert.match(
+      block.slice(guard),
+      /\n\s*else\n\s*echo "Stop: [^"\n]*"; false\n\s*fi\s*$/,
+      `${file}: a refusal must fail`,
+    );
+  }
+}
+
+for (const file of ["docs/Install-Apache.md", "docs/Install-nginx.md", "docs/Install-Caddy.md"]) {
+  test(`${file} installs only after every backup succeeded`, async () => {
+    checkGuardedInstall(file, await readFile(join(ROOT, file), "utf8"));
+  });
+}
