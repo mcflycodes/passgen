@@ -14,6 +14,7 @@ import { mountPasswordPanel } from "./ui/password.ts";
 import { startPointerEffect } from "./ui/pointer.ts";
 import { createResultsBox } from "./ui/results.ts";
 import { browserStorage, createSettingsStore, initialSettings, mountSaveControl } from "./ui/settings.ts";
+import { mountSettingsCode } from "./ui/settings-code.ts";
 import { mountThemeControls } from "./ui/theme.ts";
 
 // Saved settings (R24 to R26): the store starts from the valid stored settings,
@@ -26,11 +27,15 @@ const pointer = startPointerEffect();
 const theme = mountThemeControls(store, () => pointer.refresh());
 const password = mountPasswordPanel(store, config, { meter: createMeter("pw"), results: createResultsBox("pw") });
 const passphrase = mountPassphrasePanel(store, config, { meter: createMeter("pp"), results: createResultsBox("pp") });
-mountSaveControl(store, config, storage, () => {
+const refresh = () => {
   theme.refresh();
   password.refresh();
   passphrase.refresh();
-});
+};
+mountSaveControl(store, config, storage, refresh);
+// A settings code (src/ui/settings-code.ts) changes the store like Reset does
+// and writes nothing: Save keeps it.
+mountSettingsCode(store, config, refresh);
 
 // The end-to-end tests wait for this to prove that same-origin script runs under the CSP.
 document.documentElement.dataset.ready = "true";

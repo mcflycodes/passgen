@@ -269,6 +269,21 @@
           <p class="save-feedback" id="save-settings-status" role="status" aria-live="polite" aria-atomic="true"></p>
         </div>
         <p class="hint" id="save-settings-hint"></p>
+        <div class="settings-code">
+          <h3 class="settings-code-title" id="settings-code-title">Settings code</h3>
+          <p class="hint" id="settings-code-hint"></p>
+          <div class="code-row">
+            <button type="button" class="btn" id="get-settings-code" aria-describedby="settings-code-hint">Get settings code</button>
+            <output class="code-value" id="settings-code-value" for="get-settings-code" tabindex="-1" aria-live="off" aria-label="Settings code"></output>
+            <button type="button" class="btn" id="copy-settings-code" aria-label="Copy settings code" disabled>Copy</button>
+          </div>
+          <div class="code-row">
+            <label class="code-label" for="settings-code-input">Code to apply</label>
+            <input type="text" class="code-input" id="settings-code-input" maxlength="200" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-describedby="settings-code-status">
+            <button type="button" class="btn" id="apply-settings-code">Apply settings code</button>
+          </div>
+          <p class="save-feedback" id="settings-code-status" role="status" aria-live="polite" aria-atomic="true"></p>
+        </div>
       </section>
     </main>
 

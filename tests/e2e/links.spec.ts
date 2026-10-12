@@ -71,11 +71,11 @@ test.describe("repository and license links", () => {
       for (const theme of THEMES) {
         await chooseTheme(page, theme);
         // The repository link is the page's first focusable element and the
-        // license link follows the Reset button, so one Tab reaches each; a
+        // license link follows the Apply settings code button, so one Tab reaches each; a
         // real key press is what makes the ring show (:focus-visible).
         for (const [id, from] of [
           ["repo-link", null],
-          ["license-link", "#reset-settings"],
+          ["license-link", "#apply-settings-code"],
         ] as const) {
           const link = page.locator(`#${id}`);
           if (from === null) {
