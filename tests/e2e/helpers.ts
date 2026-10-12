@@ -63,3 +63,16 @@ export async function pageBackground(page: Page): Promise<[number, number, numbe
 }
 
 export const isDark = ([r, g, b]: [number, number, number]) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 < 0.5;
+
+// DOMRect arithmetic can vary below a pixel as Firefox changes scroll position.
+// Keep the same half-pixel limit for heights, page positions and relative offsets.
+export function expectStablePosition(actual: number | number[], expected: number | number[], label: string) {
+  const received = typeof actual === "number" ? [actual] : actual;
+  const baseline = typeof expected === "number" ? [expected] : expected;
+  expect(received, `${label}: measurement count`).toHaveLength(baseline.length);
+  for (const [index, value] of received.entries()) {
+    const original = baseline[index];
+    if (original === undefined) throw new Error(`${label}: missing baseline measurement ${index}`);
+    expect(Math.abs(value - original), `${label}[${index}]: movement in pixels`).toBeLessThanOrEqual(0.5);
+  }
+}

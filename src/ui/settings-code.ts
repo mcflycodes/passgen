@@ -15,9 +15,15 @@
 
 import { SETTINGS_SCHEMA_VERSION } from "../boot/storage.ts";
 import type { Config } from "../config/validate.ts";
-import { decodeSettingsCode, encodeSettingsCode, type SettingsCodeError } from "../core/settings-code.ts";
+import {
+  decodeSettingsCode,
+  encodeSettingsCode,
+  longestSettingsCode,
+  type SettingsCodeError,
+} from "../core/settings-code.ts";
 import { bindCopy } from "./copy.ts";
 import { byId } from "./dom.ts";
+import { reserveText } from "./reserved-text.ts";
 import { type Settings, type SettingsStore, validateStoredSettings } from "./settings.ts";
 
 export const CODE_HINT =
@@ -83,6 +89,9 @@ export function mountSettingsCode(store: SettingsStore, config: Config, onApply:
   const apply = byId("apply-settings-code", HTMLButtonElement);
   const status = byId("settings-code-status", HTMLElement);
   byId("settings-code-hint", HTMLElement).textContent = CODE_HINT;
+  // The slot keeps the height of the longest code this page can show, so
+  // showing any code moves nothing below it; a code is never cut off.
+  reserveText(value, [longestSettingsCode(config.style.offered.map((style) => style.id))]);
 
   const say = (message: string, ok: boolean) => {
     // Replaced, not appended, so a repeated message is announced again.

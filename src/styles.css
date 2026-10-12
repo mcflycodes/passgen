@@ -899,8 +899,9 @@ select {
 .save-feedback:empty {
   display: none;
 }
-/* The settings code (src/ui/settings-code.ts). The code slot keeps its
-   height whether or not a code is shown, so getting one moves nothing. */
+/* The settings code (src/ui/settings-code.ts). The code slot is sized by a
+   hidden copy of the longest code the page can show (src/ui/reserved-text.ts),
+   so showing any code, or none, moves nothing below it. */
 .settings-code {
   display: flex;
   flex-direction: column;
@@ -933,6 +934,9 @@ select {
   color: var(--text);
   font-family: var(--mono);
   font-size: 14px;
+}
+.code-row > .reserved-text {
+  flex: 1 1 14em;
 }
 .code-value {
   display: flex;

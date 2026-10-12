@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { WORD_LISTS } from "../../src/core/wordlists.ts";
 import { expect, test } from "./fixtures.ts";
-import { chooseStyle, chooseTheme, openPage, STYLES, setNumber, setRange } from "./helpers.ts";
+import { chooseStyle, chooseTheme, expectStablePosition, openPage, STYLES, setNumber, setRange } from "./helpers.ts";
 
 async function position(page: Page, prefix: "pw" | "pp") {
   return page.evaluate((prefix) => {
@@ -18,19 +18,6 @@ async function position(page: Page, prefix: "pw" | "pp") {
       relative: ids.map((id) => rect(id).top - meter.bottom),
     };
   }, prefix);
-}
-
-// DOMRect arithmetic can vary below a pixel as Firefox changes scroll position.
-// Keep the same half-pixel limit for heights, page positions and relative offsets.
-function expectStablePosition(actual: number | number[], expected: number | number[], label: string) {
-  const received = typeof actual === "number" ? [actual] : actual;
-  const baseline = typeof expected === "number" ? [expected] : expected;
-  expect(received, `${label}: measurement count`).toHaveLength(baseline.length);
-  for (const [index, value] of received.entries()) {
-    const original = baseline[index];
-    if (original === undefined) throw new Error(`${label}: missing baseline measurement ${index}`);
-    expect(Math.abs(value - original), `${label}[${index}]: movement in pixels`).toBeLessThanOrEqual(0.5);
-  }
 }
 
 for (const style of STYLES) {
