@@ -133,7 +133,7 @@ the shipped configuration; customize it by building from source instead.
 ### Stable download names
 
 New releases also attach `passgen.zip` and `passgen.zip.sha256`; the ZIP is
-byte-identical to the versioned archive. The README uses
+byte-identical to the versioned archive. [Install by hand](Install-by-hand.md) uses
 `https://github.com/mcflycodes/passgen/releases/latest/download/passgen.zip`.
 For checksum verification, resolve the latest release to its exact tag first
 and fetch both aliases from that tag, so a new release cannot mix downloads:
@@ -430,8 +430,8 @@ server/CDN configuration changes.
 ## Detailed install, update and rollback
 
 These Linux procedures include the optional checks and administrator steps for
-release-specific deployments. For the shortest manual path, see the
-[README](../README.md#deploy). Its `unzip -DD` skips archived timestamps, so new
+release-specific deployments. For the shortest manual path, see
+[Install by hand](Install-by-hand.md). Its `unzip -DD` skips archived timestamps, so new
 files receive current timestamps. Use a parent folder the web server can traverse
 and a normal umask such as `022` so it can read the files. Keep that parent and
 all backups outside every public root. The short update never deletes files and

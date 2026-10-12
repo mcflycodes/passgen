@@ -5,6 +5,10 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Documentation: the README is now a short landing page. Each install method, configuration, styles, word lists and security headers have their own page under `docs/`, listed on `docs/README.md`, and the gates table moved to `CONTRIBUTING.md`.
+
 ## [1.4.1] - 2026-10-11
 
 ### Fixed

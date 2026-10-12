@@ -35,7 +35,7 @@ pnpm install --frozen-lockfile
 pnpm check
 ```
 
-The individual gates are listed in `README.md`. PR and main CI run desktop
+The individual gates are listed in `CONTRIBUTING.md`. PR and main CI run desktop
 Chromium, Firefox and WebKit functional tests, the accessibility matrix in
 Chromium, and one matrix smoke case in each other engine. Full five-project
 coverage and the exhaustive accessibility matrix run nightly and before releases.

@@ -5,20 +5,66 @@ easy to review. Report vulnerabilities using [the security policy](SECURITY.md).
 
 ## Setup and checks
 
-Use Node.js **22.23.2** (`.nvmrc`) and pnpm **11.15.1** (`package.json`).
+You need:
+
+- Node.js **22.23.2** (`.nvmrc`)
+- pnpm **11.15.1**, pinned in `package.json` (`corepack enable` picks it up)
+- Python 3 for release packaging and its unit tests
 
 ```sh
 corepack enable
 pnpm install --frozen-lockfile
-pnpm exec playwright install
-pnpm check
+pnpm exec playwright install   # browsers for the end-to-end tests
+pnpm check                     # every local gate; see Gates below
 ```
 
-`pnpm dev` starts the development server. `pnpm check` runs every local gate;
-the [README](README.md#gates) lists them.
+Other commands:
+
+| Command | What it does |
+|---|---|
+| `pnpm dev` | Vite dev server (no meta CSP; the dev client needs inline script) |
+| `pnpm build` | Production build into `dist/` |
+| `pnpm screenshots` | Build and capture the README images in `docs/screenshots/` |
+| `pnpm serve` | Serve `dist/` on `http://127.0.0.1:4173/` with the reference security headers (a local test server, not for deployment) |
+| `pnpm headers:gen` | Regenerate `deploy/examples/`, `deploy/container/` and the `deploy/compose/` config folders after changing `security/headers.ts` |
+| `pnpm format` | Apply formatting and safe lint fixes |
+
+### Gates
+
+`pnpm check` runs these in order and stops at the first failure.
+
+| Check | What it guards | Command |
+|---|---|---|
+| Dependencies | No runtime dependencies, exact pins, pnpm supply-chain settings | `pnpm deps:check` |
+| Attribution | No attribution to tools, models or vendors | `pnpm attribution:check` |
+| HTML sinks | No HTML sinks or executable/link attributes in shipped source | `pnpm html-sinks:check` |
+| Word lists | Authenticated word lists and emitted modules match | `pnpm wordlist:check` |
+| Types | Strict typecheck | `pnpm typecheck` |
+| Lint | Lint and format | `pnpm lint` |
+| Unit tests | Unit tests, including documentation links and snippets | `pnpm test:unit` |
+| Header snippets | Reference header snippets match the definition | `pnpm headers:check` |
+| Styles | Style checks (R4b): tokens, contrast, CSS-only rules | `pnpm styles:check` |
+| Build | HTML-sink gate, configuration validation (C2) and style checks, then production build | `pnpm build` |
+| Built files | No hostname beyond the configured links, no provider file, inline code or CSS resource in the build; CSP meta in place | `pnpm verify:dist` |
+| Manifest | SHA-256 manifest of the build | `pnpm manifest` |
+| Browser tests | End-to-end, accessibility and header tests on the built files | `pnpm test:e2e` |
+| Combined gates | Injected fixtures through build, verify-dist and browser checks | `pnpm test:gate` |
+| Licenses | Dependency licenses | `pnpm licenses:check` |
+| Audit | Dependency audit | `pnpm run audit` |
+
+PR and main CI keep the static, build, supply-chain and attribution gates; browser
+coverage is described below.
+
+### Screenshots
+
+The README images in `docs/screenshots/` are fixed demonstration values.
+Regenerate them with `pnpm screenshots` using the pinned toolchain and Playwright
+Chromium (`pnpm exec playwright install chromium`). Images are reproducible on
+the same OS, with reduced motion, a fixed clock, and no external requests.
 
 ### Browser coverage
 
+The end-to-end tests run on Chromium, Firefox and WebKit, plus mobile emulation.
 Local runs may cover only Chromium when the machine lacks Playwright's Firefox
 or WebKit system libraries. Select that coverage explicitly:
 

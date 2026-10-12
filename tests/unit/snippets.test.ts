@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { describe, test } from "node:test";
@@ -78,6 +78,11 @@ describe("reference header snippets", () => {
 });
 
 const ROOT = resolve(EXAMPLES, "../..");
+const DOCS_PAGES = readdirSync(join(ROOT, "docs"))
+  .filter((file) => file.endsWith(".md"))
+  .map((file) => `docs/${file}`);
+// Task pages with copy-paste install commands.
+const INSTALL_PAGES = DOCS_PAGES.filter((file) => /^docs\/(?:Install-|Static-hosts)/.test(file));
 const RAW_MAIN = "https://raw.githubusercontent.com/mcflycodes/passgen/main/";
 
 function headingAnchors(content: string): Set<string> {
@@ -140,14 +145,13 @@ function checkDocReferences(file: string, content: string): string {
 
 test("deployment docs have valid links, anchors, script paths and raw URLs", async () => {
   const folder = join(ROOT, "agent-setup");
-  const files = [
+  const files = new Set([
     "README.md",
-    "docs/self-hosting.md",
-    "docs/install-release.md",
-    "docs/releasing.md",
+    "CONTRIBUTING.md",
+    ...DOCS_PAGES,
     ...DOCKER_DOCS,
     ...(await readdir(folder)).filter((file) => file.endsWith(".md")).map((file) => `agent-setup/${file}`),
-  ];
+  ]);
   for (const file of files) {
     const content = await readFile(join(ROOT, file), "utf8");
     const withoutLinks = checkDocReferences(file, content);
@@ -165,7 +169,7 @@ test("deployment docs have valid links, anchors, script paths and raw URLs", asy
   }
 });
 
-const DOCKER_DOCS = ["docs/docker.md", "docs/docker-https.md", "deploy/compose/README.md"];
+const DOCKER_DOCS = ["docs/docker.md", "docs/docker-https.md", "docs/Install-Docker.md", "deploy/compose/README.md"];
 // Names the Docker guides may use: placeholders, loopback, the project's own
 // repository and registry, the official image registry and container-network
 // names. Links to reference sites are exempt; anything else is a finding.
@@ -322,7 +326,15 @@ function checkInteractiveShellBlocks(file: string, content: string): void {
   }
 }
 
-for (const file of TIMESTAMP_DOCS) {
+for (const file of INSTALL_PAGES) {
+  const content = readFileSync(join(ROOT, file), "utf8");
+  if (content.includes("-exec touch"))
+    test(`${file} timestamp commands cannot follow symlinks or create targets`, () => {
+      checkTimestampCommands(file, content);
+    });
+}
+
+for (const file of [...TIMESTAMP_DOCS, ...INSTALL_PAGES]) {
   test(`${file} deployment commands never exit the user's shell`, async () => {
     checkInteractiveShellBlocks(file, await readFile(join(ROOT, file), "utf8"));
   });
@@ -351,16 +363,21 @@ test("manual timestamp steps require checksum verification, then symlink inspect
   }
 });
 
-test("short README deployment refreshes timestamps and replaces the tree without deletion", () => {
-  const deploy = readme.split("## Deploy\n")[1]?.split("## Requirements\n")[0];
-  assert.ok(deploy);
-  assert.match(deploy, /### Install by hand/);
-  assert.match(deploy, /### Update/);
-  assert.match(deploy, /### Install with an AI agent/);
+test("short by-hand deployment refreshes timestamps and replaces the tree without deletion", () => {
+  const deploy = readFileSync(join(ROOT, "docs/Install-by-hand.md"), "utf8");
+  assert.match(deploy, /## Install\n/);
+  assert.match(deploy, /## Update\n/);
+  assert.match(deploy, /## Roll back\n/);
   assert.equal((deploy.match(/unzip -DD /g) ?? []).length, 2);
   assert.doesNotMatch(deploy, /\brm\b|\$[A-Za-z{]/);
   assert.match(deploy, /mkdir \.\/passgen-next &&/);
   assert.match(deploy, /test ! -e \.\/passgen-previous && test ! -L \.\/passgen-previous &&/);
   assert.match(deploy, /test -d \.\/passgen && test ! -L \.\/passgen &&/);
-  assert.match(deploy, /mv -T \.\/passgen \.\/passgen-previous &&\nmv -T \.\/passgen-next \.\/passgen/);
+  assert.match(deploy, /mv -T \.\/passgen \.\/passgen-previous &&\n\s*mv -T \.\/passgen-next \.\/passgen/);
+});
+
+test("README links the install pages and keeps the agent one-liner", () => {
+  for (const page of INSTALL_PAGES) assert.ok(readme.includes(`](${page})`), `README does not link ${page}`);
+  assert.match(readme, /## Install with an AI agent\n/);
+  assert.ok(readme.includes(`${RAW_MAIN}agent-setup/prompt.md`));
 });
