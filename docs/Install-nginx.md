@@ -21,30 +21,48 @@ You need:
 - A checkout of the same release tag as your files, for its examples:
   `git clone --depth 1 --branch vX.Y.Z https://github.com/mcflycodes/passgen.git passgen-setup-X.Y.Z`.
 
-The site config goes inside `http {}`. On RHEL and AlmaLinux, files in
-`/etc/nginx/conf.d/` are included there, as below. On Debian and Ubuntu, put it
-in `/etc/nginx/sites-available/` and link it from `/etc/nginx/sites-enabled/`.
+The site config goes inside `http {}`. The default `nginx.conf` on RHEL,
+AlmaLinux, Debian and Ubuntu includes every `/etc/nginx/conf.d/*.conf` file
+there, so the commands below work on all of them. Run them from the checkout
+folder.
 
 ## Steps
 
-1. Back up any nginx config you will change.
+1. List the files this page creates or changes. The backup and rollback commands
+   use this list; set it again if you open a new shell.
 
-2. From the checkout, install the header file at the path the site config
-   includes:
+   ```sh
+   FILES="/etc/nginx/passgen/passgen-headers.conf /etc/nginx/conf.d/passgen.conf"
+   ```
+
+2. Back up every one of those files that already exists, as `<file>.previous`
+   (nginx does not load those, since they do not end in `.conf`). If it prints a
+   `Stop:` line, an older backup is still there: move it away and run this again.
+   Continue only when it prints no `Stop:` line.
+
+   ```sh
+   ok=yes
+   for f in $FILES; do
+     if sudo test -e "$f.previous"; then echo "Stop: $f.previous already exists. Move it away first."; ok=no; fi
+   done
+   if [ "$ok" = yes ]; then
+     for f in $FILES; do
+       if sudo test -e "$f"; then sudo cp -a "$f" "$f.previous" && echo "Backed up $f"; fi
+     done
+   fi
+   ```
+
+3. Install the header file at the path the site config includes, and the
+   [site config](../deploy/examples/nginx/passgen-site.conf):
 
    ```sh
    sudo install -D -m 0644 deploy/examples/nginx/passgen-headers.conf /etc/nginx/passgen/passgen-headers.conf
-   ```
-
-3. Copy the [site config](../deploy/examples/nginx/passgen-site.conf):
-
-   ```sh
    sudo install -m 0644 deploy/examples/nginx/passgen-site.conf /etc/nginx/conf.d/passgen.conf
    ```
 
-4. Edit the copy and replace `example.com` in `server_name`, `/srv/passgen` in
-   `root`, the certificate and key paths, and every `include` path if you put
-   the header file elsewhere. Keep every header value exactly as shipped.
+4. Edit `/etc/nginx/conf.d/passgen.conf` and replace `example.com` in
+   `server_name`, `/srv/passgen` in `root`, and the certificate and key paths.
+   Keep every header value exactly as shipped.
 
 5. Validate, and reload only if the test is successful:
 
@@ -66,6 +84,9 @@ in `/etc/nginx/sites-available/` and link it from `/etc/nginx/sites-enabled/`.
    front of nginx does it. Review other sites before changing the listener's
    default site.
 
+Keep the `.previous` files until the site works. Move them away before the next
+update; step 2 refuses to overwrite them.
+
 ## Update
 
 Before installing a new release, compare its examples with the ones you used:
@@ -74,12 +95,29 @@ Before installing a new release, compare its examples with the ones you used:
 diff -ru passgen-setup-OLD/deploy/examples/nginx passgen-setup-X.Y.Z/deploy/examples/nginx
 ```
 
-If anything changed, back up your config, apply the change with your hostname
-and paths, then validate and reload as in step 5.
+If anything changed, run steps 1 and 2 to back up again, apply the change to
+your files (or repeat steps 3 and 4 from the new checkout), then validate and
+reload as in step 5.
 
 ## Roll back
 
-Put back the config files you backed up, then validate and reload as in step 5.
+Set `FILES` as in step 1, then put back every file that was backed up:
+
+```sh
+for f in $FILES; do
+  if sudo test -e "$f.previous"; then sudo mv -T "$f.previous" "$f" && echo "Restored $f"; fi
+done
+```
+
+Validate and reload as in step 5.
+
+Files that did not exist before were not backed up, so they stay. After rolling
+back a **first** install, remove PassGen's own files too, then validate and
+reload:
+
+```sh
+sudo rm /etc/nginx/conf.d/passgen.conf /etc/nginx/passgen/passgen-headers.conf
+```
 
 ## Troubleshooting
 

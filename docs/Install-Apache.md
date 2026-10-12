@@ -21,42 +21,77 @@ You need:
 - A checkout of the same release tag as your files, for its examples:
   `git clone --depth 1 --branch vX.Y.Z https://github.com/mcflycodes/passgen.git passgen-setup-X.Y.Z`.
 
-The paths below are the ones in the examples, which suit RHEL and AlmaLinux.
-On Debian and Ubuntu, Apache's folder is `/etc/apache2`: put the header file
-under it and change the `Include` line to match, copy the site config to
-`/etc/apache2/sites-available/passgen.conf`, and enable it with
-`sudo a2enmod ssl headers` and `sudo a2ensite passgen` before validating.
+The commands below come in two versions where the paths differ: RHEL and
+AlmaLinux (`/etc/httpd`, the paths in the examples) and Debian and Ubuntu
+(`/etc/apache2`). Run them from the checkout folder.
 
 ## Steps
 
-1. Back up any Apache config you will change.
+1. List the files this page creates or changes, for your system. The backup and
+   rollback commands use this list; set it again if you open a new shell.
 
-2. From the checkout, install the header file at the path the site config
-   includes:
+   RHEL and AlmaLinux:
+
+   ```sh
+   FILES="/etc/httpd/passgen/passgen-headers.conf /etc/httpd/conf.d/passgen.conf /etc/httpd/conf/httpd.conf"
+   ```
+
+   Debian and Ubuntu:
+
+   ```sh
+   FILES="/etc/apache2/passgen/passgen-headers.conf /etc/apache2/sites-available/passgen.conf /etc/apache2/conf-available/security.conf"
+   ```
+
+2. Back up every one of those files that already exists, as `<file>.previous`.
+   If it prints a `Stop:` line, an older backup is still there: move it away and
+   run this again. Continue only when it prints no `Stop:` line.
+
+   ```sh
+   ok=yes
+   for f in $FILES; do
+     if sudo test -e "$f.previous"; then echo "Stop: $f.previous already exists. Move it away first."; ok=no; fi
+   done
+   if [ "$ok" = yes ]; then
+     for f in $FILES; do
+       if sudo test -e "$f"; then sudo cp -a "$f" "$f.previous" && echo "Backed up $f"; fi
+     done
+   fi
+   ```
+
+3. Install the header file and the [site config](../deploy/examples/apache/passgen-site.conf).
+
+   RHEL and AlmaLinux:
 
    ```sh
    sudo install -D -m 0644 deploy/examples/apache/passgen-headers.conf /etc/httpd/passgen/passgen-headers.conf
-   ```
-
-3. Copy the [site config](../deploy/examples/apache/passgen-site.conf) into
-   Apache's config folder:
-
-   ```sh
    sudo install -m 0644 deploy/examples/apache/passgen-site.conf /etc/httpd/conf.d/passgen.conf
    ```
 
-4. Edit the copy and replace, everywhere they appear:
+   Debian and Ubuntu (this also points the `Include` line at `/etc/apache2` and
+   enables the modules and the site; mod_authz_core and mod_mime are on by
+   default):
+
+   ```sh
+   sudo install -D -m 0644 deploy/examples/apache/passgen-headers.conf /etc/apache2/passgen/passgen-headers.conf
+   sudo install -m 0644 deploy/examples/apache/passgen-site.conf /etc/apache2/sites-available/passgen.conf
+   sudo sed -i 's#/etc/httpd/passgen/#/etc/apache2/passgen/#' /etc/apache2/sites-available/passgen.conf
+   sudo a2enmod ssl headers
+   sudo a2ensite passgen
+   ```
+
+4. Edit the installed site config and replace, everywhere they appear:
 
    - `example.com` in `ServerName` and in the Host check
      (`example[.]com` in the `Require expr` line);
    - `/srv/passgen` in `DocumentRoot`, the `<Directory>` line and the
      `REQUEST_FILENAME` containment check;
-   - the certificate and key paths;
-   - the `Include` path, if you put the header file elsewhere.
+   - the certificate and key paths.
 
    Keep every header value exactly as shipped.
 
-5. Set `ServerTokens Prod` in the global config, if it is not already set.
+5. Set `ServerTokens Prod` in the global config if it is not already set:
+   `/etc/httpd/conf/httpd.conf` on RHEL and AlmaLinux,
+   `/etc/apache2/conf-available/security.conf` on Debian and Ubuntu.
 
 6. Validate, and reload only if it says `Syntax OK`:
 
@@ -77,6 +112,9 @@ under it and change the `Include` line to match, copy the site config to
 8. **Optional:** add an HTTP-to-HTTPS redirect virtual host if nothing in front
    of Apache does it.
 
+Keep the `.previous` files until the site works. Move them away before the next
+update; step 2 refuses to overwrite them.
+
 ## Update
 
 Before installing a new release, compare its examples with the ones you used:
@@ -85,12 +123,36 @@ Before installing a new release, compare its examples with the ones you used:
 diff -ru passgen-setup-OLD/deploy/examples/apache passgen-setup-X.Y.Z/deploy/examples/apache
 ```
 
-If anything changed, back up your config, apply the change with your hostname
-and paths, then validate and reload as in step 6.
+If anything changed, run steps 1 and 2 to back up again, apply the change to
+your files (or repeat steps 3 and 4 from the new checkout), then validate and
+reload as in step 6.
 
 ## Roll back
 
-Put back the config files you backed up, then validate and reload as in step 6.
+Set `FILES` as in step 1, then put back every file that was backed up:
+
+```sh
+for f in $FILES; do
+  if sudo test -e "$f.previous"; then sudo mv -T "$f.previous" "$f" && echo "Restored $f"; fi
+done
+```
+
+Validate and reload as in step 6.
+
+Files that did not exist before were not backed up, so they stay. After rolling
+back a **first** install, remove PassGen's own files too, then validate and
+reload. RHEL and AlmaLinux:
+
+```sh
+sudo rm /etc/httpd/conf.d/passgen.conf /etc/httpd/passgen/passgen-headers.conf
+```
+
+Debian and Ubuntu:
+
+```sh
+sudo a2dissite passgen
+sudo rm /etc/apache2/sites-available/passgen.conf /etc/apache2/passgen/passgen-headers.conf
+```
 
 ## Troubleshooting
 

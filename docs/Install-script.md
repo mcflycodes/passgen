@@ -8,7 +8,7 @@ result and puts the backup back on its own if anything fails.
 **Who it's for:** administrators of a Linux server running Apache, nginx or
 Caddy who want verified installs and automatic rollback. The script only handles
 files: you still set up the web server once, using your server's page. For the
-shortest path without checks, see [Install by hand](Install-by-hand.md). Every
+shortest path, see [Install by hand](Install-by-hand.md). Every
 option, exit code and safety detail is in the
 [installer reference](install-release.md).
 

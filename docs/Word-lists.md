@@ -38,7 +38,15 @@ Switching lists clamps the existing endpoints to those bounds and recalculates
 strength. A deployment offering one list hides the dropdown. Saved defaults
 include the selected list and range; Reset restores the deployment's defaults.
 
-## How the lists are checked
+How passphrases are put together from these words is described in
+[How it works](How-it-works.md#passphrases).
+
+## Reference: how the lists are checked
+
+This section is for maintainers and reviewers; you do not need it to deploy or
+configure PassGen.
+
+### Build checks
 
 The build checks each raw SHA-256 against the verifier's pin and sidecar;
 independent gate pins also lock the bytes. It validates entry counts, unique
@@ -51,7 +59,7 @@ production build require them to match the authenticated inputs exactly.
 All five lists and every allowed length range are tested for unique decoding
 without separators before counting entropy.
 
-## Dictionary words and the attribution check
+### Dictionary words and the attribution check
 
 The attribution gate blanks only the explicitly reviewed collision words in
 `DICTIONARY_COLLISIONS`, within authenticated data lines and the verified
@@ -61,6 +69,3 @@ content remain scanned. Browser checks retain rendered `innerText`, validate
 marked output before replacing it with a placeholder in that rendered scan,
 and separately scan every output with only the allowlisted words blanked.
 Attributes, comments, CSS content and non-output text remain scanned.
-
-How passphrases are put together from these words is described in
-[How it works](How-it-works.md#passphrases).

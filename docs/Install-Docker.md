@@ -90,17 +90,45 @@ host, or a shared Docker network.
 
 ## Update
 
-1. Read the release notes. If configuration or headers changed, update the recipe
-   folder from the new tag too.
-2. Look up (and optionally verify) the new digest, as in steps 2 and 3.
-3. Edit `.env`, keeping the previous line as a comment for rollback:
+Run these in the recipe folder of your clone (`passgen/deploy/compose/caddy-https`).
+Replace `X.Y.Z` with the new version and `OLD` with the one you run now.
+
+1. Read the release notes.
+
+2. Fetch the new release tag into the clone and switch the recipe folder to it,
+   so the configuration matches the new image. The clone only holds the tag it
+   was made from, so the fetch is needed before the tag can be used. Your `.env`
+   is not tracked and stays as it is:
+
+   ```sh
+   git fetch --depth 1 origin tag vX.Y.Z
+   git checkout vX.Y.Z
+   ```
+
+3. Look up the new digest, as in step 2 of Install:
+
+   ```sh
+   docker buildx imagetools inspect ghcr.io/mcflycodes/passgen:X.Y.Z
+   ```
+
+4. **Optional, recommended:** check its provenance against the new tag's commit,
+   as in step 3 of Install:
+
+   ```sh
+   gh attestation verify oci://ghcr.io/mcflycodes/passgen@sha256:<new-digest> \
+     --repo mcflycodes/passgen \
+     --signer-workflow mcflycodes/passgen/.github/workflows/release.yml \
+     --source-digest "$(git rev-parse 'vX.Y.Z^{commit}')"
+   ```
+
+5. Edit `.env`, keeping the previous line as a comment for rollback:
 
    ```sh
    # Previous: PASSGEN_IMAGE=ghcr.io/mcflycodes/passgen@sha256:<previous-digest>
    PASSGEN_IMAGE=ghcr.io/mcflycodes/passgen@sha256:<new-digest>
    ```
 
-4. Apply it and check the site:
+6. Apply it and check the site:
 
    ```sh
    docker compose pull
@@ -112,9 +140,16 @@ Do not use tools that pull a moving tag and restart containers on their own; see
 
 ## Roll back
 
-Put the previous `PASSGEN_IMAGE` line back in `.env` and run `docker compose up -d`
-again. Docker keeps the old image locally until you prune it, and the registry
-keeps published digests. For `caddy-files` and `httpd-files`, see
+Put the previous `PASSGEN_IMAGE` line back in `.env`, switch the recipe folder
+back to the previous tag, which the clone still has, and apply it:
+
+```sh
+git checkout vOLD
+docker compose up -d
+```
+
+Docker keeps the old image locally until you prune it, and the registry keeps
+published digests. For `caddy-files` and `httpd-files`, see
 [Update and roll back](docker.md#update-and-roll-back).
 
 ## Troubleshooting

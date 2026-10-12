@@ -374,6 +374,37 @@ test("short by-hand deployment refreshes timestamps and replaces the tree withou
   assert.match(deploy, /test ! -e \.\/passgen-previous && test ! -L \.\/passgen-previous &&/);
   assert.match(deploy, /test -d \.\/passgen && test ! -L \.\/passgen &&/);
   assert.match(deploy, /mv -T \.\/passgen \.\/passgen-previous &&\n\s*mv -T \.\/passgen-next \.\/passgen/);
+  // Install and update keep each release's file list and check every file before use.
+  for (const section of ["## Install\n", "## Update\n"]) {
+    const block = shellBlocks(deploy.split(section)[1] ?? "").find((text) => text.includes("unzip -DD"));
+    assert.ok(block, section);
+    assert.ok(block.indexOf("sha256sum -c") > block.indexOf("unzip -DD"), `${section}: check files after unzip`);
+    assert.ok(!block.includes("mv -T") || block.indexOf("sha256sum -c") < block.indexOf("mv -T"), section);
+  }
+});
+
+test("by-hand rollback verifies the backup before refreshing timestamps or switching folders", () => {
+  const section = readFileSync(join(ROOT, "docs/Install-by-hand.md"), "utf8")
+    .split("## Roll back\n")[1]
+    ?.split("\n## ")[0];
+  assert.ok(section);
+  const blocks = shellBlocks(section);
+  assert.equal(blocks.length, 1, "rollback must be one chained block");
+  const block = blocks[0] ?? "";
+  const lines = block.trimEnd().split("\n");
+  assert.ok(
+    lines.slice(0, -1).every((line) => line.trimEnd().endsWith("&&")),
+    "every step must be chained with &&",
+  );
+  const verify = block.indexOf("(cd ./passgen-previous && sha256sum -c ../passgen-previous.SHA256SUMS) &&");
+  const symlinks = block.indexOf('test -z "$(find -P ./passgen-previous -type l -print)" &&');
+  const touch = block.indexOf("-exec touch");
+  const swap = block.indexOf("mv -T");
+  assert.ok(verify >= 0, "rollback must verify checksums");
+  assert.ok(symlinks > verify, "then refuse symbolic links");
+  assert.ok(touch > symlinks, "then refresh timestamps");
+  assert.ok(swap > touch, "and only then switch folders");
+  checkTimestampCommands("docs/Install-by-hand.md", block);
 });
 
 test("README links the install pages and keeps the agent one-liner", () => {
