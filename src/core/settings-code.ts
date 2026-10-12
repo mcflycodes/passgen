@@ -8,8 +8,10 @@
 //
 // Format, version 1: "PG1-" then the body and two check characters, in
 // Crockford base32 (0-9 and A-Z without I, L, O, U), grouped in fours with
-// hyphens. Reading ignores case, spaces and hyphens, and takes I and L as 1
-// and O as 0.
+// hyphens. Reading ignores case, spaces and hyphens everywhere, the prefix
+// included, and takes I and L as 1 and O as 0. The version is the one
+// character after PG, a value of the same alphabet: PG2 to PGZ are free for
+// later versions, and an older page refuses them as a newer version.
 //
 // The body is a bit string, five bits per character, most significant bit
 // first. It lists only the settings that differ from BASELINE, the defaults
@@ -345,6 +347,57 @@ export function encodeSettingsCode(settings: StoredSettings): string {
   return [`PG${SETTINGS_CODE_VERSION}`, ...groups].join("-");
 }
 
+/**
+ * A code at least as long as any this version writes for a page offering
+ * `styles`: every field away from its baseline, with the offered style that
+ * takes the most room. The values need not make valid settings; every
+ * field's width is fixed, so only the style changes a code's length. The
+ * page reserves room for it so showing a code never moves what is below.
+ */
+export function longestSettingsCode(styles: readonly string[]): string {
+  const p = BASELINE.password;
+  const away: StoredSettings = {
+    theme: "dark",
+    style: BASELINE.style,
+    password: {
+      length: p.length + 1,
+      lowercase: !p.lowercase,
+      uppercase: !p.uppercase,
+      numbers: !p.numbers,
+      simple: !p.simple,
+      complex: !p.complex,
+      excludeLookAlikes: !p.excludeLookAlikes,
+      dontStartWithSymbol: !p.dontStartWithSymbol,
+      counts: {
+        lowercase: { min: 0, max: 0 },
+        uppercase: { min: 0, max: 0 },
+        numbers: { min: 0, max: 0 },
+        symbols: { min: 0, max: 0 },
+      },
+    },
+    passphrase: {
+      wordList: "orchard-medium",
+      words: BASELINE.passphrase.words + 1,
+      minWordLength: 3,
+      maxWordLength: 3,
+      number: !BASELINE.passphrase.number,
+      symbol: !BASELINE.passphrase.symbol,
+      excludeLookAlikes: !BASELINE.passphrase.excludeLookAlikes,
+      separatorSymbol: "-",
+      numberDigits: 3,
+      symbolPosition: "after",
+      capitalize: "every",
+    },
+  };
+  let longest = encodeSettingsCode(away);
+  for (const style of styles) {
+    if (style === BASELINE.style) continue;
+    const code = encodeSettingsCode({ ...away, style });
+    if (code.length > longest.length) longest = code;
+  }
+  return longest;
+}
+
 /** The character values of a typed body, or null when a character is outside the alphabet. */
 function characterValues(text: string): number[] | null {
   const values: number[] = [];
@@ -480,13 +533,17 @@ function compact(text: string): string {
  */
 export function decodeSettingsCode(input: unknown): DecodeResult {
   if (typeof input !== "string" || input.length > SETTINGS_CODE_TEXT_LIMIT) return { ok: false, error: "format" };
-  const text = input.trim().toUpperCase();
+  // Case, spaces and hyphens are ignored everywhere, the prefix included, so
+  // "pg1 zw" and "PG1ZW" are "PG1-ZW". The version is the one character after
+  // PG, which is what keeps "PG1240SJ" unambiguous.
+  const text = compact(input);
   if (text === "") return { ok: false, error: "empty" };
-  const prefix = /^PG(\d{1,3})\s*-/.exec(text);
-  if (!prefix) return { ok: false, error: "format" };
-  if (Number(prefix[1]) !== SETTINGS_CODE_VERSION) return { ok: false, error: "version" };
-  const chars = characterValues(compact(text.slice(prefix[0].length)));
-  if (!chars || chars.length < 2 || chars.length - 2 > MAX_BODY) return { ok: false, error: "format" };
+  if (!text.startsWith("PG")) return { ok: false, error: "format" };
+  const version = characterValues(text.slice(2, 3))?.[0];
+  const chars = characterValues(text.slice(3));
+  if (version === undefined || !chars || chars.length < 2 || chars.length - 2 > MAX_BODY)
+    return { ok: false, error: "format" };
+  if (version !== SETTINGS_CODE_VERSION) return { ok: false, error: "version" };
   if (!checksumHolds(chars)) return { ok: false, error: "checksum" };
   const entries = readEntries(chars.slice(0, -2));
   if (typeof entries === "string") return { ok: false, error: entries };

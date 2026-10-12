@@ -11,7 +11,7 @@ import { SETTINGS_SCHEMA_VERSION } from "../../src/boot/storage.ts";
 import { type Config, config } from "../../src/config/validate.ts";
 import { generatePassphrase } from "../../src/core/passphrase.ts";
 import { countPasswords, generatePassword, planPassword } from "../../src/core/password.ts";
-import { BASELINE, decodeSettingsCode, encodeSettingsCode } from "../../src/core/settings-code.ts";
+import { BASELINE, decodeSettingsCode, encodeSettingsCode, longestSettingsCode } from "../../src/core/settings-code.ts";
 import { isWordListId, WORD_LISTS } from "../../src/core/wordlists.ts";
 import { defaultSettings, type Settings, validateStoredSettings } from "../../src/ui/settings.ts";
 import {
@@ -275,6 +275,32 @@ describe("round trip", () => {
   });
 });
 
+describe("the room a code needs", () => {
+  test("no valid code is longer than the one the page reserves room for", () => {
+    const styles = config.style.offered.map((style) => style.id);
+    const longest = longestSettingsCode(styles);
+    assert.equal(longest.length, 68);
+    for (const settings of validSettings(6, 3000))
+      assert.ok((settingsCode(settings, config) as string).length <= longest.length);
+    assert.ok("PG1-0GC2-80MX-1581-NJGR-0K8Y-E01W-5805-224J-KF8J-P5P6-A7NX-VJQ8".length <= longest.length);
+  });
+
+  test("a long custom style id is accounted for", () => {
+    const id = `s${"x".repeat(31)}`;
+    const custom: Config = structuredClone(config);
+    (custom.style.offered as Array<{ id: string; label: string }>).push({ id, label: "Long" });
+    const longest = longestSettingsCode(custom.style.offered.map((style) => style.id));
+    const code = settingsCode(
+      edited((s) => {
+        s.style = id;
+      }),
+      custom,
+    ) as string;
+    assert.ok(code.length < longest.length);
+    assert.ok(longest.length > longestSettingsCode(config.style.offered.map((style) => style.id)).length);
+  });
+});
+
 describe("check characters", () => {
   const sample = validSettings(4, 60).map((s) => settingsCode(s, config) as string);
   sample.push("PG1-ZW");
@@ -324,13 +350,48 @@ describe("refused codes", () => {
     refuse(`PG1-${"0".repeat(300)}`, "format");
   });
 
+  test("case, spaces and hyphens around the prefix do not matter either", () => {
+    const defaults = { ok: true, settings: defaultSettings(config) };
+    for (const text of [
+      "PG1ZW",
+      "PG1 ZW",
+      "pg1zw",
+      "Pg1-zW",
+      " p g 1 - z w ",
+      "-PG1-ZW-",
+      "PG-1-ZW",
+      "P-G1--ZW",
+      "PG1 - ZW",
+      "\tPG1\nZW ",
+      "PGI-ZW",
+      "pgl zw",
+    ])
+      assert.deepEqual(readSettingsCode(text, config), defaults, JSON.stringify(text));
+    const longer = settingsCode(
+      edited((s) => {
+        s.password.length = 32;
+        for (const t of ["lowercase", "uppercase", "numbers", "symbols"] as const) s.password.counts[t].max = 32;
+      }),
+      config,
+    );
+    // A body that starts with a digit right after the version.
+    assert.equal(longer, "PG1-240S-J");
+    for (const text of ["PG1240SJ", "pg1 240s j", "PG1-2-4-0-S-J"])
+      assert.equal(readSettingsCode(text, config).ok, true, text);
+  });
+
   test("a missing or wrong prefix, or characters outside the alphabet", () => {
     refuse("ZW", "format");
     refuse("PG-ZW", "format");
-    refuse("PGI-ZW", "format");
+    refuse("PGZW", "format");
+    refuse("PG", "format");
     refuse("XX1-ZW", "format");
-    refuse("PG1ZW", "format");
+    refuse("P1-ZW", "format");
+    refuse("GP1-ZW", "format");
+    refuse("PGU-ZW", "format");
+    refuse("PG*-ZW", "format");
     refuse("PG1-", "format");
+    refuse("PG1", "format");
     refuse("PG1-Z", "format");
     refuse("PG1-ZU", "format");
     refuse("PG1-Z*", "format");
@@ -343,9 +404,8 @@ describe("refused codes", () => {
   });
 
   test("another version, or a field, list or style number this version does not know, is a newer version", () => {
-    refuse("PG2-ZW", "version");
-    refuse("PG0-ZW", "version");
-    refuse("PG10-ZW", "version");
+    for (const text of ["PG2-ZW", "PG0-ZW", "PGX-ZW", "pgx zw", "PG2ZW", "PG 9 - ZW", "PGZ-0000"])
+      refuse(text, "version");
     for (const number of [29, 30, 31]) refuse(craft(field(number)), "version");
     for (const index of [5, 6]) refuse(craft(field(1) + bin(index, 3)), "version");
     for (const index of [5, 6, 7]) refuse(craft(field(18) + bin(index, 3)), "version");

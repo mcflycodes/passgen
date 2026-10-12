@@ -74,7 +74,9 @@ never a password or passphrase, and no message repeats what was typed.
 
 - Format (`src/core/settings-code.ts`): `PG1-`, then Crockford base32 (digits
   and capitals without I, L, O and U) in groups of four, ending in two check
-  characters. Case, spaces and hyphens are ignored; I and L read as 1, O as 0.
+  characters. Case, spaces and hyphens are ignored everywhere, so `pg1 zw` and
+  `PG1ZW` are `PG1-ZW`; I and L read as 1, O as 0. The version is the one
+  character after `PG`.
   The check catches every single wrong character and every swap of two
   adjacent characters.
 - Only settings that differ from the defaults PassGen 1.4 shipped with are in
