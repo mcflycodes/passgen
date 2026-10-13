@@ -1,7 +1,17 @@
 import type { Page } from "@playwright/test";
 import { WORD_LISTS } from "../../src/core/wordlists.ts";
 import { expect, test } from "./fixtures.ts";
-import { chooseStyle, chooseTheme, expectStablePosition, openPage, STYLES, setNumber, setRange } from "./helpers.ts";
+import {
+  chooseStyle,
+  chooseTheme,
+  expectStablePosition,
+  openPage,
+  STYLES,
+  setChecked,
+  setNumber,
+  setOpen,
+  setRange,
+} from "./helpers.ts";
 
 async function position(page: Page, prefix: "pw" | "pp") {
   return page.evaluate((prefix) => {
@@ -35,7 +45,7 @@ for (const style of STYLES) {
           await setNumber(page.locator("#pp-max-length"), 5);
         }
         for (const expanded of [false, true]) {
-          if (expanded) await page.locator(`#${prefix}-meter summary`).click();
+          if (expanded) await setOpen(page.locator(`#${prefix}-meter details`), true);
           // Keep the original EFF pool for the six-band and longest-warning coverage.
           if (prefix === "pp") await page.locator("#pp-word-list").selectOption("eff-large");
           const initial = await position(page, prefix);
@@ -84,12 +94,12 @@ for (const style of STYLES) {
               }
               // Only symbols shows the skipped first-character-rule notice.
               for (const id of ["pw-lowercase", "pw-uppercase", "pw-numbers"]) {
-                await page.locator(`#${id}`).uncheck();
+                await setChecked(page.locator(`#${id}`), false);
                 await check(`${length}/${id} removed`, fixed.absolute);
               }
               await expect(page.locator("#pw-notice")).toBeVisible();
               for (const id of ["pw-lowercase", "pw-uppercase", "pw-numbers"]) {
-                await page.locator(`#${id}`).check();
+                await setChecked(page.locator(`#${id}`), true);
                 await check(`${length}/${id} restored`, fixed.absolute);
               }
             }
@@ -140,8 +150,8 @@ for (const style of STYLES) {
             }
             // Small pools reach Very weak and exercise the longest warning text.
             await page.locator("#pp-word-list").selectOption("eff-large");
-            await page.locator("#pp-number").uncheck();
-            await page.locator("#pp-symbol").uncheck();
+            await setChecked(page.locator("#pp-number"), false);
+            await setChecked(page.locator("#pp-symbol"), false);
             await setNumber(page.locator("#pp-min-length"), 3);
             await setNumber(page.locator("#pp-max-length"), 3);
             for (let words = 2; words <= 12; words++) {
@@ -149,8 +159,8 @@ for (const style of STYLES) {
               await check(`narrow pool/${words}`);
             }
             await expect(page.locator("#pp-meter-warning")).toBeVisible();
-            await page.locator("#pp-number").check();
-            await page.locator("#pp-symbol").check();
+            await setChecked(page.locator("#pp-number"), true);
+            await setChecked(page.locator("#pp-symbol"), true);
             await setNumber(page.locator("#pp-min-length"), 5);
             await setNumber(page.locator("#pp-max-length"), 5);
           }
@@ -221,7 +231,7 @@ for (const width of [320, 900, 901, 2400]) {
       await chooseStyle(page, style);
       for (const expanded of [false, true]) {
         const meter = page.locator("#pp-meter details");
-        if (((await meter.getAttribute("open")) !== null) !== expanded) await meter.locator("summary").click();
+        await setOpen(meter, expanded);
         await setRange(page.locator("#pp-words"), 2);
         const baseline = await position(page, "pp");
         for (const [id, list] of Object.entries(WORD_LISTS)) {
@@ -243,14 +253,14 @@ for (const width of [320, 900, 901, 2400]) {
         await setNumber(page.locator("#pp-min-length"), 5);
         await setNumber(page.locator("#pp-max-length"), 9);
         await setRange(page.locator("#pp-words"), 2);
-        await page.locator("#pp-number").uncheck();
-        await page.locator("#pp-symbol").uncheck();
+        await setChecked(page.locator("#pp-number"), false);
+        await setChecked(page.locator("#pp-symbol"), false);
         await expect(page.locator("#pp-meter-warning")).toContainText("12,148 words");
         const warning = await position(page, "pp");
         expectStablePosition(warning.height, baseline.height, `${style}: five-digit pool warning height`);
         expectStablePosition(warning.absolute, baseline.absolute, `${style}: five-digit pool warning position`);
-        await page.locator("#pp-number").check();
-        await page.locator("#pp-symbol").check();
+        await setChecked(page.locator("#pp-number"), true);
+        await setChecked(page.locator("#pp-symbol"), true);
       }
     });
 }
