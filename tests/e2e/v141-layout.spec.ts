@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures.ts";
-import { chooseStyle, chooseTheme, openPage, STYLES, setNumber, setRange } from "./helpers.ts";
+import { chooseStyle, chooseTheme, openPage, STYLES, setChecked, setNumber, setOpen, setRange } from "./helpers.ts";
 
 const capture = process.env.V141_CAPTURE;
 const shots = process.env.V141_SCREENSHOT_DIR;
@@ -28,9 +28,9 @@ async function stationaryControls(page: Page) {
     await check();
   }
   await expect(page.locator("#pw-band")).toHaveText("Excellent");
-  await page.locator("#pw-meter summary").click();
+  await setOpen(page.locator("#pw-meter details"), true);
   await expect(page.locator("#pw-scenarios")).toContainText("NTLM search capped");
-  await page.locator("#pw-meter summary").click();
+  await setOpen(page.locator("#pw-meter details"), false);
   await check();
   for (const field of ["min", "max"] as const) {
     await setNumber(page.locator(`#pw-lowercase-${field}`), field === "min" ? 2 : 39);
@@ -42,18 +42,18 @@ async function stationaryControls(page: Page) {
   await page.locator("#pw-lowercase-max").focus();
   await page.keyboard.press("ArrowDown");
   await check();
-  await page.locator("#pw-lookalikes").check();
+  await setChecked(page.locator("#pw-lookalikes"), true);
   await check();
   await page.locator("#pp-word-list").selectOption("eff-large");
   await setNumber(page.locator("#pp-min-length"), 3);
   await setNumber(page.locator("#pp-max-length"), 3);
   await setRange(page.locator("#pp-words"), 2);
-  await page.locator("#pp-number").uncheck();
-  await page.locator("#pp-symbol").uncheck();
+  await setChecked(page.locator("#pp-number"), false);
+  await setChecked(page.locator("#pp-symbol"), false);
   await expect(page.locator("#pp-meter-warning")).toBeVisible();
   await check();
-  await page.locator("#pp-number").check();
-  await page.locator("#pp-symbol").check();
+  await setChecked(page.locator("#pp-number"), true);
+  await setChecked(page.locator("#pp-symbol"), true);
   await page.locator("#pp-symbol-char").selectOption("random-unique");
   await check();
 }

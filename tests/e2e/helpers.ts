@@ -34,6 +34,31 @@ export async function setNumber(locator: Locator, value: number | string): Promi
   }, value);
 }
 
+// Layout specs change settings from the keyboard. A pointer action first waits
+// for its target to hold still across animation frames, and in WebKit on CI
+// each one took 3 to 4.5 seconds on wide pages with fixed backgrounds, enough
+// to run a long layout test out of time (#45). Those specs measure layout, not
+// pointer handling.
+
+/** Sets a checkbox from the keyboard (focus, then Space) and checks the result. */
+export async function setChecked(locator: Locator, checked: boolean): Promise<void> {
+  if ((await locator.isChecked()) !== checked) {
+    await locator.focus();
+    await locator.page().keyboard.press("Space");
+  }
+  await expect(locator).toBeChecked({ checked });
+}
+
+/** Opens or closes a details element from the keyboard (its summary, then Enter) and checks the result. */
+export async function setOpen(details: Locator, open: boolean): Promise<void> {
+  if ((await details.evaluate((el) => (el as HTMLDetailsElement).open)) !== open) {
+    await details.locator("summary").focus();
+    await details.page().keyboard.press("Enter");
+  }
+  if (open) await expect(details).toHaveAttribute("open", "");
+  else await expect(details).not.toHaveAttribute("open");
+}
+
 /** Waits for colour transitions to finish, so a check reads final colours. */
 export async function settle(page: Page): Promise<void> {
   await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === "finished"));
