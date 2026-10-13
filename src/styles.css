@@ -411,9 +411,6 @@ summary,
 }
 
 /* ---------- Generator grid (R1 to R3) ---------- */
-main {
-  padding-bottom: 24px;
-}
 .generators {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -911,7 +908,9 @@ select {
    the status beside it says what happened and is announced. With reduced
    motion there is no fade: the highlight simply ends. */
 /* Wide screens set the settings code beside Save and Reset, against the
-   content's right edge; narrow ones stack it below them (v1.5.1). */
+   content's right edge; narrow ones stack it below them (v1.5.1). The page
+   ends with this section, so main adds no bottom padding below it; the
+   footer's own top padding is the only space before the footer text. */
 .save-settings {
   margin: 28px clamp(20px, 4vw, 72px) 0;
   padding-top: 20px;
@@ -960,19 +959,33 @@ select {
   padding-top: 16px;
   border-top: var(--hairline);
 }
+/* Side by side, the settings code takes up to 54rem, enough for its hint
+   on one line on wide screens, and its fields take the width the buttons
+   leave; Save and Reset keep at least 20rem and take the rest. The rows and
+   hint fill the block rather than keeping their stacked caps. */
 @media (min-width: 901px) {
   .save-settings {
-    grid-template-columns: minmax(min(20rem, 100%), 1fr) minmax(0, 36rem);
+    grid-template-columns: minmax(min(20rem, 100%), 1fr) minmax(0, 54rem);
+  }
+  .settings-code .hint {
+    max-width: none;
   }
   .settings-code {
     padding-top: 0;
     border-top: 0;
+  }
+  .settings-code .code-row {
+    max-width: none;
   }
 }
 .settings-code-title {
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
+}
+/* The title and its hint read as one heading block. */
+.settings-code-title + .hint {
+  margin-top: -6px;
 }
 .code-row {
   display: flex;
@@ -1043,7 +1056,7 @@ select {
    version and the configured license link. */
 .foot {
   margin: 0 clamp(20px, 4vw, 72px);
-  padding: 28px 0 40px;
+  padding: 24px 0 40px;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
