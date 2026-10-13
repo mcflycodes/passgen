@@ -10,7 +10,7 @@ your setup; the reference guides hold every detail.
 |---|---|
 | [Install by hand](Install-by-hand.md) | Download, unzip and point your web server at it. The shortest path. |
 | [Install script](Install-script.md) | One verified command on a Linux server, with backups and automatic rollback. |
-| [Docker](Install-Docker.md) | The official image behind Caddy, which handles HTTPS. |
+| [Docker](Install-Docker.md) | The official image: setup behind HTTPS, parameters, support and updates. |
 | [AI agent](Install-AI-agent.md) | Let your agent ask, plan and install, with your approval. |
 | [Apache](Install-Apache.md) | Site config and security headers for Apache httpd. |
 | [nginx](Install-nginx.md) | Site config and security headers for nginx. |
@@ -19,7 +19,7 @@ your setup; the reference guides hold every detail.
 
 Reference guides: [Self-hosting](self-hosting.md) (every server rule, CDN
 setting and fully verified procedure), [installer reference](install-release.md),
-[Running PassGen with Docker](docker.md) and
+[Docker recipes without the PassGen image](docker.md) and
 [HTTPS in front of the container](docker-https.md).
 
 ## Configure

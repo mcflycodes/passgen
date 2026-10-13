@@ -9,7 +9,7 @@ Saved defaults belong to the browser's origin; changing domains resets them.
 Generated values are never saved.
 
 To run the official container image instead of copying files to a server, see
-[Running PassGen with Docker](docker.md).
+[Install with Docker](Install-Docker.md).
 
 ## Before you start
 

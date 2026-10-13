@@ -1,8 +1,10 @@
 # Docker Compose recipes
 
 One folder per recipe. Choosing, pinning, verifying and updating are in
-[Running PassGen with Docker](../../docs/docker.md); HTTPS options are in the
-[HTTPS guide](../../docs/docker-https.md).
+[Install with Docker](../../docs/Install-Docker.md); the release files for
+`caddy-files` and `httpd-files` are in
+[Docker recipes without the PassGen image](../../docs/docker.md); HTTPS options
+are in the [HTTPS guide](../../docs/docker-https.md).
 
 | Folder | What runs |
 |---|---|

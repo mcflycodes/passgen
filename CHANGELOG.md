@@ -5,6 +5,10 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Documentation: the Docker page, `docs/Install-Docker.md`, now follows a scannable image-page layout: supported architectures and tags, setup behind HTTPS, read-only and non-root operation, matching Compose and `docker run` examples, a parameters reference, support commands, and step-by-step updates for Compose and `docker run` with digest pinning, provenance checks and update notifications. `docs/docker.md` now covers only the release-file recipes and what CI tests.
+
 ## [1.5.0] - 2026-10-12
 
 ### Added
