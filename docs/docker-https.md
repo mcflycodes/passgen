@@ -3,7 +3,7 @@
 The PassGen image serves plain HTTP on port 8080 and never handles TLS. This
 guide shows five ways to put HTTPS in front of it. Only the Caddy setup and the
 container side of the existing-proxy setup are tested in CI (the `caddy-https`
-and `localhost` recipes in [Running PassGen with Docker](docker.md)). The
+and `localhost` recipes in [Install with Docker](Install-Docker.md#application-setup)). The
 Traefik, nginx with Certbot, Cloudflare Tunnel and host Apache or nginx proxy
 configurations below are documented examples, not CI-tested: test your own setup
 with the verifier before relying on it.

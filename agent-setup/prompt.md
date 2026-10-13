@@ -15,7 +15,7 @@ already provided and ask only for what is missing:
   Pages or Netlify, or something else? Which machine or hosting project?
 - Does the machine run Docker with Compose, and would you prefer the official
   container image, behind Caddy or behind your existing proxy? If so, deploy it by
-  verified digest following the [Docker guide](../docs/docker.md) and
+  verified digest following the [Docker guide](../docs/Install-Docker.md) and
   [HTTPS guide](../docs/docker-https.md) at the selected tag, in place of the
   file-based install steps below; the same confirmation and safety rules apply.
 - What OS is it running? Do you have shell access, and sudo/root privileges?
