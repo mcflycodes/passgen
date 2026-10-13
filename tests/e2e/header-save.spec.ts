@@ -208,6 +208,9 @@ function bottomGeometry(page: Page) {
       save: box(".save-block"),
       saveButton: box("#save-settings"),
       code: box(".settings-code"),
+      codeValue: box("#settings-code-value"),
+      codeInput: box("#settings-code-input"),
+      footText: box(".foot-text"),
       codeRows: [...document.querySelectorAll(".settings-code .code-row")].map((row) => {
         const r = row.getBoundingClientRect();
         return { left: r.left, right: r.right };
@@ -233,6 +236,36 @@ test.describe("Save and the settings code at the bottom", () => {
         for (const row of g.codeRows) expect(Math.abs(row.right - g.content.right)).toBeLessThanOrEqual(1);
       });
     }
+  }
+  // v1.5.1: the row sits close to the footer, and the settings code has room.
+  // The footer's own 24px top padding is the only space before its text, so
+  // 32px allows for rounding; the shorter Save column leaves less than a
+  // control row and a half (64px) empty below its hint. At 720px the code
+  // block's hint takes at most two lines and each field keeps 400px, room for
+  // the longest code on one line (main had a 576px block with a 297px field).
+  for (const width of [1440, 1920]) {
+    for (const style of STYLES) {
+      test(`close to the footer, settings code with room: ${style}/${width}`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await openPage(page);
+        await chooseStyle(page, style);
+        const g = await bottomGeometry(page);
+        const rowBottom = Math.max(g.save.bottom, g.code.bottom);
+        expect(g.footText.top - rowBottom).toBeLessThanOrEqual(32);
+        expect(rowBottom - g.save.bottom).toBeLessThanOrEqual(64);
+        expect(g.code.right - g.code.left).toBeGreaterThanOrEqual(720);
+        expect(g.codeInput.right - g.codeInput.left).toBeGreaterThanOrEqual(400);
+        expect(g.codeValue.right - g.codeValue.left).toBeGreaterThanOrEqual(400);
+      });
+    }
+  }
+  for (const width of [901, 900, 390]) {
+    test(`close to the footer: ${width}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openPage(page);
+      const g = await bottomGeometry(page);
+      expect(g.footText.top - Math.max(g.save.bottom, g.code.bottom)).toBeLessThanOrEqual(32);
+    });
   }
   for (const width of [900, 768, 390, 320]) {
     for (const style of STYLES) {
