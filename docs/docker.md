@@ -72,7 +72,7 @@ To check the live site, run the verifier from the same tag with
 the complete file set:
 
 ```sh
-node scripts/verify-live.ts --url https://passgen.example.com/ --manifest /path/to/SHA256SUMS --release-dir /path/to/passgen
+node ../../../scripts/verify-live.ts --url https://passgen.example.com/ --manifest /path/to/SHA256SUMS --release-dir /path/to/passgen
 ```
 
 ## Update and roll back the files recipes

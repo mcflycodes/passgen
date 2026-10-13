@@ -52,7 +52,8 @@ CI brings up all four unchanged on amd64 and arm64 and probes them; see
   only Caddy reaches it, over an internal network. Caddy gets and renews the
   certificate, passes PassGen's headers through untouched, and adds the same
   headers to the responses it creates itself, such as its HTTP-to-HTTPS redirect
-  and the 502 page shown while PassGen is down.
+  and the 502 page shown while PassGen is down. The internal backend network
+  also prevents PassGen from accessing outside networks.
 - **`localhost`** suits a host that already runs Apache, nginx or Caddy with
   working certificates. Point that proxy at `http://127.0.0.1:8080`. It is the
   recipe shown under [Usage](#usage).
@@ -256,8 +257,8 @@ Log rotation belongs in your Docker daemon configuration.
 
 | Problem | What to do |
 |---|---|
-| Compose refuses to start and says to set `PASSGEN_IMAGE` | `.env` still has the placeholder. Set the image with its verified digest. |
-| No certificate, or the browser shows a certificate error | Check that the hostname points at this host and that ports 80 and 443 are reachable from the internet. `docker compose logs caddy` shows Caddy's messages. |
+| Compose refuses to start and says to set `PASSGEN_IMAGE` | `PASSGEN_IMAGE` is unset or empty. Set the image with its verified digest. |
+| No certificate, or the browser shows a certificate error | Check that the hostname points at this host and that ports 80 and 443 are reachable from the internet. For `caddy-https`, use `docker compose logs caddy`; for `caddy-files`, use `docker compose logs passgen`. |
 | 502 from Caddy | The PassGen container is not running or not healthy yet. Check `docker compose ps` and `docker compose logs passgen`. |
 | The files recipes return 403, or the containers cannot read files | On SELinux hosts, label the mounted folders, for example `chcon -R -t container_file_t caddy passgen`. See [Release files](docker.md#release-files-for-caddy-files-and-httpd-files). |
 | Headers missing or doubled behind your own proxy | The proxy must pass the container's headers through unchanged. See [Rules for every setup](docker-https.md#rules-for-every-setup). |
@@ -394,7 +395,11 @@ published digests. For `caddy-files` and `httpd-files`, see
 4. Recreate it with the same `docker run` parameters as in [Usage](#docker-cli),
    with the new digest as the last argument.
 
-To roll back, repeat steps 3 and 4 with the previous digest.
+5. Check the live site through your HTTPS proxy, as in step 4 or 5 of
+   [Set up caddy-https](#set-up-caddy-https).
+
+To roll back, repeat steps 3 and 4 with the previous digest, then check the
+site again.
 
 **Optional:** remove old images once you no longer need them for rollback:
 
