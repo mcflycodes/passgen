@@ -18,6 +18,9 @@ function color(value: string) {
 }
 const tags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function axe(page: Page, state: string) {
+  // Audit from the top of the page: a pinned header covers whatever is
+  // scrolled beneath it, which target-size would report as obscured.
+  await page.evaluate(() => window.scrollTo(0, 0));
   const result = await new AxeBuilder({ page }).withTags(tags).analyze();
   expect(result.violations, state).toEqual([]);
 }

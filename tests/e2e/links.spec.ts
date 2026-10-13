@@ -70,22 +70,15 @@ test.describe("repository and license links", () => {
       await chooseStyle(page, style);
       for (const theme of THEMES) {
         await chooseTheme(page, theme);
-        // The repository link is the page's first focusable element and the
+        // The repository link follows the header's Reset button and the
         // license link follows the Apply settings code button, so one Tab reaches each; a
         // real key press is what makes the ring show (:focus-visible).
         for (const [id, from] of [
-          ["repo-link", null],
+          ["repo-link", "#header-reset-settings"],
           ["license-link", "#apply-settings-code"],
         ] as const) {
           const link = page.locator(`#${id}`);
-          if (from === null) {
-            // Start sequential focus from the body, as tests/e2e/accessibility.spec.ts does.
-            await page.evaluate(() => {
-              document.body.tabIndex = -1;
-              document.body.focus();
-              document.body.removeAttribute("tabindex");
-            });
-          } else await page.locator(from).focus();
+          await page.locator(from).focus();
           await page.keyboard.press("Tab");
           await expect(link).toBeFocused();
           const ring = await link.evaluate((el) => {
