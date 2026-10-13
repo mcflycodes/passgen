@@ -5,13 +5,15 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-12
+
 ### Added
 
-- Settings codes: "Get settings code" shows a short code, such as `PG1-ZW`, for every setting of both generators, the theme and the style. Typing it into another browser and pressing Apply sets the same settings there at once, with no server, account, network request or URL. The code holds settings only, never a password; it is checked by the same rules as saved settings and refused with a message if it has a typo or asks for something the page does not offer. Applying does not save; Save as my default keeps it.
+- Settings codes. "Get settings code", below the Save and Reset buttons, shows a short code for every setting of both generators, the theme and the style; "Apply settings code" in another browser sets the same settings there at once, with no server, account or network request. PassGen's shipped defaults give `PG1-ZW`, and other codes stay short because a code lists only the settings that differ from those shipped defaults. Case, spaces and hyphens do not matter when typing a code, and its two check characters catch any single wrong character and any swap of two adjacent characters. A code holds settings only, never a password, and is never put in the URL. Applying a code does not save it; press Save as my default to keep it. A code with a typo, from another version, or asking for something the page does not offer is refused with a message and changes nothing.
 
 ### Changed
 
-- Documentation: the README is now a short landing page. Each install method, configuration, styles, word lists and security headers have their own page under `docs/`, listed on `docs/README.md`, and the gates table moved to `CONTRIBUTING.md`.
+- Documentation: the README is now a short landing page. Each install method, configuration, styles, word lists and security headers have their own page under `docs/`, listed on `docs/README.md`, and the gates table moved to `CONTRIBUTING.md`. The by-hand install keeps each release's file list next to the site folder and checks files against it on update and rollback, and the Apache, nginx and Caddy pages back up the files they change and restore them on rollback.
 
 ## [1.4.1] - 2026-10-11
 
