@@ -5,6 +5,11 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- "Save as my default" and "Reset to defaults" are now also in the header, between the PassGen name and the GitHub, Style and theme controls, so saving no longer means scrolling to the bottom. They do exactly what the buttons at the bottom do, which stay. A header press confirms in the header: the pressed button is highlighted and briefly reads Saved, Cleared or Failed, and screen readers hear the full message once. Below 1024px wide the header buttons read Save and Reset, keeping their full names for assistive technology, and on narrow screens the header wraps rather than overflowing.
+- At the bottom of the page, the settings code sits beside Save and Reset from 901px wide, against the right edge of the content, and below them on narrower screens.
+
 ## [1.5.0] - 2026-10-12
 
 ### Added
