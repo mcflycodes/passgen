@@ -5,6 +5,30 @@ import { chooseStyle, chooseTheme, openPage, STYLES, setNumber, setRange } from 
 const capture = process.env.V141_CAPTURE;
 const shots = process.env.V141_SCREENSHOT_DIR;
 
+// The settings below change from the keyboard. A pointer action first waits
+// for its target to hold still across animation frames, and in WebKit on CI
+// each one took 3 to 4.5 seconds on wide pages with fixed backgrounds, so
+// Slate/light/1920 ran out of time (#45). This test measures layout, not
+// pointer handling.
+async function setChecked(page: Page, selector: string, checked: boolean) {
+  const box = page.locator(selector);
+  if ((await box.isChecked()) !== checked) {
+    await box.focus();
+    await page.keyboard.press("Space");
+  }
+  await expect(box).toBeChecked({ checked });
+}
+
+async function setOpen(page: Page, selector: string, open: boolean) {
+  const details = page.locator(`${selector} details`);
+  if ((await details.evaluate((el) => (el as HTMLDetailsElement).open)) !== open) {
+    await details.locator("summary").focus();
+    await page.keyboard.press("Enter");
+  }
+  if (open) await expect(details).toHaveAttribute("open", "");
+  else await expect(details).not.toHaveAttribute("open");
+}
+
 // Exercise both cards in every style/theme, including warnings on phones.
 // On stacked cards, longer extras can move the following card as a whole;
 // settings must keep their position inside their own card.
@@ -28,9 +52,9 @@ async function stationaryControls(page: Page) {
     await check();
   }
   await expect(page.locator("#pw-band")).toHaveText("Excellent");
-  await page.locator("#pw-meter summary").click();
+  await setOpen(page, "#pw-meter", true);
   await expect(page.locator("#pw-scenarios")).toContainText("NTLM search capped");
-  await page.locator("#pw-meter summary").click();
+  await setOpen(page, "#pw-meter", false);
   await check();
   for (const field of ["min", "max"] as const) {
     await setNumber(page.locator(`#pw-lowercase-${field}`), field === "min" ? 2 : 39);
@@ -42,18 +66,18 @@ async function stationaryControls(page: Page) {
   await page.locator("#pw-lowercase-max").focus();
   await page.keyboard.press("ArrowDown");
   await check();
-  await page.locator("#pw-lookalikes").check();
+  await setChecked(page, "#pw-lookalikes", true);
   await check();
   await page.locator("#pp-word-list").selectOption("eff-large");
   await setNumber(page.locator("#pp-min-length"), 3);
   await setNumber(page.locator("#pp-max-length"), 3);
   await setRange(page.locator("#pp-words"), 2);
-  await page.locator("#pp-number").uncheck();
-  await page.locator("#pp-symbol").uncheck();
+  await setChecked(page, "#pp-number", false);
+  await setChecked(page, "#pp-symbol", false);
   await expect(page.locator("#pp-meter-warning")).toBeVisible();
   await check();
-  await page.locator("#pp-number").check();
-  await page.locator("#pp-symbol").check();
+  await setChecked(page, "#pp-number", true);
+  await setChecked(page, "#pp-symbol", true);
   await page.locator("#pp-symbol-char").selectOption("random-unique");
   await check();
 }
