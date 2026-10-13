@@ -19,6 +19,19 @@
         <p class="tagline" data-cfg-text="text.tagline"></p>
         <!-- /passgen:tagline -->
       </div>
+      <!-- The same Save and Reset as at the bottom (src/ui/settings.ts). Each
+           button keeps its full name; its visible label swaps between the
+           full or compact idle text and a short outcome in one grid cell, so
+           the button never changes size. -->
+      <div class="header-save">
+        <button type="button" class="btn btn-primary header-save-btn" id="header-save-settings" aria-label="Save as my default" aria-describedby="save-settings-hint">
+          <span class="hb-labels" aria-hidden="true"><span class="hb-idle"><span class="hb-full">Save as my default</span><span class="hb-short">Save</span></span><span class="hb-ok">Saved</span><span class="hb-fail">Failed</span></span>
+        </button>
+        <button type="button" class="btn header-save-btn" id="header-reset-settings" aria-label="Reset to defaults" aria-describedby="save-settings-hint">
+          <span class="hb-labels" aria-hidden="true"><span class="hb-idle"><span class="hb-full">Reset to defaults</span><span class="hb-short">Reset</span></span><span class="hb-ok">Cleared</span><span class="hb-fail">Failed</span></span>
+        </button>
+        <p class="sr-only" id="header-save-status" role="status" aria-live="polite" aria-atomic="true"></p>
+      </div>
       <div class="top-controls">
         <!-- passgen:repo-link -->
         <!-- biome-ignore lint/a11y/useValidAnchor: the build fills the href from the configuration (decision 0005) -->
@@ -263,12 +276,14 @@
 
       <section class="save-settings" id="save-settings-area" aria-labelledby="save-settings-title">
         <h2 class="sr-only" id="save-settings-title">Saved settings</h2>
-        <div class="save-actions">
-          <button type="button" class="btn btn-primary" id="save-settings" aria-describedby="save-settings-hint">Save as my default</button>
-          <button type="button" class="btn" id="reset-settings" aria-describedby="save-settings-hint">Reset to defaults</button>
-          <p class="save-feedback" id="save-settings-status" role="status" aria-live="polite" aria-atomic="true"></p>
+        <div class="save-block">
+          <div class="save-actions">
+            <button type="button" class="btn btn-primary" id="save-settings" aria-describedby="save-settings-hint">Save as my default</button>
+            <button type="button" class="btn" id="reset-settings" aria-describedby="save-settings-hint">Reset to defaults</button>
+            <p class="save-feedback" id="save-settings-status" role="status" aria-live="polite" aria-atomic="true"></p>
+          </div>
+          <p class="hint" id="save-settings-hint"></p>
         </div>
-        <p class="hint" id="save-settings-hint"></p>
         <div class="settings-code">
           <h3 class="settings-code-title" id="settings-code-title">Settings code</h3>
           <p class="hint" id="settings-code-hint"></p>

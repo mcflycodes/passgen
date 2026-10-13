@@ -278,15 +278,19 @@ export const SAVE_INVALID_STATUS = "Could not save: fix the settings marked with
 export const SAVE_FEEDBACK_MS = 2000;
 
 /**
- * Binds "Save as my default" and "Reset to defaults". Nothing is written
- * until Save is pressed: it writes one snapshot of the whole store, so a
- * later change is not saved unless Save is pressed again. Reset removes the
- * record and puts the configured defaults back in the store, then `onReset`
- * lets the panels show them. Each outcome is shown as a short status, which
- * a screen reader hears, and a highlight on the pressed button that fades
- * out (or, with reduced motion, simply ends). A browser whose storage cannot
- * be read says so in the hint from the start, and the Save button explains
- * it again when pressed; one that refuses the write explains it then.
+ * Binds "Save as my default" and "Reset to defaults", in the header and at
+ * the bottom of the page: both pairs run the same two actions below. Nothing
+ * is written until Save is pressed: it writes one snapshot of the whole
+ * store, so a later change is not saved unless Save is pressed again. Reset
+ * removes the record and puts the configured defaults back in the store,
+ * then `onReset` lets the panels show them. Each outcome is shown beside the
+ * pair that was pressed: a short status, which a screen reader hears, and a
+ * highlight on the pressed button that fades out (or, with reduced motion,
+ * simply ends). The other pair's status is cleared, so an outcome is
+ * announced once. The header's status is for screen readers; its buttons
+ * show the outcome in their own label (index.html). A browser whose storage
+ * cannot be read says so in the hint from the start, and Save explains it
+ * again when pressed; one that refuses the write explains it then.
  */
 export function mountSaveControl(
   store: SettingsStore,
@@ -294,43 +298,56 @@ export function mountSaveControl(
   storage: SettingsStorage | null,
   onReset: () => void,
 ): void {
-  const save = byId("save-settings", HTMLButtonElement);
-  const reset = byId("reset-settings", HTMLButtonElement);
+  const pairs = (
+    [
+      ["save-settings", "reset-settings", "save-settings-status"],
+      ["header-save-settings", "header-reset-settings", "header-save-status"],
+    ] as const
+  ).map(([save, reset, status]) => ({
+    save: byId(save, HTMLButtonElement),
+    reset: byId(reset, HTMLButtonElement),
+    status: byId(status, HTMLElement),
+  }));
   const hint = byId("save-settings-hint", HTMLElement);
-  const status = byId("save-settings-status", HTMLElement);
   hint.textContent = storage ? SAVE_HINT : SAVE_UNAVAILABLE_HINT;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const feedback = (button: HTMLButtonElement, message: string, ok: boolean) => {
+  const clear = () => {
+    for (const pair of pairs) {
+      for (const b of [pair.save, pair.reset]) b.classList.remove("is-done", "is-error");
+      pair.status.textContent = "";
+      pair.status.classList.remove("is-error");
+    }
+  };
+  const feedback = (button: HTMLButtonElement, status: HTMLElement, message: string, ok: boolean) => {
     clearTimeout(timer);
-    for (const b of [save, reset]) b.classList.remove("is-done");
+    clear();
     // The status is replaced, not appended, so a repeated press is announced again.
-    status.textContent = "";
     status.textContent = message;
     status.classList.toggle("is-error", !ok);
-    if (ok) button.classList.add("is-done");
-    timer = setTimeout(() => {
-      button.classList.remove("is-done");
-      status.textContent = "";
-      status.classList.remove("is-error");
-    }, SAVE_FEEDBACK_MS);
+    button.classList.add(ok ? "is-done" : "is-error");
+    timer = setTimeout(clear, SAVE_FEEDBACK_MS);
   };
-  save.addEventListener("click", () => {
+  const saveSettings = (button: HTMLButtonElement, status: HTMLElement) => {
     const text = serializeSettings(store.current, config);
     if (text === null) {
-      feedback(save, SAVE_INVALID_STATUS, false);
+      feedback(button, status, SAVE_INVALID_STATUS, false);
       return;
     }
     if (!storage?.write(text)) {
       hint.textContent = SAVE_UNAVAILABLE_HINT;
-      feedback(save, SAVE_FAILED_STATUS, false);
+      feedback(button, status, SAVE_FAILED_STATUS, false);
       return;
     }
-    feedback(save, SAVED_STATUS, true);
-  });
-  reset.addEventListener("click", () => {
+    feedback(button, status, SAVED_STATUS, true);
+  };
+  const resetSettings = (button: HTMLButtonElement, status: HTMLElement) => {
     const removed = storage?.remove() ?? false;
     store.update(defaultSettings(config));
     onReset();
-    feedback(reset, removed ? RESET_STATUS : RESET_FAILED_STATUS, removed);
-  });
+    feedback(button, status, removed ? RESET_STATUS : RESET_FAILED_STATUS, removed);
+  };
+  for (const { save, reset, status } of pairs) {
+    save.addEventListener("click", () => saveSettings(save, status));
+    reset.addEventListener("click", () => resetSettings(reset, status));
+  }
 }
