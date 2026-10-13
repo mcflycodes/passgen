@@ -899,6 +899,61 @@ select {
 .save-feedback:empty {
   display: none;
 }
+/* The settings code (src/ui/settings-code.ts). The code slot is sized by a
+   hidden copy of the longest code the page can show (src/ui/reserved-text.ts),
+   so showing any code, or none, moves nothing below it. */
+.settings-code {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: var(--hairline);
+}
+.settings-code-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.code-row {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  max-width: 720px;
+}
+.code-value,
+.code-input {
+  flex: 1 1 14em;
+  min-width: 0;
+  min-height: var(--control-h);
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+}
+.code-row > .reserved-text {
+  flex: 1 1 14em;
+}
+.code-value {
+  display: flex;
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+.code-input {
+  text-transform: uppercase;
+}
+.code-input[aria-invalid="true"] {
+  border-color: var(--bad);
+  box-shadow: 0 0 0 1px var(--bad);
+}
+.code-label {
+  font-size: 14px;
+  color: var(--text-2);
+}
 .btn.is-done {
   background: var(--ok);
   color: var(--on-accent);

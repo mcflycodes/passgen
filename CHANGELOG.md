@@ -5,6 +5,10 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Settings codes: "Get settings code" shows a short code, such as `PG1-ZW`, for every setting of both generators, the theme and the style. Typing it into another browser and pressing Apply sets the same settings there at once, with no server, account, network request or URL. The code holds settings only, never a password; it is checked by the same rules as saved settings and refused with a message if it has a typo or asks for something the page does not offer. Applying does not save; Save as my default keeps it.
+
 ### Changed
 
 - Documentation: the README is now a short landing page. Each install method, configuration, styles, word lists and security headers have their own page under `docs/`, listed on `docs/README.md`, and the gates table moved to `CONTRIBUTING.md`.

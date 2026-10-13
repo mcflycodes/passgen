@@ -62,6 +62,41 @@ becomes the default.
   or Reset.
 - Saved defaults belong to the browser's origin: changing domains resets them.
 
+## Settings codes
+
+A settings code carries the same settings to another browser without a server,
+an account, a network request or a URL. "Get settings code" under the Save
+buttons shows a short code such as `PG1-ZW` (the shipped defaults) for the
+settings on the page; type it into "Code to apply" in the other browser and
+press Apply. The settings change at once, as if set by hand, but nothing is
+saved until Save as my default is pressed there. A code holds settings only,
+never a password or passphrase, and no message repeats what was typed.
+
+- Format (`src/core/settings-code.ts`): `PG1-`, then Crockford base32 (digits
+  and capitals without I, L, O and U) in groups of four, ending in two check
+  characters. Case, spaces and hyphens are ignored everywhere, so `pg1 zw` and
+  `PG1ZW` are `PG1-ZW`; I and L read as 1, O as 0. The version is the one
+  character after `PG`.
+  The check catches every single wrong character and every swap of two
+  adjacent characters.
+- Only settings that differ from the defaults PassGen 1.4 shipped with are in
+  the code, so typical codes are short: the defaults are `PG1-ZW`, a longer
+  password with a few changes is under a dozen characters, and changing every
+  setting gives about 60. The same settings always give the same code, on any
+  deployment.
+- A code is checked by the same validator as saved settings, against this
+  page's bounds, styles and word lists, before anything changes. A code with a
+  typo, from another version, or asking for something this page does not offer
+  (a style or word list it leaves out, a length beyond its limits) is refused
+  with a message and changes nothing. Strength is always computed from the
+  applied settings, so a code cannot make the meter claim more than they give.
+- Versions: a new setting gets the next unused field number in the code, with
+  its default at that time as its baseline, so older codes still load and get
+  that default. An older page meeting a field number it does not know refuses
+  the code as coming from a newer version. Changing what an existing field or
+  a baseline means requires a new prefix (`PG2-`); a page refuses prefixes it
+  does not know.
+
 ## Strength estimates
 
 Unspecified slow-hash and online attack estimates are `null`: consumers must
