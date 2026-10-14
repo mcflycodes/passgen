@@ -1056,7 +1056,8 @@ select {
   gap: 10px;
   padding: 12px 14px 14px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  /* A panel, so the card radius; --radius-sm is for controls (a pill in Purple). */
+  border-radius: var(--radius);
   background: var(--panel);
 }
 .settings-code-head {
