@@ -222,7 +222,8 @@ test.describe("pinned header", () => {
       const seen = await page.evaluate(() => {
         const el = document.activeElement as HTMLElement;
         const header = document.querySelector(".top") as HTMLElement;
-        if (header.contains(el)) return { inHeader: true, top: 0, bottom: 0, headerBottom: 0 };
+        const name = `${el.tagName.toLowerCase()}#${el.id}${el.getAttribute("aria-label") ? ` "${el.getAttribute("aria-label")}"` : ""}`;
+        if (header.contains(el)) return { inHeader: true, name, top: 0, bottom: 0, headerBottom: 0 };
         const input = el instanceof HTMLInputElement ? el : null;
         const target =
           input?.type === "checkbox"
@@ -231,11 +232,17 @@ test.describe("pinned header", () => {
               ? (document.querySelector(`label[for="${el.id}"]`) as HTMLElement)
               : el;
         const r = target.getBoundingClientRect();
-        return { inHeader: false, top: r.top, bottom: r.bottom, headerBottom: header.getBoundingClientRect().bottom };
+        return {
+          inHeader: false,
+          name,
+          top: r.top,
+          bottom: r.bottom,
+          headerBottom: header.getBoundingClientRect().bottom,
+        };
       });
       if (seen.inHeader) break;
-      expect(seen.top, `focus stop ${i}`).toBeGreaterThanOrEqual(seen.headerBottom - 1);
-      expect(seen.bottom, `focus stop ${i}`).toBeLessThanOrEqual(640 + 1);
+      expect(seen.top, `focus stop ${i}: ${seen.name}`).toBeGreaterThanOrEqual(seen.headerBottom - 1);
+      expect(seen.bottom, `focus stop ${i}: ${seen.name}`).toBeLessThanOrEqual(640 + 1);
     }
   });
 
