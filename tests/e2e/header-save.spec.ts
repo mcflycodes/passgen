@@ -1,8 +1,8 @@
-// v1.5.1: "Save as my default" and "Reset to defaults" also sit in the header,
-// between the name and the GitHub, Style and theme controls, and work exactly
-// like the pair at the bottom. Each press shows its outcome beside the pair
-// that was pressed and is announced once. At the bottom, the settings code
-// sits beside Save and Reset on wide screens and below them on narrow ones.
+// v1.5.1: "Save as my default" and "Reset to defaults" are in the header
+// only, at the right end after the Style and theme controls (or, below
+// 900px, the Appearance button) and a separator. Each press shows its outcome
+// on the pressed button and is announced once. The header order, the
+// separator, pinning and the Appearance panel are in header.spec.ts.
 
 import type { Page } from "@playwright/test";
 import { SETTINGS_STORAGE_KEY } from "../../src/boot/storage.ts";
@@ -14,7 +14,6 @@ import { chooseStyle, openPage, STYLES, setNumber, setRange } from "./helpers.ts
 const headerSave = (page: Page) => page.locator(".top #header-save-settings");
 const headerReset = (page: Page) => page.locator(".top #header-reset-settings");
 const headerStatus = (page: Page) => page.locator(".top #header-save-status");
-const bottomStatus = (page: Page) => page.locator("#save-settings-status");
 const storedText = (page: Page) => page.evaluate((key) => localStorage.getItem(key), SETTINGS_STORAGE_KEY);
 
 /** Boxes of the header pieces, for overlap and containment checks. */
@@ -36,7 +35,7 @@ function headerGeometry(page: Page) {
       reset: box(document.getElementById("header-reset-settings")),
       others: [
         box(document.querySelector(".brand")),
-        ...[...document.querySelectorAll(".top-controls > *")]
+        ...[...document.querySelectorAll(".top-controls > *, #appearance-toggle, .top-sep")]
           .filter((el) => el.getClientRects().length > 0)
           .map((el) => box(el)),
       ],
@@ -76,16 +75,17 @@ test.describe("header Save and Reset", () => {
           for (const other of g.others) expect(overlaps(button, other), JSON.stringify({ button, other })).toBe(false);
         }
         expect(overlaps(g.save, g.reset)).toBe(false);
-        // Name first, then Save and Reset, then the GitHub, Style and theme controls.
-        const [brand, ...controls] = g.others;
-        if (!brand) throw new Error("Missing brand");
+        // One row: Save and Reset come after everything else in the header, Reset last.
         for (const button of [g.save, g.reset]) {
-          const sameRow = (other: Box) => other.top < button.bottom && button.top < other.bottom;
-          if (sameRow(brand)) expect(button.left).toBeGreaterThanOrEqual(brand.right);
-          for (const control of controls) if (sameRow(control)) expect(button.right).toBeLessThanOrEqual(control.left);
+          for (const other of g.others) {
+            expect(other.top < button.bottom && button.top < other.bottom, "same row").toBe(true);
+            expect(button.left).toBeGreaterThanOrEqual(other.right);
+          }
         }
-        // The pinned single-row header keeps its configured height.
-        if (g.sticky) expect(g.header.height).toBe(g.headerHeight);
+        expect(g.reset.left).toBeGreaterThanOrEqual(g.save.right);
+        // The pinned single-row header keeps its height: the style's from 900px, a compact row below.
+        expect(g.sticky).toBe(true);
+        expect(g.header.height).toBe(width >= 900 ? g.headerHeight : 53);
 
         // It works: the header Save writes the record and confirms it in the header.
         await headerSave(page).click();
@@ -123,7 +123,6 @@ test.describe("header Save and Reset", () => {
     await expect(headerSave(page)).toHaveAccessibleName("Save as my default");
     // Announced once: only the status beside the pressed pair speaks.
     await expect(headerStatus(page)).toHaveText(SAVED_STATUS);
-    await expect(bottomStatus(page)).toBeEmpty();
     expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
     // The highlight ends after the feedback time.
     await expect(headerSave(page)).not.toHaveClass(/is-done/, { timeout: 5000 });
@@ -135,16 +134,10 @@ test.describe("header Save and Reset", () => {
     await expect(page.locator("html")).toHaveAttribute("data-style", "purple");
     await expect(page.locator("#pw-length-number")).toHaveValue("31");
 
-    // The bottom pair still speaks for itself, and the header stays quiet.
-    await page.locator("#save-settings").click();
-    await expect(bottomStatus(page)).toHaveText(SAVED_STATUS);
-    await expect(headerStatus(page)).toBeEmpty();
-    await expect(headerSave(page)).not.toHaveClass(/is-done/);
-    // A header press takes over: the bottom status clears, so nothing is said twice.
+    // Pressing again announces again: the status is replaced, not appended.
     await headerSave(page).click();
     await expect(headerStatus(page)).toHaveText(SAVED_STATUS);
-    await expect(bottomStatus(page)).toBeEmpty();
-    await expect(page.locator("#save-settings")).not.toHaveClass(/is-done/);
+    await expect(page.getByRole("status").filter({ hasText: SAVED_STATUS })).toHaveCount(1);
   });
 
   test("header Reset clears the record, restores the defaults and confirms in the header", async ({ page }) => {
@@ -159,7 +152,6 @@ test.describe("header Save and Reset", () => {
     await expect(headerReset(page).locator(".hb-ok")).toHaveText("Cleared");
     await expect(headerReset(page).locator(".hb-ok")).toBeVisible();
     await expect(headerStatus(page)).toHaveText(RESET_STATUS);
-    await expect(bottomStatus(page)).toBeEmpty();
     expect(await storedText(page)).toBeNull();
     await expect(page.locator("#pw-length-number")).toHaveValue(String(config.password.length.default));
     await page.reload();
@@ -176,110 +168,25 @@ test.describe("header Save and Reset", () => {
     await expect(headerSave(page).locator(".hb-fail")).toBeVisible();
     await expect(headerSave(page).locator(".hb-fail")).toHaveText("Failed");
     await expect(headerStatus(page)).toHaveText(SAVE_INVALID_STATUS);
-    await expect(bottomStatus(page)).toBeEmpty();
     expect(await storedText(page)).toBeNull();
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
   });
 
-  test("ids stay unique with both pairs on the page", async ({ page }) => {
+  test("Save and Reset are only in the header: the bottom pair is gone from the page", async ({ page }) => {
     await openPage(page);
     const duplicates = await page.evaluate(() => {
       const ids = [...document.querySelectorAll("[id]")].map((el) => el.id);
       return ids.filter((id, i) => ids.indexOf(id) !== i);
     });
     expect(duplicates).toEqual([]);
-    await expect(page.getByRole("button", { name: "Save as my default" })).toHaveCount(2);
-    await expect(page.getByRole("button", { name: "Reset to defaults" })).toHaveCount(2);
+    await expect(page.getByRole("button", { name: "Save as my default" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Reset to defaults" })).toHaveCount(1);
+    await expect(page.locator(".top").getByRole("button", { name: "Save as my default" })).toHaveCount(1);
+    await expect(page.locator(".top").getByRole("button", { name: "Reset to defaults" })).toHaveCount(1);
+    for (const gone of ["#save-settings", "#reset-settings", "#save-settings-status", ".save-settings", ".save-block"])
+      await expect(page.locator(gone), gone).toHaveCount(0);
+    // The hint stays: it describes both buttons and is their tooltip.
+    await expect(headerSave(page)).toHaveAccessibleDescription(/Nothing generated is ever stored/);
+    await expect(headerReset(page)).toHaveAccessibleDescription(/Nothing generated is ever stored/);
   });
-});
-
-/** The save block, the settings code block and the content edges they align to. */
-function bottomGeometry(page: Page) {
-  return page.evaluate(() => {
-    const box = (selector: string) => {
-      const el = document.querySelector(selector);
-      if (!el) throw new Error(`Missing ${selector}`);
-      const r = el.getBoundingClientRect();
-      return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
-    };
-    return {
-      overflow: document.documentElement.scrollWidth - innerWidth,
-      content: box(".generators"),
-      save: box(".save-block"),
-      saveButton: box("#save-settings"),
-      code: box(".settings-code"),
-      codeValue: box("#settings-code-value"),
-      codeInput: box("#settings-code-input"),
-      footText: box(".foot-text"),
-      codeRows: [...document.querySelectorAll(".settings-code .code-row")].map((row) => {
-        const r = row.getBoundingClientRect();
-        return { left: r.left, right: r.right };
-      }),
-    };
-  });
-}
-
-test.describe("Save and the settings code at the bottom", () => {
-  for (const width of [1440, 1280, 1024, 901]) {
-    for (const style of STYLES) {
-      test(`side by side, settings code right-aligned: ${style}/${width}`, async ({ page }) => {
-        await page.setViewportSize({ width, height: 900 });
-        await openPage(page);
-        await chooseStyle(page, style);
-        const g = await bottomGeometry(page);
-        expect(g.overflow).toBeLessThanOrEqual(0);
-        // One row: Save on the left at the content's left edge, the code block on the right.
-        expect(Math.abs(g.save.left - g.content.left)).toBeLessThanOrEqual(1);
-        expect(Math.abs(g.code.right - g.content.right)).toBeLessThanOrEqual(1);
-        expect(Math.abs(g.code.top - g.save.top)).toBeLessThanOrEqual(1);
-        expect(g.code.left).toBeGreaterThan(g.save.right);
-        for (const row of g.codeRows) expect(Math.abs(row.right - g.content.right)).toBeLessThanOrEqual(1);
-      });
-    }
-  }
-  // v1.5.1: the row sits close to the footer, and the settings code has room.
-  // The footer's own 24px top padding is the only space before its text, so
-  // 32px allows for rounding; the shorter Save column leaves less than a
-  // control row and a half (64px) empty below its hint. At 720px the code
-  // block's hint takes at most two lines and each field keeps 400px, room for
-  // the longest code on one line (main had a 576px block with a 297px field).
-  for (const width of [1440, 1920]) {
-    for (const style of STYLES) {
-      test(`close to the footer, settings code with room: ${style}/${width}`, async ({ page }) => {
-        await page.setViewportSize({ width, height: 900 });
-        await openPage(page);
-        await chooseStyle(page, style);
-        const g = await bottomGeometry(page);
-        const rowBottom = Math.max(g.save.bottom, g.code.bottom);
-        expect(g.footText.top - rowBottom).toBeLessThanOrEqual(32);
-        expect(rowBottom - g.save.bottom).toBeLessThanOrEqual(64);
-        expect(g.code.right - g.code.left).toBeGreaterThanOrEqual(720);
-        expect(g.codeInput.right - g.codeInput.left).toBeGreaterThanOrEqual(400);
-        expect(g.codeValue.right - g.codeValue.left).toBeGreaterThanOrEqual(400);
-      });
-    }
-  }
-  for (const width of [901, 900, 390]) {
-    test(`close to the footer: ${width}`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 900 });
-      await openPage(page);
-      const g = await bottomGeometry(page);
-      expect(g.footText.top - Math.max(g.save.bottom, g.code.bottom)).toBeLessThanOrEqual(32);
-    });
-  }
-  for (const width of [900, 768, 390, 320]) {
-    for (const style of STYLES) {
-      test(`stacked, Save first: ${style}/${width}`, async ({ page }) => {
-        await page.setViewportSize({ width, height: 900 });
-        await openPage(page);
-        await chooseStyle(page, style);
-        const g = await bottomGeometry(page);
-        expect(g.overflow).toBeLessThanOrEqual(0);
-        expect(g.code.top).toBeGreaterThanOrEqual(g.save.bottom);
-        expect(Math.abs(g.save.left - g.content.left)).toBeLessThanOrEqual(1);
-        expect(Math.abs(g.code.left - g.content.left)).toBeLessThanOrEqual(1);
-        expect(g.code.right).toBeLessThanOrEqual(g.content.right + 1);
-      });
-    }
-  }
 });

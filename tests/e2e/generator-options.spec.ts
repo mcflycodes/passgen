@@ -1,12 +1,12 @@
 import { config } from "../../src/config/validate.ts";
 import { expect, test } from "./fixtures.ts";
-import { openPage, resultText, setNumber } from "./helpers.ts";
+import { chooseStyle, openPage, resultText, setNumber } from "./helpers.ts";
 
 const symbols = config.password.characters.simple + config.password.characters.complex;
 for (const { id: style } of config.style.offered) {
   test(`new generator controls work by keyboard in ${style}`, async ({ page }) => {
     await openPage(page);
-    await page.locator("#style").selectOption(style);
+    await chooseStyle(page, style);
     const firstRule = page.getByRole("checkbox", { name: "Don't start with a symbol" });
     await expect(firstRule).toBeChecked();
     await expect(firstRule).toHaveAccessibleDescription(/Skipped if/);

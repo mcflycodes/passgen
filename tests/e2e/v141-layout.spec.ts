@@ -125,32 +125,37 @@ for (const width of [1440, 1920, 1100, 1024, 901]) {
 for (const width of [1440, 768, 390]) {
   for (const style of STYLES) {
     for (const theme of ["light", "dark"] as const) {
-      test(`Credits right alignment: ${style}/${theme}/${width}`, async ({ page }) => {
+      // v1.5.1: the open Credits panel spans the footer's full width below the
+      // footer's columns, its entries starting at the footer's left edge (in
+      // 1.4.1 they were right-aligned under the toggle, which sat on the right).
+      test(`Credits full-width panel alignment: ${style}/${theme}/${width}`, async ({ page }) => {
         await page.setViewportSize({ width, height: 1000 });
         await openPage(page);
         await chooseStyle(page, style);
         await chooseTheme(page, theme);
         const above = () =>
-          page
-            .locator("main, main *, .foot-text, .foot-meta > :not(details), #wordlist-credits summary")
-            .evaluateAll((els) =>
-              els.map((el) => {
-                const r = el.getBoundingClientRect();
-                return [r.x, r.y + scrollY, r.width, r.height];
-              }),
-            );
+          page.locator("main, main *, .foot-privacy, .foot-meta, .settings-code").evaluateAll((els) =>
+            els.map((el) => {
+              const r = el.getBoundingClientRect();
+              return [r.x, r.y + scrollY, r.width, r.height];
+            }),
+          );
         await page.locator("#wordlist-credits summary").focus();
         const before = await above();
         await page.locator("#wordlist-credits summary").click();
-        expect(await above()).toEqual(before);
+        // Nothing above the panel moves; on phones the settings code follows the panel.
+        const after = await above();
+        const code = before.length - 1;
+        expect(after.slice(0, code)).toEqual(before.slice(0, code));
+        if (width >= 901) expect(after[code]).toEqual(before[code]);
         if (capture && shots && ((style === "calm" && theme === "dark") || (style === "payload" && theme === "light")))
           await page.screenshot({ path: `${shots}/${capture}-${style}-${theme}-credits-${width}.png`, fullPage: true });
         const rows = await page.locator("#wordlist-credits li").evaluateAll((entries) =>
           entries.map((entry) => {
-            const toggle = document.querySelector(".foot-meta");
-            if (!toggle) throw new Error("Missing toggle group");
+            const footer = document.querySelector(".foot");
+            if (!footer) throw new Error("Missing footer");
             const walker = document.createTreeWalker(entry, NodeFilter.SHOW_TEXT);
-            const rights: number[] = [];
+            const lefts: number[] = [];
             const split: string[] = [];
             for (let node = walker.nextNode(); node; node = walker.nextNode()) {
               for (const match of (node.textContent ?? "").matchAll(/\S+/g)) {
@@ -159,19 +164,25 @@ for (const width of [1440, 768, 390]) {
                 range.setEnd(node, match.index + match[0].length);
                 const rects = [...range.getClientRects()];
                 if (new Set(rects.map((r) => r.top)).size > 1) split.push(match[0]);
-                rights.push(...rects.map((r) => r.right));
+                lefts.push(...rects.map((r) => r.left));
               }
             }
-            return { right: Math.max(...rights), toggle: toggle.getBoundingClientRect().right, split };
+            const panel = entry.parentElement?.getBoundingClientRect();
+            const box = footer.getBoundingClientRect();
+            return {
+              left: Math.min(...lefts),
+              footerLeft: box.left,
+              panelWidth: panel?.width ?? 0,
+              footerWidth: box.width,
+              split,
+            };
           }),
         );
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         for (const row of rows) {
           expect(row.split).toEqual([]);
-          expect(
-            Math.abs(row.right - row.toggle),
-            "visible entry right edge matches Credits toggle group",
-          ).toBeLessThanOrEqual(1);
+          expect(Math.abs(row.left - row.footerLeft), "entry starts at the footer's left edge").toBeLessThanOrEqual(1);
+          expect(Math.abs(row.panelWidth - row.footerWidth), "panel spans the footer").toBeLessThanOrEqual(1);
         }
         if (width === 390) await stationaryControls(page);
       });

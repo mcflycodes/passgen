@@ -1,16 +1,17 @@
-// "Get settings code" and "Apply settings code": carry the current settings
-// to another browser as a short typed code (src/core/settings-code.ts has
-// the format). Nothing here touches storage, the URL or the network. A code
-// holds settings only, never a generated value, and no message here ever
-// repeats what was typed, since a mistyped paste could be a password.
+// The settings code: carries the current settings to another browser as a
+// short typed code (src/core/settings-code.ts has the format). Nothing here
+// touches storage, the URL or the network. A code holds settings only, never
+// a generated value, and no message here ever repeats what was typed, since
+// a mistyped paste could be a password.
 //
-// Getting a code checks the current settings with the stored-settings
-// validator, as Save does, so a code is only ever made from settings that
-// could be saved. Applying a code decodes it and checks the result with the
+// The code shown is always the one for the current settings, made with the
+// stored-settings validator as Save does, so a code is only ever made from
+// settings that could be saved; while they could not, the slot says so and
+// Copy is disabled. Applying a code decodes it and checks the result with the
 // same validator, against this page's own bounds, styles and word lists,
 // before anything changes; a refused code changes nothing. An applied code
-// goes into the store and the panels show it, as Reset does, and the meter
-// is computed from those settings as for any other change. Applying does not
+// goes into the store and the panels show it, as Reset does, and the meter is
+// computed from those settings as for any other change. Applying does not
 // save: Save as my default keeps it.
 
 import { SETTINGS_SCHEMA_VERSION } from "../boot/storage.ts";
@@ -27,9 +28,9 @@ import { reserveText } from "./reserved-text.ts";
 import { type Settings, type SettingsStore, validateStoredSettings } from "./settings.ts";
 
 export const CODE_HINT =
-  "To use these settings in another browser, get a code here and apply it there. The code holds settings only, never a password, and is not saved.";
-export const CODE_READY_STATUS = "Settings code ready. It holds settings only, never a password.";
-export const CODE_INVALID_STATUS = "Could not make a code: fix the settings marked with an error first.";
+  "The code follows your settings as you change them. It holds settings only, never a password, and is not saved.";
+/** Shown in the code slot, with Copy disabled, while the settings cannot make a code. */
+export const CODE_UNAVAILABLE_TEXT = "Fix the marked settings to get a code";
 export const CODE_APPLIED_STATUS = "Settings applied. Press Save as my default to keep them in this browser.";
 export const CODE_ERROR_STATUS: Readonly<Record<SettingsCodeError | "unavailable", string>> = {
   empty: "Type or paste a settings code first.",
@@ -75,23 +76,24 @@ export function readSettingsCode(text: unknown, config: Config): ReadResult {
 }
 
 /**
- * Binds the settings code controls. Get shows the code for the current
- * settings; any later change clears it, so a shown code always matches the
- * page. Apply (or Enter in the field) reads the typed code and, when it is
- * valid here, puts its settings in the store and calls `onApply` so the
- * panels show them. The status says what happened and is announced.
+ * Binds the settings code controls. The slot always shows the code for the
+ * current settings and follows every change; it keeps the size of the
+ * longest code this page can show, so a code changing length, or the
+ * unavailable message, moves nothing. Copy copies the shown code. Apply (or
+ * Enter in the field) reads the typed code and, when it is valid here, puts
+ * its settings in the store and calls `onApply` so the panels show them. The
+ * status says what happened and is announced.
  */
 export function mountSettingsCode(store: SettingsStore, config: Config, onApply: () => void): void {
-  const get = byId("get-settings-code", HTMLButtonElement);
   const value = byId("settings-code-value", HTMLOutputElement);
   const copy = byId("copy-settings-code", HTMLButtonElement);
   const input = byId("settings-code-input", HTMLInputElement);
   const apply = byId("apply-settings-code", HTMLButtonElement);
   const status = byId("settings-code-status", HTMLElement);
   byId("settings-code-hint", HTMLElement).textContent = CODE_HINT;
-  // The slot keeps the height of the longest code this page can show, so
-  // showing any code moves nothing below it; a code is never cut off.
-  reserveText(value, [longestSettingsCode(config.style.offered.map((style) => style.id))]);
+  reserveText(value, [longestSettingsCode(config.style.offered.map((style) => style.id)), CODE_UNAVAILABLE_TEXT], {
+    alternatives: true,
+  });
 
   const say = (message: string, ok: boolean) => {
     // Replaced, not appended, so a repeated message is announced again.
@@ -99,21 +101,20 @@ export function mountSettingsCode(store: SettingsStore, config: Config, onApply:
     status.textContent = message;
     status.classList.toggle("is-error", !ok);
   };
-  const show = (code: string) => {
-    value.textContent = code;
-    copy.disabled = code === "";
+  const show = () => {
+    const code = settingsCode(store.current, config);
+    const text = code ?? CODE_UNAVAILABLE_TEXT;
+    // Rewritten only when it changes: Copy's feedback ends when the code does.
+    if (value.textContent !== text) value.textContent = text;
+    value.classList.toggle("is-unavailable", code === null);
+    copy.disabled = code === null;
   };
-  show("");
+  show();
   store.subscribe(() => {
-    show("");
+    show();
     say("", true);
   });
 
-  get.addEventListener("click", () => {
-    const code = settingsCode(store.current, config);
-    show(code ?? "");
-    say(code ? CODE_READY_STATUS : CODE_INVALID_STATUS, code !== null);
-  });
   bindCopy(copy, () => value.textContent ?? "", value);
 
   const applyCode = () => {

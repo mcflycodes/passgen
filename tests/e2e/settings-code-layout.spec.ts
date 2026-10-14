@@ -1,15 +1,16 @@
-// Showing a settings code moves nothing: the code slot keeps the height of
-// the longest code this deployment can produce, so the Apply row below it
-// stays put whether the shown code is the shortest or the longest, at phone
-// and desktop widths, in every style. The shown code stays whole: nothing is
-// clipped or scrolled out of view.
+// The live settings code moves nothing: the code slot keeps the height of
+// the longest code this deployment can produce (and of the message shown
+// while the settings cannot make one), so the Apply row below it and the box
+// around it stay put whether the shown code is the shortest or the longest,
+// or the message, at phone and desktop widths, in every style. The shown code
+// stays whole: nothing is clipped or scrolled out of view.
 
 import type { Page } from "@playwright/test";
 import type { StoredSettings } from "../../src/boot/stored-settings.ts";
 import { BASELINE, encodeSettingsCode } from "../../src/core/settings-code.ts";
-import { CODE_APPLIED_STATUS, CODE_READY_STATUS } from "../../src/ui/settings-code.ts";
+import { CODE_APPLIED_STATUS, CODE_UNAVAILABLE_TEXT } from "../../src/ui/settings-code.ts";
 import { expect, test } from "./fixtures.ts";
-import { chooseStyle, expectStablePosition, openPage, STYLES } from "./helpers.ts";
+import { chooseStyle, expectStablePosition, openPage, STYLES, setNumber } from "./helpers.ts";
 
 /**
  * The longest code a page will show for `style`: every field away from its
@@ -55,21 +56,26 @@ function longestValid(style: string): string {
 }
 
 /**
- * The top of the Apply row's controls, measured from the top of the row
- * holding Get and the code slot, so a change elsewhere on the page (a code that changes the
- * generators) does not count; only the slot lies between them.
+ * The top of the Apply row's controls and the height of the settings code
+ * box, measured from the top of the row holding the code slot and Copy, so a
+ * change elsewhere on the page (a code that changes the generators) does not
+ * count; only the slot lies between them.
  */
 function applyRow(page: Page) {
   return page.evaluate(() => {
-    const top = (id: string) => {
-      const element = document.getElementById(id);
-      if (!element) throw new Error(`Missing ${id}`);
-      return element.getBoundingClientRect().top;
+    const element = (id: string) => {
+      const found = document.getElementById(id);
+      if (!found) throw new Error(`Missing ${id}`);
+      return found;
     };
-    const row = document.getElementById("get-settings-code")?.closest(".code-row");
-    if (!row) throw new Error("Missing the Get row");
-    const get = row.getBoundingClientRect().top;
-    return [top("settings-code-input") - get, top("apply-settings-code") - get];
+    const row = element("settings-code-value").closest(".code-row");
+    if (!row) throw new Error("Missing the code row");
+    const top = row.getBoundingClientRect().top;
+    return [
+      element("settings-code-input").getBoundingClientRect().top - top,
+      element("apply-settings-code").getBoundingClientRect().top - top,
+      element("settings-code").getBoundingClientRect().height,
+    ];
   });
 }
 
@@ -89,36 +95,45 @@ test("the longest valid code is at least as long as the longest the review measu
   for (const style of STYLES) expect(longestValid(style).length).toBeGreaterThanOrEqual(style === "calm" ? 60 : 63);
 });
 
-for (const width of [320, 393, 1440]) {
+for (const width of [320, 393, 1024, 1440]) {
   for (const style of STYLES) {
-    test(`showing the shortest and longest code moves nothing: ${style}/${width}`, async ({ page }) => {
+    test(`the live code moves nothing as it changes length: ${style}/${width}`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await openPage(page);
       await chooseStyle(page, style);
-      const get = page.locator("#get-settings-code");
       const shown = page.locator("#settings-code-value");
       const status = page.locator("#settings-code-status");
 
       // Shortest: the code for these settings, which differ from the defaults by the style at most.
+      await expect(shown).toHaveText(/^PG1-/);
       const before = await applyRow(page);
-      await get.click();
-      await expect(status).toHaveText(CODE_READY_STATUS);
-      await expect(shown).not.toHaveText("");
-      expectStablePosition(await applyRow(page), before, `${style}/${width} shortest code`);
       expect(await whole(page)).toEqual({ fits: true, overflow: ["visible", "visible"], selectable: true });
 
-      // Longest: apply it, then show it.
+      // The unavailable message takes the same room as any code.
+      await setNumber(page.locator("#pw-lowercase-min"), 99);
+      await expect(shown).toHaveText(CODE_UNAVAILABLE_TEXT);
+      await expect(status).toHaveText("");
+      expectStablePosition(await applyRow(page), before, `${style}/${width} unavailable`);
+      expect(await whole(page)).toEqual({ fits: true, overflow: ["visible", "visible"], selectable: true });
+      await setNumber(page.locator("#pw-lowercase-min"), 0);
+      await expect(shown).toHaveText(/^PG1-/);
+      expectStablePosition(await applyRow(page), before, `${style}/${width} back to a code`);
+
+      // Longest: apply it; the slot shows it at once.
       const code = longestValid(style);
       await page.locator("#settings-code-input").fill(code);
       await page.locator("#apply-settings-code").click();
       await expect(status).toHaveText(CODE_APPLIED_STATUS);
-      const applied = await applyRow(page);
-      await get.click();
       await expect(shown).toHaveText(code);
-      expectStablePosition(await applyRow(page), applied, `${style}/${width} longest code`);
+      const applied = await applyRow(page);
       expect(await whole(page)).toEqual({ fits: true, overflow: ["visible", "visible"], selectable: true });
-      // The empty slot and a shown code take the same room either way.
-      expectStablePosition(applied, before, `${style}/${width} empty slot`);
+      // The status line below the Apply row is the only thing the press added.
+      expectStablePosition(applied.slice(0, 2), before.slice(0, 2), `${style}/${width} longest code`);
+      // A later change clears the status; the box is back to its first height with a shorter code.
+      await page.locator("#pp-lookalikes").uncheck();
+      await expect(status).toHaveText("");
+      await expect(shown).not.toHaveText(code);
+      expectStablePosition(await applyRow(page), before, `${style}/${width} after the longest code`);
     });
   }
 }

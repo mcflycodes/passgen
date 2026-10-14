@@ -232,7 +232,7 @@ summary,
   position: relative;
   top: 0;
   z-index: 10;
-  min-height: var(--header-h);
+  min-height: var(--top-h);
   display: flex;
   align-items: center;
   gap: 16px;
@@ -247,6 +247,7 @@ summary,
   align-items: baseline;
   gap: 14px;
   min-width: 0;
+  margin-right: auto;
 }
 .brand {
   color: var(--text);
@@ -274,19 +275,25 @@ summary,
   letter-spacing: var(--tagline-track, 0);
   text-transform: var(--tagline-case, none);
 }
-/* Save and Reset in the header (v1.5.1) share the bottom pair's actions
-   (src/ui/settings.ts) and sit next to the other controls, which they push
-   right. Each label is a stack of the idle text and the short outcomes in
-   one grid cell, so confirming never changes the button's size; below
-   1024px the idle text is compact and the full name stays the accessible
-   name. */
+/* The header row, after the name: the Style and theme controls, a thin
+   separator, then Save and Reset (v1.5.1). Save and Reset run the actions in
+   src/ui/settings.ts. Each label is a stack of the idle text and the short
+   outcomes in one grid cell, so confirming never changes the button's size;
+   below 1024px the idle text is compact and the full name stays the
+   accessible name. */
 .header-save {
   flex: none;
-  margin-left: auto;
-  margin-right: clamp(0px, 1vw, 12px);
   display: flex;
   align-items: center;
   gap: 8px;
+}
+/* Decorative: it only groups the controls on either side. */
+.top-sep {
+  flex: none;
+  align-self: center;
+  width: 1px;
+  height: 24px;
+  background: var(--line-strong);
 }
 .header-save-btn {
   min-height: 34px;
@@ -330,24 +337,6 @@ summary,
   color: var(--muted);
 }
 
-/* The repository mark uses the same checked header colour as other controls. */
-.top-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  min-height: 24px;
-  padding: 4px;
-  color: var(--text-2);
-  border-radius: var(--radius-sm);
-}
-.top-link svg {
-  flex-shrink: 0;
-}
-.top-link:hover {
-  color: var(--text);
-}
-
 .theme-control {
   display: inline-flex;
   border: 1px solid var(--line-strong);
@@ -389,14 +378,48 @@ summary,
   color: var(--on-accent);
 }
 
-/* The single-row header can stay available without covering focused controls.
-   Narrow and short (including zoomed) viewports keep it in normal flow. */
-@media (min-width: 900px) and (min-height: 500px) {
+/* The Appearance button replaces the Style and theme controls below 900px
+   (src/ui/appearance.ts); from 900px it is hidden. */
+.appearance-toggle {
+  display: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.appearance-toggle:hover,
+.appearance-toggle[aria-expanded="true"] {
+  color: var(--text);
+  border-color: var(--text-2);
+}
+
+/* The header is pinned at every width, so the controls stay in reach;
+   focused controls scroll clear of it. --top-h is its height: the style's
+   --header-h from 900px, a compact row below. Only a very short viewport
+   (under 400px tall, such as a phone on its side or 400% zoom) keeps it in
+   normal flow, where a pinned row would take too much of the little height
+   there is. */
+:root {
+  --top-h: var(--header-h);
+}
+@media (max-width: 899px) {
+  :root {
+    --top-h: 53px;
+  }
+}
+@media (min-height: 400px) {
   .top {
     position: sticky;
   }
   html {
-    scroll-padding-top: calc(var(--header-h) + 16px);
+    scroll-padding-top: calc(var(--top-h) + 16px);
   }
 }
 
@@ -902,41 +925,205 @@ select {
   line-height: 1.4;
 }
 
-/* ---------- Saved settings (R24) ---------- */
-/* Save and Reset write storage only when pressed (src/ui/settings.ts). The
-   pressed button is highlighted in the ok colour with a ring that fades out;
-   the status beside it says what happened and is announced. With reduced
-   motion there is no fade: the highlight simply ends. */
-/* Wide screens set the settings code beside Save and Reset, against the
-   content's right edge; narrow ones stack it below them (v1.5.1). The page
-   ends with this section, so main adds no bottom padding below it; the
-   footer's own top padding is the only space before the footer text. */
-.save-settings {
+/* ---------- Bottom of the page (v1.5.1) ---------- */
+/* The privacy line, the meta line and the settings code (index.html). The
+   DOM order is the reading order at every width: privacy, meta, settings
+   code. The meta line is three items (before Credits, the Credits summary,
+   after it), so the open Credits panel can span the full width below.
+   Up to 900px everything stacks in a wrapping row: the meta line stays one
+   row while it fits and wraps rather than overflowing when it does not (a
+   320px screen with enlarged text spacing). From 901px a grid places the
+   items: the settings code is a column on the right, beside the privacy and
+   meta lines stacked on the left; from 1200px the privacy line, the meta
+   line and the settings code are three columns, the first two centred
+   against the settings code box. The footer sits on the page itself, with
+   the decorative layers behind it, so its text uses the secondary colour:
+   the build checks --text-2 against every colour those layers can place
+   there. The settings code box is a panel. */
+.foot {
   margin: 28px clamp(20px, 4vw, 72px) 0;
-  padding-top: 20px;
+  padding: 20px 0 40px;
   border-top: 1px solid var(--line);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px clamp(24px, 3vw, 56px);
-  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  color: var(--text-2);
+  font-size: 13px;
 }
-.save-block {
+.foot-privacy {
+  order: 1;
+  min-width: 0;
+  max-width: 62ch;
+}
+/* Ends the privacy line's row, which its measure leaves short. */
+.foot::after {
+  content: "";
+  order: 2;
+  flex-basis: 100%;
+}
+.foot-meta {
+  order: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.foot-meta-start {
+  padding-right: 8px;
+}
+.wordlist-credits {
+  display: contents;
+}
+.wordlist-credits > summary {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  list-style: none;
+}
+.wordlist-credits > summary::-webkit-details-marker {
+  display: none;
+}
+/* A small chevron after Credits, turned when open; drawn with borders in the
+   current colour. */
+.wordlist-credits > summary::after {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  /* Room for the corners of the turned square. */
+  margin: -3px 2px 0 0;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+.wordlist-credits[open] > summary::after {
+  margin-top: 3px;
+  margin-bottom: 0;
+  transform: rotate(-135deg);
+}
+.foot-meta-end {
+  padding-left: 8px;
+}
+.wordlist-credits::details-content {
+  order: 4;
+  flex: 1 0 100%;
+  min-width: 0;
+}
+.wordlist-credits ul {
+  margin-top: 14px;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+.wordlist-credits a {
+  display: inline-block;
+  min-height: 24px;
+  color: inherit;
+  text-underline-offset: 3px;
+}
+.foot-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+.foot-link:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* The settings code (src/ui/settings-code.ts): always open, in its own box.
+   The code slot is sized by hidden copies of the longest code the page can
+   show and of the unavailable message (src/ui/reserved-text.ts), so the
+   code changing length, or giving way to the message, moves nothing. */
+.settings-code {
+  order: 5;
+  flex: 1 0 100%;
+  margin-top: 20px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+.settings-code-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+.settings-code-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.settings-code-sub {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.code-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
-.save-settings .hint {
-  max-width: 640px;
+.code-row > .reserved-text {
+  flex: 1 1 0;
+  min-width: 0;
 }
-.save-actions {
+.code-apply {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.code-value,
+.code-input {
+  min-width: 0;
+  min-height: var(--control-h);
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+}
+.code-value {
   display: flex;
   align-items: center;
-  gap: 8px 12px;
-  flex-wrap: wrap;
+  overflow-wrap: anywhere;
 }
-.save-actions .btn {
-  flex: 0 1 auto;
+.code-value.is-unavailable {
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+.code-input {
+  flex: 1 1 0;
+  text-transform: uppercase;
+}
+.code-input[aria-invalid="true"] {
+  border-color: var(--bad);
+  box-shadow: 0 0 0 1px var(--bad);
+}
+.code-label {
+  font-size: 13px;
+  color: var(--text-2);
 }
 .save-feedback {
   font-size: 14px;
@@ -948,84 +1135,98 @@ select {
 .save-feedback:empty {
   display: none;
 }
-/* The settings code (src/ui/settings-code.ts). The code slot is sized by a
-   hidden copy of the longest code the page can show (src/ui/reserved-text.ts),
-   so showing any code, or none, moves nothing below it. */
-.settings-code {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  padding-top: 16px;
-  border-top: var(--hairline);
-}
-/* Side by side, the settings code takes up to 54rem, enough for its hint
-   on one line on wide screens, and its fields take the width the buttons
-   leave; Save and Reset keep at least 20rem and take the rest. The rows and
-   hint fill the block rather than keeping their stacked caps. */
-@media (min-width: 901px) {
-  .save-settings {
-    grid-template-columns: minmax(min(20rem, 100%), 1fr) minmax(0, 54rem);
+/* The narrowest phones tighten the meta line so it stays one row at 320px. */
+@media (max-width: 360px) {
+  .foot-meta {
+    gap: 5px;
+    letter-spacing: 0;
   }
-  .settings-code .hint {
-    max-width: none;
+  .foot-meta-start {
+    padding-right: 6px;
+  }
+  .foot-meta-end {
+    padding-left: 6px;
+  }
+}
+/* 901 to 1199px: the privacy and meta lines on the left, the settings code
+   on the right; the open Credits panel spans both below. The grid's column
+   lines are named: p (privacy), m (meta: m-start, m2, m3, m-end, so the
+   Credits summary is its own item), code and full (the Credits panel). */
+@media (min-width: 901px) {
+  .foot::after {
+    display: none;
+  }
+  .foot {
+    display: grid;
+    align-items: start;
+    grid-template-columns:
+      [full-start p-start m-start] max-content
+      [m2] max-content
+      [m3] minmax(0, 1fr)
+      [p-end m-end] 48px
+      [code-start] minmax(0, 1.3fr)
+      [code-end full-end];
+    grid-template-rows: auto auto 1fr auto;
+  }
+  .foot-privacy {
+    grid-column: p;
+    grid-row: 1;
+  }
+  .foot-meta {
+    grid-row: 2;
+  }
+  .foot-meta-start {
+    grid-column: m-start / m2;
+  }
+  .wordlist-credits > summary {
+    grid-column: m2 / m3;
+  }
+  .foot-meta-end {
+    grid-column: m3 / m-end;
+    justify-self: start;
   }
   .settings-code {
-    padding-top: 0;
-    border-top: 0;
+    grid-column: code;
+    grid-row: 1 / span 3;
+    margin-top: 0;
   }
-  .settings-code .code-row {
-    max-width: none;
+  .wordlist-credits::details-content {
+    grid-column: full;
+    grid-row: 4;
   }
 }
-.settings-code-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
+/* 1200px and wider: three columns, privacy | meta | settings code, with the
+   privacy and meta lines centred against the settings code box. */
+@media (min-width: 1200px) {
+  .foot {
+    grid-template-columns:
+      [full-start p-start] minmax(0, 1fr)
+      [p-end] 56px
+      [m-start] max-content
+      [m2] max-content
+      [m3] minmax(0, 0.35fr)
+      [m-end] 56px
+      [code-start] minmax(0, 1.2fr)
+      [code-end full-end];
+    grid-template-rows: auto auto;
+  }
+  .foot-privacy,
+  .foot-meta {
+    grid-row: 1;
+    align-self: center;
+    margin-top: 0;
+  }
+  .settings-code {
+    grid-row: 1;
+  }
+  .wordlist-credits::details-content {
+    grid-row: 2;
+  }
 }
-/* The title and its hint read as one heading block. */
-.settings-code-title + .hint {
-  margin-top: -6px;
-}
-.code-row {
-  display: flex;
-  align-items: center;
-  gap: 8px 12px;
-  flex-wrap: wrap;
-  max-width: 720px;
-}
-.code-value,
-.code-input {
-  flex: 1 1 14em;
-  min-width: 0;
-  min-height: var(--control-h);
-  padding: 0 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--field);
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 14px;
-}
-.code-row > .reserved-text {
-  flex: 1 1 14em;
-}
-.code-value {
-  display: flex;
-  align-items: center;
-  overflow-wrap: anywhere;
-}
-.code-input {
-  text-transform: uppercase;
-}
-.code-input[aria-invalid="true"] {
-  border-color: var(--bad);
-  box-shadow: 0 0 0 1px var(--bad);
-}
-.code-label {
-  font-size: 14px;
-  color: var(--text-2);
-}
+
+/* Save and Reset write storage only when pressed (src/ui/settings.ts). The
+   pressed button is highlighted in the ok colour with a ring that fades out;
+   with reduced motion there is no fade: the highlight simply ends. */
 .btn.is-done {
   background: var(--ok);
   color: var(--on-accent);
@@ -1047,91 +1248,6 @@ select {
   to {
     box-shadow: 0 0 0 4px transparent;
   }
-}
-
-/* ---------- Footer ---------- */
-/* The footer sits on the page itself, with the decorative layers behind it,
-   so it uses the secondary text colour: the build checks --text-2 against
-   every colour those layers can place there. The right side carries the
-   version and the configured license link. */
-.foot {
-  margin: 0 clamp(20px, 4vw, 72px);
-  padding: 24px 0 40px;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px 32px;
-  color: var(--text-2);
-  font-size: 13px;
-  container-type: inline-size;
-}
-.foot-text {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  /* Give spare width to the caption on a shared row. On a wrapped row,
-     metadata can fill the footer so its list has the same left edge. */
-  flex: 1000000 1 420px;
-  min-width: 0;
-}
-.foot-meta {
-  display: grid;
-  grid-template-columns: repeat(4, max-content) minmax(max-content, 1fr);
-  flex: 1 1 max-content;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-}
-.wordlist-credits {
-  display: contents;
-}
-.wordlist-credits::details-content {
-  grid-column: 1 / -1;
-  contain: inline-size;
-}
-.wordlist-credits summary {
-  justify-self: start;
-  cursor: pointer;
-  min-height: 24px;
-  border-radius: var(--radius-sm);
-}
-.wordlist-credits ul {
-  position: relative;
-  /* These offsets assume .foot-meta ends at the footer’s right edge. */
-  width: 100cqw;
-  left: calc(100% - 100cqw);
-  min-width: 0;
-  margin-top: 12px;
-  padding-left: 0;
-  list-style: none;
-  text-align: right;
-  white-space: normal;
-  overflow-wrap: break-word;
-  word-break: normal;
-  font-family: var(--sans);
-  letter-spacing: normal;
-}
-.wordlist-credits a {
-  display: inline-block;
-  min-height: 24px;
-  color: inherit;
-  text-underline-offset: 3px;
-}
-.foot-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  color: inherit;
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-  border-radius: var(--radius-sm);
-}
-.foot-link:hover {
-  text-decoration-thickness: 2px;
 }
 
 /* ---------- Narrow widths (R3) ---------- */
@@ -1170,13 +1286,57 @@ select {
     display: inline;
   }
 }
-/* Below the pinned width the header may wrap rather than overflow. */
+/* Below 900px the header is one compact row: the name, the Appearance
+   button, the separator, then Save and Reset with their short labels. The
+   Style and theme controls drop from the header's right edge as a panel
+   while the button is expanded (src/ui/appearance.ts). */
 @media (max-width: 899px) {
   .top {
-    flex-wrap: wrap;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    row-gap: 10px;
+    gap: 8px;
+    padding: 8px clamp(12px, 4vw, 20px);
+  }
+  .brand {
+    font-size: 22px;
+  }
+  .appearance-toggle {
+    display: inline-flex;
+  }
+  .header-save {
+    gap: 6px;
+  }
+  .header-save-btn {
+    min-height: 36px;
+    padding: 2px 10px;
+  }
+  .top-controls {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: clamp(12px, 4vw, 20px);
+    width: min(300px, calc(100vw - 24px));
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 14px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    background: var(--panel);
+    box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.45);
+  }
+  .appearance-toggle[aria-expanded="false"] + .top-controls {
+    display: none;
+  }
+  .top-controls .style-control {
+    justify-content: space-between;
+  }
+  .top-controls .style-control select {
+    flex: 1;
+    max-width: 180px;
+  }
+  .top-controls .theme-control label {
+    flex: 1;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 8px;
   }
 }
 @media (max-width: 360px) {
@@ -1188,44 +1348,11 @@ select {
   }
 }
 @media (max-width: 640px) {
-  .top {
-    flex-wrap: wrap;
-    height: auto;
-    min-height: var(--header-h);
-    padding-top: 10px;
-    padding-bottom: 10px;
-    row-gap: 10px;
-  }
-  .top-controls {
-    margin-left: 0;
-    width: 100%;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    row-gap: 10px;
-  }
-  .theme-control label {
-    min-width: 0;
-    padding: 0 10px;
-    min-height: 36px;
-  }
-  .style-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
   .control-row {
     grid-template-columns: 1fr;
   }
   .result-actions .btn {
     flex: 1 1 120px;
-  }
-  .brand {
-    font-size: 22px;
   }
   .headline {
     margin-bottom: 10px;
@@ -1245,6 +1372,9 @@ select {
   }
   .btn.is-done {
     animation: none;
+  }
+  .wordlist-credits > summary::after {
+    transition: none;
   }
 }
 

@@ -64,16 +64,40 @@ export async function settle(page: Page): Promise<void> {
   await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === "finished"));
 }
 
+/**
+ * Runs `use` with the Style and theme controls on screen. Below 900px they
+ * are in the header's Appearance panel: it is opened first and closed again
+ * after, as a user would, so the page is left as it was found.
+ */
+export async function withAppearance(page: Page, use: () => Promise<void>): Promise<void> {
+  const toggle = page.locator("#appearance-toggle");
+  const folded = (await toggle.isVisible()) && (await toggle.getAttribute("aria-expanded")) === "false";
+  if (folded) {
+    await toggle.click();
+    await expect(page.locator("#appearance-panel")).toBeVisible();
+  }
+  await use();
+  if (folded) {
+    await toggle.click();
+    await expect(page.locator("#appearance-panel")).toBeHidden();
+  }
+}
+
 /** Chooses a style through the Style control. */
 export async function chooseStyle(page: Page, style: string): Promise<void> {
-  await page.locator("#style").selectOption(style);
+  await withAppearance(page, () =>
+    page
+      .locator("#style")
+      .selectOption(style)
+      .then(() => undefined),
+  );
   await expect(page.locator("html")).toHaveAttribute("data-style", style);
   await settle(page);
 }
 
 export async function chooseTheme(page: Page, theme: (typeof THEMES)[number]): Promise<void> {
   // The radio itself is visually hidden; its label is the control a user sees.
-  await page.locator(`label[for="theme-${theme}"]`).click();
+  await withAppearance(page, () => page.locator(`label[for="theme-${theme}"]`).click());
   await expect(page.locator(`#theme-${theme}`)).toBeChecked();
   await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
   await settle(page);

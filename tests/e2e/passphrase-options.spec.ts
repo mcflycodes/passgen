@@ -68,7 +68,7 @@ test("new options save, restore and reset; old v2 records are discarded and clea
   await page.locator("#pp-symbol-position").selectOption("after");
   await page.locator("#pp-number-digits").selectOption("1");
   await page.locator("#pp-capitalize").selectOption("every");
-  await page.locator("#save-settings").click();
+  await page.locator("#header-save-settings").click();
   expect(await page.evaluate(() => localStorage.getItem("passgen:settings:v2"))).toBeNull();
   const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) as string), SETTINGS_STORAGE_KEY);
   expect(saved.version).toBe(SETTINGS_SCHEMA_VERSION);
@@ -78,7 +78,7 @@ test("new options save, restore and reset; old v2 records are discarded and clea
   await expect(page.locator("#pp-number-digits")).toHaveValue("1");
   await expect(page.locator("#pp-capitalize")).toHaveValue("every");
   expect(await resultText(page, "pp-value")).toMatch(/^[A-Z][a-z]+(?:[0-9][^a-zA-Z0-9][A-Z][a-z]+){4}$/);
-  await page.locator("#reset-settings").click();
+  await page.locator("#header-reset-settings").click();
   await expect(page.locator("#pp-symbol-position")).toHaveValue("both");
   await expect(page.locator("#pp-number-digits")).toHaveValue("2");
   await expect(page.locator("#pp-capitalize")).toHaveValue("off");
@@ -94,7 +94,7 @@ test("separator look-alikes filter the dropdown, fall back, save and reset", asy
   await dropdown.selectOption("!");
   await checkbox.check();
   await expect(dropdown).toHaveValue("-");
-  await page.locator("#save-settings").click();
+  await page.locator("#header-save-settings").click();
   const fixed = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) as string), SETTINGS_STORAGE_KEY);
   expect(fixed.settings.passphrase).toMatchObject({ excludeLookAlikes: true, separatorSymbol: "-" });
   await page.reload();
@@ -107,7 +107,7 @@ test("separator look-alikes filter the dropdown, fall back, save and reset", asy
   await page.locator("#pp-symbol-position").selectOption("both");
   await expect(page.locator("#pp-unique-note")).toBeVisible();
   await page.evaluate(() => localStorage.setItem("passgen:settings:v3", '{"version":3,"settings":{}}'));
-  await page.locator("#save-settings").click();
+  await page.locator("#header-save-settings").click();
   expect(await page.evaluate(() => localStorage.getItem("passgen:settings:v3"))).toBeNull();
   await page.reload();
   await expect(checkbox).toBeChecked();
@@ -115,7 +115,7 @@ test("separator look-alikes filter the dropdown, fall back, save and reset", asy
   await checkbox.uncheck();
   await expect(dropdown.locator('option[value="!"]')).toHaveCount(1);
   await checkbox.check();
-  await page.locator("#reset-settings").click();
+  await page.locator("#header-reset-settings").click();
   await expect(checkbox).not.toBeChecked();
   await expect(dropdown).toHaveValue("random");
   await expect(dropdown.locator('option[value="!"]')).toHaveCount(1);

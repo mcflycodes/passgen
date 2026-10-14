@@ -42,7 +42,19 @@ describe("the token table", () => {
   test("every token the layout reads is in the table, and nothing else is accepted", () => {
     const layout = readFileSync(join(ROOT, "src/styles.css"), "utf8");
     const read = new Set([...layout.matchAll(/var\((--[a-z0-9-]+)/g)].map((m) => m[1] as string));
-    const own = new Set(["--hairline", "--fill", "--px", "--py", "--pxs", "--pys", "--pxt", "--pyt", "--pxn", "--pyn"]);
+    const own = new Set([
+      "--hairline",
+      "--top-h",
+      "--fill",
+      "--px",
+      "--py",
+      "--pxs",
+      "--pys",
+      "--pxt",
+      "--pyt",
+      "--pxn",
+      "--pyn",
+    ]);
     for (const name of read) if (!own.has(name)) assert.ok(TOKEN_TYPES[name], `${name} is typed`);
     assert.ok(
       problems(`${calm}\n:root[data-style="calm"] { --my-color: #fff; }`).some((p) =>
@@ -55,6 +67,9 @@ describe("the token table", () => {
       ),
     );
     assert.ok(problems(`${calm}\n:root[data-style="calm"] { --px: 50%; }`).some((p) => /--px is not a token/.test(p)));
+    assert.ok(
+      problems(`${calm}\n:root[data-style="calm"] { --top-h: 90px; }`).some((p) => /--top-h is not a token/.test(p)),
+    );
   });
 });
 

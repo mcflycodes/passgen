@@ -19,28 +19,13 @@
         <p class="tagline" data-cfg-text="text.tagline"></p>
         <!-- /passgen:tagline -->
       </div>
-      <!-- The same Save and Reset as at the bottom (src/ui/settings.ts). Each
-           button keeps its full name; its visible label swaps between the
-           full or compact idle text and a short outcome in one grid cell, so
-           the button never changes size. -->
-      <div class="header-save">
-        <button type="button" class="btn btn-primary header-save-btn" id="header-save-settings" aria-label="Save as my default" aria-describedby="save-settings-hint">
-          <span class="hb-labels" aria-hidden="true"><span class="hb-idle"><span class="hb-full">Save as my default</span><span class="hb-short">Save</span></span><span class="hb-ok">Saved</span><span class="hb-fail">Failed</span></span>
-        </button>
-        <button type="button" class="btn header-save-btn" id="header-reset-settings" aria-label="Reset to defaults" aria-describedby="save-settings-hint">
-          <span class="hb-labels" aria-hidden="true"><span class="hb-idle"><span class="hb-full">Reset to defaults</span><span class="hb-short">Reset</span></span><span class="hb-ok">Cleared</span><span class="hb-fail">Failed</span></span>
-        </button>
-        <p class="sr-only" id="header-save-status" role="status" aria-live="polite" aria-atomic="true"></p>
-      </div>
-      <div class="top-controls">
-        <!-- passgen:repo-link -->
-        <!-- biome-ignore lint/a11y/useValidAnchor: the build fills the href from the configuration (decision 0005) -->
-        <!-- biome-ignore lint/a11y/useAriaPropsSupportedByRole: with its href the element is a link, which supports aria-label -->
-        <!-- biome-ignore lint/a11y/useAnchorContent: aria-label names the icon-only link; the decorative SVG is hidden from screen readers -->
-        <a class="top-link" id="repo-link" data-cfg-href="links.repoUrl" rel="noopener noreferrer" aria-label="GitHub" title="GitHub">
-          <svg aria-hidden="true" focusable="false" fill="currentColor" width="24" height="24" viewBox="0 0 16 16"><path d="M 6.766  11.328 c -2.063 -.25 -3.516 -1.734 -3.516 -3.656  0 -.781 .281 -1.625 .75 -2.188 -.203 -.515 -.172 -1.609 .063 -2.062 .625 -.078  1.468 .25  1.968 .703 .594 -.187  1.219 -.281  1.985 -.281 .765  0  1.39 .094  1.953 .265 .484 -.437  1.344 -.765  1.969 -.687 .218 .422 .25  1.515 .046  2.047 .5 .593 .766  1.39 .766  2.203  0  1.922 -1.453  3.375 -3.547  3.64 .531 .344 .89  1.094 .89  1.954 v 1.625 c 0  .468 .391 .734 .86 .547 C 13.781  14.359  16  11.53  16  8.03  16  3.61  12.406  0  7.984  0  3.563  0  0  3.61  0  8.031 a 7.88  7.88  0  0  0  5.172  7.422 c .422 .156 .828 -.125 .828 -.547 v -1.25 c -.219 .094 -.5 .156 -.75 .156 -1.031  0 -1.64 -.562 -2.078 -1.609 -.172 -.422 -.36 -.672 -.719 -.719 -.187 -.015 -.25 -.093 -.25 -.187  0 -.188 .313 -.328 .625 -.328 .453  0  .844 .281  1.25 .86 .313 .452 .64 .655  1.031 .655 s .641 -.14  1 -.5 c .266 -.265 .47 -.5 .657 -.656"/></svg>
-        </a>
-        <!-- /passgen:repo-link -->
+      <!-- Below 900px the Style and theme controls fold into the Appearance
+           panel, so the pinned header stays one row (src/ui/appearance.ts);
+           from 900px the button is hidden and the panel is part of the row. -->
+      <button type="button" class="appearance-toggle" id="appearance-toggle" aria-label="Appearance" title="Appearance" aria-expanded="false" aria-controls="appearance-panel">
+        <svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10" cy="10" r="7.2"/><path d="M10 2.8 A7.2 7.2 0 0 1 10 17.2 Z" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <div class="top-controls" id="appearance-panel">
         <!-- passgen:style-control -->
         <div class="style-control">
           <label class="style-label" for="style">Style</label>
@@ -56,6 +41,21 @@
           <input class="sr-only" type="radio" name="theme" id="theme-dark" value="dark" data-cfg-checked-eq="theme">
           <label for="theme-dark">Dark</label>
         </fieldset>
+      </div>
+      <span class="top-sep" aria-hidden="true"></span>
+      <!-- Save and Reset (src/ui/settings.ts). Each button keeps its full
+           name; its visible label swaps between the full or compact idle text
+           and a short outcome in one grid cell, so the button never changes
+           size. The hint describes both buttons and is read with them. -->
+      <div class="header-save">
+        <button type="button" class="btn btn-primary header-save-btn" id="header-save-settings" aria-label="Save as my default" aria-describedby="save-settings-hint">
+          <span class="hb-labels" aria-hidden="true"><span class="hb-idle"><span class="hb-full">Save as my default</span><span class="hb-short">Save</span></span><span class="hb-ok">Saved</span><span class="hb-fail">Failed</span></span>
+        </button>
+        <button type="button" class="btn header-save-btn" id="header-reset-settings" aria-label="Reset to defaults" aria-describedby="save-settings-hint">
+          <span class="hb-labels" aria-hidden="true"><span class="hb-idle"><span class="hb-full">Reset to defaults</span><span class="hb-short">Reset</span></span><span class="hb-ok">Cleared</span><span class="hb-fail">Failed</span></span>
+        </button>
+        <p class="sr-only" id="save-settings-hint"></p>
+        <p class="sr-only" id="header-save-status" role="status" aria-live="polite" aria-atomic="true"></p>
       </div>
     </header>
 
@@ -273,40 +273,16 @@
           </section>
         </section>
       </div>
-
-      <section class="save-settings" id="save-settings-area" aria-labelledby="save-settings-title">
-        <h2 class="sr-only" id="save-settings-title">Saved settings</h2>
-        <div class="save-block">
-          <div class="save-actions">
-            <button type="button" class="btn btn-primary" id="save-settings" aria-describedby="save-settings-hint">Save as my default</button>
-            <button type="button" class="btn" id="reset-settings" aria-describedby="save-settings-hint">Reset to defaults</button>
-            <p class="save-feedback" id="save-settings-status" role="status" aria-live="polite" aria-atomic="true"></p>
-          </div>
-          <p class="hint" id="save-settings-hint"></p>
-        </div>
-        <div class="settings-code">
-          <h3 class="settings-code-title" id="settings-code-title">Settings code</h3>
-          <p class="hint" id="settings-code-hint"></p>
-          <div class="code-row">
-            <button type="button" class="btn" id="get-settings-code" aria-describedby="settings-code-hint">Get settings code</button>
-            <output class="code-value" id="settings-code-value" for="get-settings-code" tabindex="-1" aria-live="off" aria-label="Settings code"></output>
-            <button type="button" class="btn" id="copy-settings-code" aria-label="Copy settings code" disabled>Copy</button>
-          </div>
-          <div class="code-row">
-            <label class="code-label" for="settings-code-input">Code to apply</label>
-            <input type="text" class="code-input" id="settings-code-input" maxlength="200" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-describedby="settings-code-status">
-            <button type="button" class="btn" id="apply-settings-code">Apply settings code</button>
-          </div>
-          <p class="save-feedback" id="settings-code-status" role="status" aria-live="polite" aria-atomic="true"></p>
-        </div>
-      </section>
     </main>
 
+    <!-- The bottom of the page is one grid (src/styles.css). The DOM order is
+         the reading order at every width: the privacy line, the meta line,
+         then the settings code. The meta line is three grid items (before
+         Credits, the Credits summary, after it), so the open Credits panel
+         can span the full width below. -->
     <footer class="foot">
-      <div class="foot-text">
-        <p>Everything happens in this tab: no account, no tracking, no network requests after the page loads.</p>
-      </div>
-      <div class="foot-meta">
+      <p class="foot-privacy">Everything happens in this tab: no account, no tracking, no network requests after the page loads.</p>
+      <span class="foot-meta foot-meta-start">
         <span class="foot-version">v<!-- passgen:version --></span>
         <!-- passgen:license-link -->
         <span class="foot-sep" aria-hidden="true">·</span>
@@ -315,11 +291,37 @@
         <a class="foot-link" id="license-link" data-cfg-href="links.licenseUrl" rel="noopener noreferrer" aria-label="Apache-2.0 license">Apache-2.0</a>
         <!-- /passgen:license-link -->
         <span class="foot-sep" aria-hidden="true">·</span>
-        <details id="wordlist-credits" class="wordlist-credits">
-          <summary>Credits</summary>
-          <ul><!-- passgen:word-list-credits --></ul>
-        </details>
-      </div>
+      </span>
+      <details id="wordlist-credits" class="wordlist-credits">
+        <summary class="foot-meta">Credits</summary>
+        <ul><!-- passgen:word-list-credits --></ul>
+      </details>
+      <!-- passgen:repo-link -->
+      <span class="foot-meta foot-meta-end">
+        <span class="foot-sep" aria-hidden="true">·</span>
+        <!-- biome-ignore lint/a11y/useValidAnchor: the build fills the href from the configuration (decision 0005) -->
+        <a class="foot-link" id="repo-link" data-cfg-href="links.repoUrl" rel="noopener noreferrer">GitHub</a>
+      </span>
+      <!-- /passgen:repo-link -->
+      <section class="settings-code" id="settings-code" aria-labelledby="settings-code-title">
+        <div class="settings-code-head">
+          <h2 class="settings-code-title" id="settings-code-title">Settings code</h2>
+          <p class="settings-code-sub">Use these settings in another browser</p>
+        </div>
+        <p class="hint" id="settings-code-hint"></p>
+        <div class="code-row">
+          <output class="code-value" id="settings-code-value" tabindex="-1" aria-live="off" aria-label="Settings code for the current settings"></output>
+          <button type="button" class="btn" id="copy-settings-code" aria-label="Copy settings code">Copy</button>
+        </div>
+        <div class="code-apply">
+          <label class="code-label" for="settings-code-input">Code to apply</label>
+          <div class="code-row">
+            <input type="text" class="code-input" id="settings-code-input" maxlength="200" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-describedby="settings-code-status">
+            <button type="button" class="btn" id="apply-settings-code" aria-label="Apply settings code">Apply</button>
+          </div>
+        </div>
+        <p class="save-feedback" id="settings-code-status" role="status" aria-live="polite" aria-atomic="true"></p>
+      </section>
     </footer>
   </body>
 </html>
