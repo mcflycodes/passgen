@@ -1,4 +1,5 @@
-// The settings code: a code got on one page and applied in a fresh browser
+// The settings code: the code shown on one page (always the one for the
+// current settings, v1.5.1) and applied in a fresh browser
 // context reproduces every setting, the theme, the style and the strength
 // shown; applying writes nothing to any storage, touches neither the URL nor
 // history and makes no request; a bad code changes nothing and says why, to
@@ -7,11 +8,10 @@
 
 import type { Browser, Page } from "@playwright/test";
 import { BASELINE, encodeSettingsCode } from "../../src/core/settings-code.ts";
-import { CODE_APPLIED_STATUS, CODE_ERROR_STATUS, CODE_READY_STATUS } from "../../src/ui/settings-code.ts";
+import { CODE_APPLIED_STATUS, CODE_ERROR_STATUS, CODE_UNAVAILABLE_TEXT } from "../../src/ui/settings-code.ts";
 import { expect, expectNoRequestsAfterLoad, test } from "./fixtures.ts";
 import { chooseStyle, chooseTheme, openPage, setNumber, setRange } from "./helpers.ts";
 
-const get = (page: Page) => page.locator("#get-settings-code");
 const shown = (page: Page) => page.locator("#settings-code-value");
 const copy = (page: Page) => page.locator("#copy-settings-code");
 const input = (page: Page) => page.locator("#settings-code-input");
@@ -102,8 +102,8 @@ async function codeFrom(browser: Browser, change: (page: Page) => Promise<void>)
   const page = await context.newPage();
   await openPage(page);
   await change(page);
-  await get(page).click();
-  await expect(status(page)).toHaveText(CODE_READY_STATUS);
+  await expect(shown(page)).toHaveText(/^PG1-/);
+  await expect(copy(page)).toBeEnabled();
   const code = (await shown(page).textContent()) ?? "";
   const source = await state(page);
   await context.close();
@@ -133,8 +133,7 @@ test.describe("settings code", () => {
     await expect(page.locator("#pw-value")).not.toHaveText("");
     await expect(page.locator("#pp-value")).not.toHaveText("");
 
-    // The same settings give the same code here.
-    await get(page).click();
+    // The same settings give the same code here, shown at once.
     await expect(shown(page)).toHaveText(code);
 
     await page.waitForLoadState("networkidle");
@@ -166,8 +165,8 @@ test.describe("settings code", () => {
     expect(await state(page)).toEqual(defaults);
     await input(page).fill(code);
     await apply(page).click();
-    await page.locator("#save-settings").click();
-    await expect(page.locator("#save-settings-status")).toContainText("Saved");
+    await page.locator("#header-save-settings").click();
+    await expect(page.locator("#header-save-status")).toContainText("Saved");
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-ready", "true");
     expect(await state(page)).toEqual(source);
@@ -218,7 +217,7 @@ test.describe("settings code", () => {
     });
   }
 
-  test("Get works from the keyboard, the shown code is cleared by any later change, and Copy copies it", async ({
+  test("the shown code follows every change, Copy copies it from the keyboard, and settings that cannot be saved show why with Copy disabled", async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -229,25 +228,39 @@ test.describe("settings code", () => {
       });
     });
     await openPage(page);
-    await expect(copy(page)).toBeDisabled();
-    await expect(shown(page)).toHaveText("");
-    await get(page).focus();
-    await page.keyboard.press("Enter");
+    // There is no Get button: the code for the defaults is on screen from the start.
+    await expect(page.locator("#get-settings-code")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /get settings code/i })).toHaveCount(0);
     await expect(shown(page)).toHaveText("PG1-ZW");
-    await expect(status(page)).toHaveText(CODE_READY_STATUS);
+    await expect(shown(page)).not.toHaveClass(/is-unavailable/);
     await expect(copy(page)).toBeEnabled();
-    await copy(page).click();
+    await copy(page).focus();
+    await page.keyboard.press("Enter");
     await expect(copy(page)).toHaveText("Copied");
     expect(await page.evaluate(() => (window as unknown as { __copied: string[] }).__copied)).toEqual(["PG1-ZW"]);
+    // Any change shows the new code at once, says nothing, and ends Copy's feedback.
     await page.locator("#pw-numbers").uncheck();
-    await expect(shown(page)).toHaveText("");
+    await expect(shown(page)).not.toHaveText("PG1-ZW");
+    await expect(shown(page)).toHaveText(/^PG1-[0-9A-HJKMNP-TV-Z-]+$/);
     await expect(status(page)).toHaveText("");
-    await expect(copy(page)).toBeDisabled();
-    // Settings the generators refuse give no code.
+    await expect(copy(page)).toHaveText("Copy");
+    const changed = (await shown(page).textContent()) ?? "";
+    await copy(page).click();
+    expect(await page.evaluate(() => (window as unknown as { __copied: string[] }).__copied)).toEqual([
+      "PG1-ZW",
+      changed,
+    ]);
+    await page.locator("#pw-numbers").check();
+    await expect(shown(page)).toHaveText("PG1-ZW");
+    // Settings the generators refuse give no code: the slot says so and Copy is disabled.
     await setNumber(page.locator("#pw-lowercase-min"), 99);
-    await get(page).click();
-    await expect(status(page)).toContainText("fix the settings");
-    await expect(shown(page)).toHaveText("");
+    await expect(shown(page)).toHaveText(CODE_UNAVAILABLE_TEXT);
+    await expect(shown(page)).toHaveClass(/is-unavailable/);
+    await expect(copy(page)).toBeDisabled();
+    await setNumber(page.locator("#pw-lowercase-min"), 1);
+    await expect(shown(page)).toHaveText(/^PG1-/);
+    await expect(shown(page)).not.toHaveClass(/is-unavailable/);
+    await expect(copy(page)).toBeEnabled();
   });
 
   test("neither the code nor any status contains a generated password or passphrase", async ({ browser, page }) => {
@@ -255,12 +268,12 @@ test.describe("settings code", () => {
     await openPage(page);
     await input(page).fill(code);
     await apply(page).click();
-    await get(page).click();
+    await expect(shown(page)).toHaveText(code);
     const texts = [
       code,
       (await shown(page).textContent()) ?? "",
       (await status(page).textContent()) ?? "",
-      (await page.locator("#save-settings-status").textContent()) ?? "",
+      (await page.locator("#header-save-status").textContent()) ?? "",
     ].map((text) => text.toUpperCase());
     const outputs = await page.locator("[data-generated]").allTextContents();
     expect(outputs.filter(Boolean).length).toBeGreaterThanOrEqual(2);

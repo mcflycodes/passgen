@@ -17,7 +17,7 @@ for (const width of [1440, 768, 390]) {
         await expect(details).not.toHaveAttribute("open", "");
         const collapsedSpacing = await page.locator(".foot").evaluate((footer) => {
           const bottom = Math.max(
-            ...[...footer.querySelectorAll(".foot-text, .foot-meta, summary")].map(
+            ...[...footer.querySelectorAll(".foot-privacy, .foot-meta, summary, .settings-code")].map(
               (el) => el.getBoundingClientRect().bottom,
             ),
           );
@@ -32,7 +32,7 @@ for (const width of [1440, 768, 390]) {
         await expect(summary).toBeFocused();
         const above = () =>
           page
-            .locator("main, main *, .foot-text, .foot-version, #license-link, #wordlist-credits summary")
+            .locator("main, main *, .foot-privacy, .foot-version, #license-link, #wordlist-credits summary")
             .evaluateAll((nodes) =>
               nodes.map((node) => {
                 const r = node.getBoundingClientRect();
@@ -103,10 +103,16 @@ for (const width of [1440, 768, 390]) {
           }
         }
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        // Audit from the top of the page, as the accessibility matrix does: the
+        // header is pinned at every width (v1.5.1) and covers whatever is
+        // scrolled beneath it, which target-size would report as obscured.
+        const scrolled = await page.evaluate(() => scrollY);
+        await page.evaluate(() => window.scrollTo(0, 0));
         const result = await new AxeBuilder({ page })
           .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
           .analyze();
         expect(result.violations).toEqual([]);
+        await page.evaluate((y) => window.scrollTo(0, y), scrolled);
         if (phone) {
           // Emergency wrapping is allowed only for a word wider than the panel.
           const wrapped = await details
@@ -133,88 +139,4 @@ for (const width of [1440, 768, 390]) {
       });
     }
   }
-}
-
-for (const style of STYLES) {
-  test(`Collapsed Credits keeps main's intrinsic flex wrap: ${style}`, async ({ page }) => {
-    await openPage(page);
-    await chooseStyle(page, style);
-    // A separate, inert footer supplies the original flex layout as an oracle.
-    // Serve the stylesheet externally to respect the page's CSP.
-    await page.route("**/credits-baseline.css", (route) =>
-      route.fulfill({
-        contentType: "text/css",
-        body: `
-        .credits-baseline { container-type:normal; display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px 32px; }
-        .credits-baseline .foot-text { flex:1 1 420px; margin-right:0; grid-column:auto; }
-        .credits-baseline .foot-meta { grid-template-columns:repeat(5,auto); padding-bottom:0; flex:0 1 auto; }
-        .credits-baseline .wordlist-credits::details-content { display:block; content-visibility:hidden; grid-column:auto; contain:none; }
-        .credits-baseline .wordlist-credits ul { position:static; width:0; min-width:100%; margin-top:0; }
-      `,
-      }),
-    );
-    await page.addStyleTag({ url: "/credits-baseline.css" });
-    await page.locator(".foot").evaluate((footer) => {
-      const clone = footer.cloneNode(true) as HTMLElement;
-      clone.classList.add("credits-baseline");
-      clone.setAttribute("inert", "");
-      clone.setAttribute("aria-hidden", "true");
-      for (const el of clone.querySelectorAll("[id]")) el.removeAttribute("id");
-      clone.querySelector(".foot-meta")?.append(clone.querySelector("details") as HTMLElement);
-      footer.after(clone);
-    });
-    for (const theme of ["light", "dark"] as const) {
-      await chooseTheme(page, theme);
-      for (const width of [768, 760, 800, 1024, 1440, 390]) {
-        await page.setViewportSize({ width, height: 1000 });
-        const boxes = await page.evaluate(() => {
-          const box = (selector: string) => {
-            const footer = document.querySelector(selector) as HTMLElement;
-            const origin = footer.getBoundingClientRect();
-            return [".foot-text", ".foot-meta"].map((child) => {
-              const rect = (footer.querySelector(child) as HTMLElement).getBoundingClientRect();
-              if (child === ".foot-meta") {
-                const cells = [
-                  ...footer.querySelectorAll(".foot-version, .foot-sep, #license-link, .foot-link, summary"),
-                ].map((el) => el.getBoundingClientRect());
-                const left = Math.min(...cells.map((r) => r.left));
-                const right = Math.max(...cells.map((r) => r.right));
-                return { x: left - origin.x, y: rect.y - origin.y, width: right - left, height: rect.height };
-              }
-              return { x: rect.x - origin.x, y: rect.y - origin.y, width: rect.width, height: rect.height };
-            });
-          };
-          return { actual: box(".foot:not(.credits-baseline)"), expected: box(".credits-baseline") };
-        });
-        for (let i = 0; i < boxes.actual.length; i++) {
-          const actual = boxes.actual[i];
-          const expected = boxes.expected[i];
-          if (!actual || !expected) throw new Error("Missing footer row box");
-          for (const key of ["x", "y", "width", "height"] as const) {
-            expect(Math.abs(actual[key] - expected[key]), `${style}/${theme}/${width}/${i}/${key}`).toBeLessThanOrEqual(
-              1,
-            );
-          }
-        }
-        const above = () =>
-          page
-            .locator(
-              "main, main *, .foot:not(.credits-baseline) .foot-text, .foot:not(.credits-baseline) .foot-version, .foot:not(.credits-baseline) .foot-link, .foot:not(.credits-baseline) summary",
-            )
-            .evaluateAll((nodes) =>
-              nodes.map((node) => {
-                const rect = node.getBoundingClientRect();
-                return { x: rect.x, y: rect.y + scrollY, width: rect.width, height: rect.height };
-              }),
-            );
-        const summary = page.locator("#wordlist-credits summary");
-        await summary.focus();
-        const before = await above();
-        await page.keyboard.press("Enter");
-        expect(await above()).toEqual(before);
-        await page.keyboard.press("Space");
-        expect(await above()).toEqual(before);
-      }
-    }
-  });
 }

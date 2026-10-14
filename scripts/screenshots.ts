@@ -88,6 +88,9 @@ try {
         await chooseStyle(page, shot.style);
         await chooseTheme(page, shot.theme);
         await page.locator(".intro").waitFor({ state: "visible" });
+        // On phones the style and theme are chosen in the Appearance panel;
+        // move the pointer off its button so it is not drawn hovered.
+        await page.mouse.move(0, 0);
         await page.evaluate(() => document.fonts.ready);
         await page.locator("#pw-value").blur();
         await page.locator("#pp-value").blur();

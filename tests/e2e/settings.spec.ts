@@ -45,9 +45,10 @@ const storageKeys = (page: Page) => page.evaluate(() => Object.keys(localStorage
 const setStored = (page: Page, text: string) =>
   page.evaluate(([key, value]) => localStorage.setItem(key as string, value as string), [KEY, text]);
 
-const save = (page: Page) => page.locator("#save-settings");
-const reset = (page: Page) => page.locator("#reset-settings");
-const status = (page: Page) => page.locator("#save-settings-status");
+// Save and Reset are in the header (v1.5.1); the hint describes both and is their tooltip.
+const save = (page: Page) => page.locator(".top #header-save-settings");
+const reset = (page: Page) => page.locator(".top #header-reset-settings");
+const status = (page: Page) => page.locator(".top #header-save-status");
 const hint = (page: Page) => page.locator("#save-settings-hint");
 
 /** The stored text for the defaults with `edit` applied. */
@@ -230,8 +231,12 @@ test.describe("saved settings", () => {
     await watchWrites(page);
     await openPage(page);
     await expect(save(page)).toBeEnabled();
-    await expect(save(page)).toHaveText("Save as my default");
+    await expect(save(page)).toHaveAccessibleName("Save as my default");
     await expect(hint(page)).toContainText("Nothing generated is ever stored");
+    for (const button of [save(page), reset(page)]) {
+      await expect(button).toHaveAccessibleDescription(/Nothing generated is ever stored/);
+      await expect(button).toHaveAttribute("title", /Nothing generated is ever stored/);
+    }
     await expect(status(page)).toHaveAttribute("role", "status");
     await expect(status(page)).toHaveAttribute("aria-live", "polite");
     await expect(status(page)).toBeEmpty();
@@ -414,7 +419,9 @@ test.describe("saved settings", () => {
       await save(page).click();
       await expect(save(page)).toHaveClass(/is-done/);
       await expect(status(page)).toHaveText(SAVED_STATUS);
-      await expect(status(page)).toBeVisible();
+      // Seen on the button itself: its label reads Saved while the status is announced.
+      await expect(save(page).locator(".hb-ok")).toBeVisible();
+      await expect(save(page).locator(".hb-idle")).toBeHidden();
       await expect(status(page)).toHaveAttribute("role", "status");
       await expect(status(page)).toHaveAttribute("aria-live", "polite");
       await expect(status(page)).toHaveAttribute("aria-atomic", "true");
@@ -433,7 +440,8 @@ test.describe("saved settings", () => {
       expect(animated).toBe(1);
       await expect(save(page)).not.toHaveClass(/is-done/, { timeout: SAVE_FEEDBACK_MS * 3 });
       await expect(status(page)).toBeEmpty();
-      await expect(status(page)).toBeHidden();
+      await expect(save(page).locator(".hb-ok")).toBeHidden();
+      await expect(save(page).locator(".hb-idle")).toBeVisible();
       // Pressing again announces again.
       await save(page).click();
       await expect(status(page)).toHaveText(SAVED_STATUS);
@@ -756,6 +764,8 @@ test.describe("saved settings", () => {
       await expect(page.locator("html")).toHaveAttribute("data-theme", "system");
       await expect(save(page)).toBeEnabled();
       await expect(hint(page)).toContainText("Saving is unavailable");
+      await expect(save(page)).toHaveAccessibleDescription(/Saving is unavailable/);
+      await expect(save(page)).toHaveAttribute("title", /Saving is unavailable/);
       await chooseTheme(page, "dark");
       await save(page).click();
       await expect(status(page)).toHaveText(SAVE_FAILED_STATUS);
@@ -788,6 +798,7 @@ test.describe("saved settings", () => {
       await save(page).click();
       await expect(status(page)).toHaveText(SAVE_FAILED_STATUS);
       await expect(hint(page)).toContainText("Saving is unavailable");
+      await expect(save(page)).toHaveAttribute("title", /Saving is unavailable/);
       await expect(save(page)).not.toHaveClass(/is-done/);
       expect(await storageKeys(page)).toEqual([]);
       await chooseTheme(page, "dark");

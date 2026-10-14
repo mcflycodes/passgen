@@ -31,10 +31,9 @@ The footer also shows the version from `package.json`.
 
 ## Links
 
-`links.repoUrl` is the repository link beside the Style control and
-`links.licenseUrl` is the "Apache-2.0" link in the footer. Each is an `https`
-URL, written in its normalised form with no credentials, or empty to leave
-that link out. They render as plain anchors with `rel="noopener noreferrer"`,
+`links.repoUrl` is the "GitHub" link and `links.licenseUrl` the "Apache-2.0"
+link, both on the footer's meta line. Each is an `https` URL, written in its
+normalised form with no credentials, or empty to leave that link out. They render as plain anchors with `rel="noopener noreferrer"`,
 and cause no request. The footer also carries source and license URLs only for
 the offered word lists, restricted to designated Credits anchors. The
 host-name checks accept each one exactly as configured, as an anchor's `href`
@@ -49,15 +48,18 @@ defaults" removes it and restores the configured defaults. A change made after
 saving is not saved unless Save is pressed again, so a one-off tweak never
 becomes the default.
 
-- Each press is confirmed by a short status beside the buttons, announced
-  politely to screen readers, and a highlight on the button that fades out (or
-  simply ends under reduced motion).
+- Both buttons are at the right end of the header, the only place they
+  appear. Each press is confirmed on the pressed button, which is highlighted
+  and briefly reads Saved, Cleared or Failed, and by a short status announced
+  politely to screen readers; the highlight fades out (or simply ends under
+  reduced motion). A hint describing both buttons is read with them and shown
+  as their tooltip.
 - A stored record is checked by `src/boot/stored-settings.ts` both before the
   first paint and when the app starts, never includes a generated value, and is
   removed when it fails the check.
 - Nothing is written to storage until Save or Reset is pressed, not even a
-  probe. A browser whose storage cannot be read says so under the buttons, and
-  one that refuses the write says so when Save is pressed.
+  probe. A browser whose storage cannot be read says so in the buttons' hint,
+  and one that refuses the write says so when Save is pressed.
 - Saved settings use schema v5; older settings are ignored and removed on Save
   or Reset.
 - Saved defaults belong to the browser's origin: changing domains resets them.
@@ -65,10 +67,12 @@ becomes the default.
 ## Settings codes
 
 A settings code carries the same settings to another browser without a server,
-an account, a network request or a URL. "Get settings code" under the Save
-buttons shows a short code such as `PG1-ZW` (the shipped defaults) for the
-settings on the page; type it into "Code to apply" in the other browser and
-press Apply. The settings change at once, as if set by hand, but nothing is
+an account, a network request or a URL. The Settings code box at the bottom
+of the page always shows the code for the settings on the page, such as
+`PG1-ZW` (the shipped defaults), and updates it as they change; Copy copies
+it. While a setting is marked with an error there is no code: the box says to
+fix the marked settings, and Copy is disabled. Type a code into "Code to
+apply" in the other browser and press Apply. The settings change at once, as if set by hand, but nothing is
 saved until Save as my default is pressed there. A code holds settings only,
 never a password or passphrase, and no message repeats what was typed.
 

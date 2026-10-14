@@ -52,9 +52,33 @@ The meter counts all valid sequences exactly.
 |---|---|
 | `src/ui/password.ts`, `src/ui/passphrase.ts` | Bind the controls to the generators and turn each core error into a message with generation disabled. |
 | `src/ui/settings.ts` | Holds every user-changeable setting in one serialisable object and binds the Save and Reset buttons. |
+| `src/ui/settings-code.ts` | Shows the live settings code and applies a typed one. |
 | `src/ui/theme.ts` | Applies the theme and style choices. |
+| `src/ui/appearance.ts` | Opens and closes the narrow header's Appearance panel. |
 | `src/ui/pointer.ts` | The shared pointer effect for decorative backgrounds. |
 | `src/ui/meter.ts`, `src/ui/results.ts` | The strength meter and the extra-results markup. |
+
+### Layout
+
+The page supports widths down to 320 CSS pixels with no horizontal scrolling,
+including with enlarged text spacing; narrower viewports are not supported.
+
+- The header is pinned at the top at every width. From 900px it is one row:
+  the PassGen name, the Style control, the theme switch, a separator, then
+  "Save as my default" and "Reset to defaults". Below 900px it is a compact
+  53px row: the name, an Appearance button that opens the Style and theme
+  controls as a panel (Escape or a click outside closes it and returns focus
+  to the button), the separator, then Save and Reset with short labels and
+  their full names for assistive technology. Focused controls always scroll
+  clear of the pinned header. A viewport under 400px tall, such as a phone on
+  its side or 400% zoom, leaves the header in normal flow instead, so it does
+  not take a large share of the little height there is.
+- The bottom of the page holds the privacy line, the meta line (version,
+  license, Credits and GitHub) and the Settings code box, in that reading and
+  keyboard order at every width. From 1200px they are three columns, the
+  first two centred against the box; from 901px the privacy and meta lines
+  stack beside the box; at 900px and below all three stack. Credits opens a
+  full-width panel below them.
 
 The theme and style are applied before the first paint; see
 [Styles](Styles.md#theme-and-style-at-page-load). Saved settings are described

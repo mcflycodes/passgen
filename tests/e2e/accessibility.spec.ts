@@ -8,7 +8,7 @@ import { AxeBuilder } from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { contrastRatio } from "../../scripts/lib/style-checks.ts";
 import { expect, test } from "./fixtures.ts";
-import { chooseStyle, chooseTheme, openPage, STYLES, setNumber } from "./helpers.ts";
+import { chooseStyle, chooseTheme, openPage, STYLES, setNumber, withAppearance } from "./helpers.ts";
 import { DIST_DIR } from "./servers.ts";
 
 function color(value: string) {
@@ -137,6 +137,15 @@ async function keyboard(page: Page) {
   }
   // Native radio arrows, checkboxes, sliders, number entry, selects, buttons
   // and details all receive real keyboard activation, not synthetic clicks.
+  // Below 900px the theme and Style controls are in the Appearance panel,
+  // opened from the keyboard first.
+  const appearance = page.locator("#appearance-toggle");
+  const folded = await appearance.isVisible();
+  if (folded) {
+    await appearance.focus();
+    await page.keyboard.press("Enter");
+    await expect(appearance).toHaveAttribute("aria-expanded", "true");
+  }
   await page.locator("#theme-system").focus();
   await page.keyboard.press("ArrowRight");
   await expect(page.locator("#theme-light")).toBeChecked();
@@ -154,9 +163,20 @@ async function keyboard(page: Page) {
   await page.keyboard.press("Tab");
   await expect(page.locator("#pw-length")).toHaveValue("21");
   await setNumber(page.locator("#pw-length-number"), 20);
+  if (folded) {
+    await appearance.focus();
+    await page.keyboard.press("Enter");
+  }
   await page.locator("#style").focus();
   await page.keyboard.press("Home");
   await page.keyboard.press("Enter");
+  if (folded) {
+    // Mobile Enter may have opened the select's own picker, so close the
+    // panel from its button (Escape is covered in header.spec.ts).
+    await appearance.focus();
+    await page.keyboard.press("Enter");
+    await expect(appearance).toHaveAttribute("aria-expanded", "false");
+  }
   await page.locator("#pw-regen").focus();
   const previous = await page.locator("#pw-value").innerText();
   await page.keyboard.press("Enter");
@@ -167,18 +187,22 @@ async function keyboard(page: Page) {
   await expect(page.locator("#pw-meter details")).toHaveAttribute("open", "");
 }
 
-async function headerPosition(page: Page, sticky: boolean) {
+// The header is pinned at every width (v1.5.1): one row of the style's
+// --header-h from 900px, a 53px compact row below. Only a viewport under
+// 400px tall (a phone on its side, 400% zoom) leaves it in normal flow.
+async function headerPosition(page: Page) {
   const header = await page.locator(".top").evaluate((el) => ({
     position: getComputedStyle(el).position,
     height: el.getBoundingClientRect().height,
     configuredHeight: Number.parseFloat(getComputedStyle(el).getPropertyValue("--header-h")),
     scrollPadding: Number.parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop),
+    width: innerWidth,
+    viewportHeight: innerHeight,
   }));
+  const sticky = header.viewportHeight >= 400;
   expect(header.position).toBe(sticky ? "sticky" : "relative");
-  if (sticky) {
-    expect(header.height).toBe(header.configuredHeight);
-    expect(header.scrollPadding).toBeGreaterThanOrEqual(header.height + 16);
-  }
+  expect(header.height).toBe(header.width >= 900 ? header.configuredHeight : 53);
+  if (sticky) expect(header.scrollPadding).toBeGreaterThanOrEqual(header.height + 16);
 }
 
 async function reflow(page: Page) {
@@ -241,9 +265,7 @@ for (const style of STYLES) {
             return levels.every((level, i) => i === 0 || level <= (levels[i - 1] ?? 0) + 1);
           }),
         ).toBe(true);
-        const initial = page.viewportSize();
-        if (!initial) throw new Error("Missing viewport");
-        await headerPosition(page, initial.width >= 900 && initial.height >= 500);
+        await headerPosition(page);
         await axe(page, "initial");
         await keyboard(page);
         // Keyboard smoke changes theme/style; restore the combination under audit.
@@ -263,13 +285,13 @@ for (const style of STYLES) {
         await expect(page.locator("#pw-lowercase-min")).toHaveAccessibleDescription(/Min/);
         await axe(page, "invalid settings");
         await setNumber(page.locator("#pw-lowercase-min"), 1);
-        await page.locator("#save-settings").click();
-        const saved = page.locator("#save-settings-status");
+        await page.locator("#header-save-settings").click();
+        const saved = page.locator("#header-save-status");
         await expect(saved).toContainText("Saved");
         await expect(saved).toHaveAttribute("aria-live", "polite");
-        await expect(page.locator("#save-settings")).toHaveClass(/is-done/);
+        await expect(page.locator("#header-save-settings")).toHaveClass(/is-done/);
         await axe(page, "saved");
-        await page.locator("#reset-settings").click();
+        await page.locator("#header-reset-settings").click();
         await expect(saved).toContainText("Reset to defaults");
         await axe(page, "reset");
         for (const link of await page.locator("a[href]").all()) {
@@ -290,9 +312,12 @@ for (const style of STYLES) {
         await expect(page.locator("#pw-value")).toBeFocused();
         expect(await page.evaluate(() => getSelection()?.toString())).toBe(await page.locator("#pw-value").innerText());
         await axe(page, "clipboard fallback");
-        for (const input of await page.locator("input, select").all()) {
-          await expect(input).toHaveAccessibleName(/.+/);
-        }
+        // Below 900px the Style and theme controls are named inside the Appearance panel.
+        await withAppearance(page, async () => {
+          for (const input of await page.locator("input, select").all()) {
+            await expect(input).toHaveAccessibleName(/.+/);
+          }
+        });
         expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
         const transitionDurations = await page.locator(".btn").evaluateAll((buttons) =>
           buttons.flatMap((button) =>
@@ -302,16 +327,18 @@ for (const style of STYLES) {
           ),
         );
         for (const duration of transitionDurations) expect(duration).toBe("0s");
-        // 200% of the 1280x800 desktop viewport is 640x400 CSS pixels.
-        // Also exercise 320 CSS px, independently of the project's device.
+        // 200% of the 1280x800 desktop viewport is 640x400 CSS pixels, and
+        // 400% of a 1280x1024 one is 320x256. Also exercise 320 CSS px,
+        // independently of the project's device.
         const original = page.viewportSize();
         if (!original) throw new Error("Missing viewport");
         for (const viewport of [
           { width: 640, height: 400 },
+          { width: 320, height: 256 },
           { width: 320, height: original.height },
         ]) {
           await page.setViewportSize(viewport);
-          await headerPosition(page, false);
+          await headerPosition(page);
           await reflow(page);
           // A test-only user stylesheet bypasses CSP, as accessibility user
           // overrides do; no inline style is added to the product.
@@ -336,7 +363,7 @@ test("focus helper leaves visible rings alone and instantly corrects clipped key
   await openPage(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.keyboard.press("Tab");
-  const control = page.locator("#save-settings");
+  const control = page.locator("#apply-settings-code");
   const result = await control.evaluate(async (el) => {
     const element = el as HTMLElement;
     element.scrollIntoView({ block: "center" });

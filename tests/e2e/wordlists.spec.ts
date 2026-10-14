@@ -40,11 +40,11 @@ test("word list dropdown describes each list, clamps lengths and recalculates st
 test("save and reset include the selected word list", async ({ page }) => {
   await openPage(page);
   await page.locator("#pp-word-list").selectOption("eff-short1");
-  await page.locator("#save-settings").click();
+  await page.locator("#header-save-settings").click();
   await page.reload();
   await expect(page.locator("#pp-word-list")).toHaveValue("eff-short1");
   await expect(page.locator("#pp-max-length")).toHaveValue("5");
-  await page.locator("#reset-settings").click();
+  await page.locator("#header-reset-settings").click();
   await expect(page.locator("#pp-word-list")).toHaveValue("orchard-long");
   await expect(page.locator("#pp-max-length")).toHaveValue("10");
 });
@@ -59,7 +59,7 @@ test("Credits start collapsed, toggle by keyboard and preserve everything above"
   await page.keyboard.press("Tab");
   await expect(summary).toBeFocused();
   const above = () =>
-    page.locator("main, .foot-text, .foot-version, #wordlist-credits summary").evaluateAll((nodes) =>
+    page.locator("main, .foot-privacy, .foot-version, #wordlist-credits summary").evaluateAll((nodes) =>
       nodes.map((node) => {
         const r = node.getBoundingClientRect();
         return { x: r.x, y: r.y + scrollY, width: r.width };

@@ -105,7 +105,7 @@ describe("the shipped index.html", () => {
     const html = page();
     assert.match(
       html,
-      /<a class="top-link" id="repo-link" rel="noopener noreferrer" aria-label="GitHub" title="GitHub" href="https:\/\/github\.com\/mcflycodes\/passgen">\s*<svg[^>]*>[\s\S]*?<\/svg>\s*<\/a>/,
+      /<a class="foot-link" id="repo-link" rel="noopener noreferrer" href="https:\/\/github\.com\/mcflycodes\/passgen">GitHub<\/a>/,
     );
     assert.match(
       html,
@@ -113,6 +113,13 @@ describe("the shipped index.html", () => {
     );
     assert.doesNotMatch(html, /target=/);
     assert.equal(html.match(/<a\b/g)?.length, 12, "configured links and per-list credits");
+    // v1.5.1: both configured links are in the footer; the header has none.
+    const header = html.slice(html.indexOf('<header class="top">'), html.indexOf("</header>"));
+    assert.ok(header.length > 0);
+    assert.doesNotMatch(header, /<a\b|GitHub/);
+    const footer = html.slice(html.indexOf('<footer class="foot">'));
+    assert.ok(footer.indexOf('id="license-link"') < footer.indexOf("<summary"), "license link before Credits");
+    assert.ok(footer.indexOf("</summary>") < footer.indexOf('id="repo-link"'), "GitHub link after Credits");
   });
 
   test("leaves each link out when its URL is empty, with its separator", () => {
@@ -121,12 +128,14 @@ describe("the shipped index.html", () => {
     });
     assert.doesNotMatch(noRepo, /id="repo-link"/);
     assert.doesNotMatch(noRepo, /GitHub/);
+    assert.doesNotMatch(noRepo, /foot-meta-end/, "the GitHub link leaves with its separator");
+    assert.equal(noRepo.match(/class="foot-sep"/g)?.length, 2);
     assert.match(noRepo, /id="license-link"/);
     const noLicense = page((c) => {
       c.links.licenseUrl = "";
     });
     assert.doesNotMatch(noLicense, /id="license-link"/);
-    assert.equal(noLicense.match(/class="foot-sep"/g)?.length, 1);
+    assert.equal(noLicense.match(/class="foot-sep"/g)?.length, 2);
     assert.match(noLicense, /id="repo-link"/);
     const none = page((c) => {
       c.links.repoUrl = "";

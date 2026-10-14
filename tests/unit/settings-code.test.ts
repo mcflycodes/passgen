@@ -18,8 +18,7 @@ import {
   CODE_APPLIED_STATUS,
   CODE_ERROR_STATUS,
   CODE_HINT,
-  CODE_INVALID_STATUS,
-  CODE_READY_STATUS,
+  CODE_UNAVAILABLE_TEXT,
   readSettingsCode,
   settingsCode,
 } from "../../src/ui/settings-code.ts";
@@ -496,13 +495,9 @@ describe("making a code", () => {
 
 describe("no generated value", () => {
   test("neither the code nor any message contains a password or passphrase made with its settings", () => {
-    const messages = [
-      CODE_HINT,
-      CODE_READY_STATUS,
-      CODE_INVALID_STATUS,
-      CODE_APPLIED_STATUS,
-      ...Object.values(CODE_ERROR_STATUS),
-    ].map((m) => m.toUpperCase());
+    const messages = [CODE_HINT, CODE_UNAVAILABLE_TEXT, CODE_APPLIED_STATUS, ...Object.values(CODE_ERROR_STATUS)].map(
+      (m) => m.toUpperCase(),
+    );
     for (const settings of validSettings(5, 200)) {
       const code = settingsCode(settings, config) as string;
       const outputs = [generatePassphrase(settings.passphrase)];
