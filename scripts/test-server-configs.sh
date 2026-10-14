@@ -2,6 +2,9 @@
 set -euo pipefail
 : "${TMPDIR:?Set TMPDIR to task scratch space}"
 : "${HTTPD_IMAGE:?}" "${NGINX_IMAGE:?}" "${CADDY_IMAGE:?}"
+# Pull each pinned image with registry fallback; use the ref that served the same digest.
+pulled=$(PINNED_IMAGE_BUDGET=360 bash scripts/ci/pull-pinned-image.sh pull "$HTTPD_IMAGE" "$NGINX_IMAGE" "$CADDY_IMAGE")
+{ read -r HTTPD_IMAGE; read -r NGINX_IMAGE; read -r CADDY_IMAGE; } <<< "$pulled"
 work=$(mktemp -d "$TMPDIR/server-configs-XXXX")
 container="passgen-configs-$$"
 cleanup() {

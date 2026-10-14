@@ -11,7 +11,8 @@ domain=passgen.localhost
 manifest=dist-manifest/SHA256SUMS
 recipe=
 project=
-compose() { docker compose -f "$work/$recipe/compose.yaml" -p "$project" "$@"; }
+images=()
+compose() { docker compose -f "$work/$recipe/compose.yaml" "${images[@]}" -p "$project" "$@"; }
 finish() {
   compose logs --no-color || true
   compose down --volumes --remove-orphans || true
@@ -24,19 +25,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Anonymous registry pulls are rate limited and shared between runners; retry with backoff.
-retry() {
-  local attempt
-  for attempt in 1 2 3 4 5; do
-    if "$@"; then return 0; fi
-    echo "Attempt $attempt failed: $*"
-    sleep $((attempt * 15))
-  done
-  echo "FAIL: $*"
-  return 1
-}
+# Anonymous registry pulls are rate limited and shared between runners: the helper
+# pulls each pinned image with registry fallback and retries, by the same digest.
+PINNED_IMAGE_DEADLINE=$(($(date +%s) + 480))
+export PINNED_IMAGE_DEADLINE
 
 # Each recipe runs from a copy with only its documented .env values and files added.
+# If a pinned image came from a fallback registry, an override file outside the
+# recipe points its service at that source, by the same digest.
 start() {
   recipe=$1
   project="passgen-ci-$1"
@@ -49,11 +45,22 @@ start() {
   fi
   if [[ "$recipe" == *-files ]]; then cp -R dist "$work/$recipe/passgen"; fi
   chmod -R u=rwX,go=rX "$work/$recipe"
+  images=()
   compose config --quiet
-  local pinned
-  for pinned in $(compose config --images); do
-    if [[ "$pinned" != "$image" ]]; then retry docker pull --quiet "$pinned" >/dev/null; fi
-  done
+  local services service pinned source override='{}'
+  services=$(compose config --format json | jq -er '.services | to_entries[] | "\(.key) \(.value.image)"')
+  while read -r service pinned; do
+    if [[ "$pinned" == "$image" ]]; then continue; fi
+    source=$(bash scripts/ci/pull-pinned-image.sh pull "$pinned")
+    if [[ "$source" != "${pinned%%[:@]*}"@* ]]; then
+      override=$(jq -c --arg service "$service" --arg source "$source" '.services[$service].image = $source' <<< "$override")
+    fi
+  done <<< "$services"
+  if [[ "$override" != '{}' ]]; then
+    echo "$override" > "$work/$recipe.images.json"
+    images=(-f "$work/$recipe.images.json")
+    echo "Using fallback sources: $override"
+  fi
   compose up --detach --wait --wait-timeout 120 --pull never
   echo "PASS $recipe: docker compose up --wait"
 }
@@ -62,7 +69,7 @@ inspect() { docker inspect "$(compose ps --quiet "$1")" > "$work/$1.json"; }
 
 # Caddy's local CA root appears in its data volume once it has issued the certificate.
 caddy_ready() {
-  for attempt in {1..30}; do
+  for _ in {1..30}; do
     if compose exec -T "$1" cat /data/caddy/pki/authorities/local/root.crt > "$work/ca.pem" 2>/dev/null &&
       curl --silent --noproxy '*' --max-time 2 --cacert "$work/ca.pem" --resolve "$domain:443:127.0.0.1" \
         "https://$domain/" -o /dev/null; then return 0; fi
@@ -102,7 +109,9 @@ not_exposed() {
 
 # The image is built exactly as the container job builds it, for this runner's platform only.
 chmod -R u=rwX,go=rX dist deploy/container deploy/examples/nginx/passgen-headers.conf
-retry docker build --quiet --tag "$image" . >/dev/null
+base=$(sed -n 's/^FROM \([^ ]*\) AS upstream$/\1/p' Dockerfile)
+bash scripts/ci/pull-pinned-image.sh run "$base" -- \
+  docker build --quiet --build-context "upstream=docker-image://{image}" --tag "$image" . >/dev/null
 
 start caddy-https
 caddy_ready caddy

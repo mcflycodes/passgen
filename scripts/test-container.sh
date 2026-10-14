@@ -23,9 +23,16 @@ cleanup() {
 trap cleanup EXIT
 
 # Same builder, arguments and annotations as the release workflow's image job.
+# The helper pulls the pinned BuildKit and base images with registry fallback,
+# and supplies the base to the build as the "upstream" stage, by the same digest.
+PINNED_IMAGE_DEADLINE=$(($(date +%s) + 480))
+export PINNED_IMAGE_DEADLINE
 chmod -R u=rwX,go=rX dist deploy/container deploy/examples/nginx/passgen-headers.conf
-docker buildx create --name "$name" --driver docker-container --driver-opt "image=$BUILDKIT_IMAGE" >/dev/null
-build=(docker buildx build --builder "$name" --provenance=false --sbom=false
+buildkit=$(bash scripts/ci/pull-pinned-image.sh pull "$BUILDKIT_IMAGE")
+docker buildx create --name "$name" --driver docker-container --driver-opt "image=$buildkit" >/dev/null
+base=$(sed -n 's/^FROM \([^ ]*\) AS upstream$/\1/p' Dockerfile)
+build=(bash scripts/ci/pull-pinned-image.sh run "$base" -- docker buildx build --builder "$name"
+  --build-context "upstream=docker-image://{image}" --provenance=false --sbom=false
   --build-arg "PASSGEN_VERSION=$version" --build-arg "PASSGEN_REVISION=$revision"
   --build-arg "PASSGEN_CREATED=$created")
 # Index annotations apply only to multi-platform output.

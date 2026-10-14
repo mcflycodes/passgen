@@ -134,7 +134,10 @@ docker buildx imagetools inspect public.ecr.aws/docker/library/caddy:2
 ```
 
 Use the top-level `Digest` from each result, replace the pinned digest in
-`.github/workflows/ci.yml`, and open a reviewed PR. Require the workflow guard
+`.github/workflows/ci.yml`, and open a reviewed PR. CI pulls these images
+through `scripts/ci/pull-pinned-image.sh`, which falls back to Docker Hub and
+Google's mirror by the same digest, so confirm the digest there too, as
+described under "Refresh pinned images" in `docs/releasing.md`. Require the workflow guard
 and all three real-server checks to pass before merging.
 
 Run the additional curl probes against any deployment (the manifest must include

@@ -223,6 +223,29 @@ function checkReleaseWorkflow(configuration: string) {
   for (const run of configuration.matchAll(/run:.*(?:\n {10}.*)*/g)) assert.doesNotMatch(run[0], /\$\{\{/);
 }
 
+const PULL_HELPER = "bash scripts/ci/pull-pinned-image.sh";
+const BASE_FROM_DOCKERFILE = `base=$(sed -n 's/^FROM \\([^ ]*\\) AS upstream$/\\1/p' Dockerfile)`;
+
+/**
+ * Pinned third-party images are pulled only through the registry-fallback helper,
+ * which pulls by digest, and every image build takes the Dockerfile's base from it.
+ */
+function checkPinnedPulls(text: string, pulled: string[]) {
+  assert.doesNotMatch(text, /docker (?:image )?pull\b|\bretry docker\b/, "Pull pinned images through the helper");
+  const helperPulls = text.match(/bash scripts\/ci\/pull-pinned-image\.sh pull .*/g) ?? [];
+  for (const variable of pulled)
+    assert.ok(
+      helperPulls.some((line) => line.includes(`"${variable}"`)),
+      `${variable} must be pulled through the helper`,
+    );
+  const builds = text.match(/docker (?:buildx )?build /g) ?? [];
+  const wrapped = text.match(/pull-pinned-image\.sh run "\$base" --(?: \\\n\s*| )docker (?:buildx )?build /g) ?? [];
+  assert.equal(wrapped.length, builds.length, "Every image build runs through the helper");
+  const contexts = text.match(/ --build-context "upstream=docker-image:\/\/\{image\}" /g) ?? [];
+  assert.equal(contexts.length, builds.length, "Every image build takes its base from the helper");
+  if (builds.length > 0) assert.ok(text.includes(BASE_FROM_DOCKERFILE), "The base is the Dockerfile's pinned stage");
+}
+
 const BUILDKIT_IMAGE = /^ {6,10}BUILDKIT_IMAGE: mirror\.gcr\.io\/moby\/buildkit:v\d+\.\d+\.\d+@sha256:[a-f0-9]{64}$/m;
 const IMAGE_ANNOTATIONS = [
   '--annotation "index:org.opencontainers.image.source=https://github.com/mcflycodes/passgen"',
@@ -240,11 +263,14 @@ function checkImageJob(image: string) {
     "      contents: read\n      packages: write\n      id-token: write\n      attestations: write\n",
     "Image job permissions must be exactly these",
   );
+  // The pull helper is bash and docker only (its own test checks); nothing else from scripts/.
   assert.doesNotMatch(
-    image,
+    image.replaceAll("scripts/ci/pull-pinned-image.sh", ""),
     /setup-node|action-setup|\bpnpm\b|\bnpm\b|\bnode\b|\bpython3?\b|scripts\//,
     "No project build tooling with publish permissions",
   );
+  checkPinnedPulls(image, ["$BUILDKIT_IMAGE"]);
+  assert.match(image, /--driver-opt "image=\$buildkit"/);
   assert.match(image, /persist-credentials: false/);
   assert.match(image, /ref: \$\{\{ needs\.validate\.outputs\.commit \}\}/);
   assert.match(image, /^ {6}IMAGE: ghcr\.io\/mcflycodes\/passgen$/m);
@@ -377,6 +403,12 @@ function checkServerWorkflow(configuration: string) {
   assert.equal((server.match(/pnpm build/g) ?? []).length, 1);
   for (const command of ["pnpm headers:check", "pnpm manifest", "bash scripts/test-server-configs.sh"])
     assert.ok(server.includes(command));
+  checkServerScript(read("scripts/test-server-configs.sh"));
+}
+
+function checkServerScript(script: string) {
+  checkPinnedPulls(script, ["$HTTPD_IMAGE", "$NGINX_IMAGE", "$CADDY_IMAGE"]);
+  assert.match(script, /\{ read -r HTTPD_IMAGE; read -r NGINX_IMAGE; read -r CADDY_IMAGE; \} <<< "\$pulled"/);
 }
 
 test("server config CI pins official images, actions, read-only permissions and safe triggers", () => {
@@ -660,6 +692,12 @@ test("release image guard rejects weaker gates, wider permissions, tooling, rebu
     inImage('--metadata-file "$RUNNER_TEMP/image-metadata.json"', `--label x=\${{ github.ref_name }}`),
     inImage("--provenance=false", "--provenance=false --cache-to type=gha"),
     inImage("          (cd dist && sha256sum --check --strict --quiet ../release/SHA256SUMS)\n", ""),
+    inImage(`${PULL_HELPER} pull "$BUILDKIT_IMAGE"`, 'docker pull --quiet "$BUILDKIT_IMAGE"'),
+    inImage('--driver-opt "image=$buildkit"', '--driver-opt "image=$BUILDKIT_IMAGE"'),
+    inImage(`${PULL_HELPER} run "$base" -- \\\n            docker buildx build`, "docker buildx build"),
+    inImage('            --build-context "upstream=docker-image://{image}" \\\n', ""),
+    inImage(BASE_FROM_DOCKERFILE, "base=public.ecr.aws/nginx/nginx-unprivileged:1"),
+    inImage("--provenance=false", "--provenance=false\n          node scripts/ci/pull-pinned-image.sh"),
   ]) {
     assert.notEqual(broken, releaseWorkflow);
     assert.throws(() => checkReleaseWorkflow(broken));
@@ -691,6 +729,7 @@ function checkContainerJob(configuration: string) {
   const release = jobBlock(releaseWorkflow, "image");
   assert.equal(job.match(BUILDKIT_IMAGE)?.[0]?.trim(), release.match(BUILDKIT_IMAGE)?.[0]?.trim());
   const script = read("scripts/test-container.sh");
+  checkContainerScript(script);
   for (const annotation of IMAGE_ANNOTATIONS) assert.ok(script.includes(annotation), annotation);
   assert.match(script, /"\$\{annotations\[@\]\}" --platform linux\/amd64,linux\/arm64 \\\n\s+--output "type=oci/);
   assert.match(
@@ -704,6 +743,11 @@ function checkContainerJob(configuration: string) {
     assert.ok(script.includes(probe), probe);
   for (const step of ["image", "responses", "processes", "logs"])
     assert.match(script, new RegExp(`node scripts/check-container\\.ts (?:.*\\\\\\n)*.*\\b${step}$`, "m"), step);
+}
+
+function checkContainerScript(script: string) {
+  checkPinnedPulls(script, ["$BUILDKIT_IMAGE"]);
+  assert.match(script, /--driver-opt "image=\$buildkit"/);
 }
 
 test("container CI builds and probes both architectures natively with pinned images and no publishing", () => {
@@ -731,6 +775,33 @@ test("container CI guard rejects publishing, unpinned or Docker Hub builders, on
   }
 });
 
+test("pull guards reject direct pulls, unwrapped builds and a base not taken from the helper", () => {
+  const scripts: [string, (script: string) => void][] = [
+    [read("scripts/test-container.sh"), checkContainerScript],
+    [read("scripts/test-server-configs.sh"), checkServerScript],
+    [read("scripts/test-compose.sh"), checkComposeScript],
+  ];
+  for (const [script, check] of scripts) {
+    check(script);
+    const broken = [
+      script.replace(PULL_HELPER, "docker pull"),
+      script.replace(/bash scripts\/ci\/pull-pinned-image\.sh pull [^)]*\)/, '$(echo "$1")'),
+      script.replace(/--build-context "upstream=docker-image:\/\/\{image\}" /, ""),
+      script.replace(/bash scripts\/ci\/pull-pinned-image\.sh run "\$base" --(?: \\\n\s*| )/, ""),
+      script.replace(BASE_FROM_DOCKERFILE, "base=public.ecr.aws/nginx/nginx-unprivileged:1"),
+      `${script}\ndocker image pull "$HTTPD_IMAGE"\n`,
+    ].filter((text) => text !== script);
+    assert.ok(broken.length >= 3);
+    for (const text of broken) assert.throws(() => check(text));
+  }
+  assert.throws(() =>
+    checkContainerScript(read("scripts/test-container.sh").replace('image=$buildkit"', 'image=$BUILDKIT_IMAGE"')),
+  );
+  assert.throws(() =>
+    checkServerScript(read("scripts/test-server-configs.sh").replace(' "$NGINX_IMAGE" "$CADDY_IMAGE")', ")")),
+  );
+});
+
 function checkComposeJob(configuration: string) {
   const job = jobBlock(configuration, "compose");
   assert.match(job, /^ {4}needs: changes$/m);
@@ -751,6 +822,7 @@ function checkComposeJob(configuration: string) {
   for (const command of ["pnpm headers:check", "pnpm verify:dist", "pnpm manifest", "bash scripts/test-compose.sh"])
     assert.ok(job.includes(command), command);
   const script = read("scripts/test-compose.sh");
+  checkComposeScript(script);
   for (const recipe of ["caddy-https", "localhost", "caddy-files", "httpd-files"])
     assert.match(script, new RegExp(`^start ${recipe}$`, "m"), `${recipe} must be brought up`);
   for (const probe of [
@@ -766,6 +838,11 @@ function checkComposeJob(configuration: string) {
   ])
     assert.ok(script.includes(probe), probe);
   assert.doesNotMatch(script, /acme_ca|acme_dns|letsencrypt|acme-v02/i, "No real ACME in CI");
+}
+
+function checkComposeScript(script: string) {
+  checkPinnedPulls(script, ["$pinned"]);
+  assert.match(script, /compose up --detach --wait --wait-timeout 120 --pull never\n {2}echo "PASS \$recipe/);
 }
 
 test("compose CI brings up every recipe natively on both architectures with no publishing", () => {
