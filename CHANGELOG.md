@@ -5,7 +5,9 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
-## [1.5.1] - 2026-10-14
+## [1.5.2] - 2026-10-14
+
+Version 1.5.1 was tagged but never published; this release contains all of its changes.
 
 ### Changed
 
