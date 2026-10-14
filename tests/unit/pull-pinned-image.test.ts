@@ -21,11 +21,21 @@ const BASE_DIGEST = "sha256:3af0c10d960cc2502427fe1219c52989d309e7d65596869c60a3
 const BASE = `public.ecr.aws/nginx/nginx-unprivileged:1.30.5-alpine-slim@${BASE_DIGEST}`;
 
 const RATE_LIMIT = "1|toomanyrequests: Rate exceeded";
+const BUILD = ["--", "docker", "buildx", "build", "--build-context", "upstream=docker-image://{image}", "."];
+const ECR_BASE = `public.ecr.aws/nginx/nginx-unprivileged@${BASE_DIGEST}`;
+const HUB_BASE = `docker.io/nginxinc/nginx-unprivileged@${BASE_DIGEST}`;
+const GCR_BASE = `mirror.gcr.io/nginxinc/nginx-unprivileged@${BASE_DIGEST}`;
 
 const STUBS = {
-  // Each non-inspect call takes the next scripted "status|message" line; none left means success.
+  // Each non-inspect call takes the next scripted "status|message" line (\\n for more
+  // lines); none left means success. With STUB_HANG it ignores TERM and never finishes.
   docker: `#!/usr/bin/env bash
 echo "docker $*" >> "$STUB_DIR/calls"
+if [ -n "\${STUB_HANG:-}" ]; then
+  echo $$ > "$STUB_DIR/hung"
+  trap '' TERM
+  while :; do sleep 0.2; done
+fi
 if [ "$1 $2" = "image inspect" ]; then
   if grep -qxF "\${@: -1}" "$STUB_DIR/missing"; then echo "Error: No such image: \${@: -1}" >&2; exit 1; fi
   exit 0
@@ -33,7 +43,7 @@ fi
 line=$(head -n 1 "$STUB_DIR/outcomes")
 tail -n +2 "$STUB_DIR/outcomes" > "$STUB_DIR/outcomes.next" && mv "$STUB_DIR/outcomes.next" "$STUB_DIR/outcomes"
 [ -n "$line" ] || exit 0
-[ -z "\${line#*|}" ] || echo "\${line#*|}" >&2
+[ -z "\${line#*|}" ] || printf '%b\\n' "\${line#*|}" >&2
 exit "\${line%%|*}"
 `,
   date: `#!/usr/bin/env bash
@@ -62,12 +72,19 @@ type Run = {
   sleeps: number[];
   limits: number[];
   elapsed: number;
+  /** Wall-clock milliseconds, and the PID of a hung stub docker, if any. */
+  wall: number;
+  hung: number | undefined;
 };
 
-function run(args: string[], outcomes: string[] = [], options: { missing?: string[]; env?: object } = {}): Run {
+type Options = { missing?: string[]; env?: object; realClock?: boolean };
+
+/** Runs the helper with a stub docker and, unless realClock, a simulated date, sleep and timeout. */
+function run(args: string[], outcomes: string[] = [], options: Options = {}): Run {
   const dir = mkdtempSync(join(resolve(tmpdir()), "passgen-pull-"));
   try {
     for (const [name, body] of Object.entries(STUBS)) {
+      if (options.realClock && name !== "docker") continue;
       writeFileSync(join(dir, name), body);
       chmodSync(join(dir, name), 0o755);
     }
@@ -77,7 +94,10 @@ function run(args: string[], outcomes: string[] = [], options: { missing?: strin
     writeFileSync(join(dir, "clock"), `${START}\n`);
     const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${dir}:${process.env.PATH}`, STUB_DIR: dir, TMPDIR: dir };
     for (const name of Object.keys(env)) if (name.startsWith("PINNED_IMAGE_")) delete env[name];
+    const started = performance.now();
     const result = spawnSync("bash", [HELPER, ...args], { encoding: "utf8", env: { ...env, ...options.env } });
+    const wall = performance.now() - started;
+    const hung = readdirSync(dir).includes("hung") ? Number(readFileSync(join(dir, "hung"), "utf8")) : undefined;
     const calls = readFileSync(join(dir, "calls"), "utf8").split("\n").filter(Boolean);
     const leftovers = readdirSync(dir).filter((name) => name.startsWith("pull-pinned-image-"));
     assert.deepEqual(leftovers, [], "The helper removes its work directory");
@@ -92,10 +112,23 @@ function run(args: string[], outcomes: string[] = [], options: { missing?: strin
       sleeps: calls.filter((call) => call.startsWith("sleep ")).map((call) => Number(call.slice(6))),
       limits: calls.filter((call) => call.startsWith("timeout ")).map((call) => Number(call.slice(8))),
       elapsed: Number(readFileSync(join(dir, "clock"), "utf8")) - START,
+      wall,
+      hung,
     };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/** True once the process is gone or a zombie waiting to be reaped. */
+function gone(pid: number | undefined): boolean {
+  assert.ok(pid, "The stub docker started");
+  for (let tries = 0; tries < 20; tries++) {
+    const state = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).stdout.trim();
+    if (state === "" || state.startsWith("Z")) return true;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+  }
+  return false;
 }
 
 /** Every ref handed to docker is name@digest with the pinned digest: never a tag. */
@@ -161,6 +194,9 @@ test("refuses refs not pinned by digest, unknown repositories and commands witho
     ["pull", `docker.io/library/redis:7@${HTTPD_DIGEST}`],
     ["run", BASE, "--", "docker", "build", "."],
     ["run", BASE.replace(/@.*/, ""), "--", "docker", "build", "--build-context", "upstream=docker-image://{image}"],
+    // Fallback repositories are only ever reached through their pinned ref.
+    ["pull", HUB],
+    ["run", HUB_BASE, ...BUILD],
   ]) {
     const result = run(args);
     assert.equal(result.status, 2, args.join(" "));
@@ -216,7 +252,7 @@ test("a pull the daemon cannot find under the pinned digest counts as a mismatch
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(result.refs, [ECR, HUB]);
   assert.equal(result.stdout, `${HUB}\n`);
-  assert.match(result.stderr, /failed \(dropping this source\): digest mismatch/);
+  assert.match(result.stderr, /failed \(dropping this source\): Error: digest mismatch/);
 });
 
 test("fails at once when no source serves the digest", () => {
@@ -239,7 +275,10 @@ test("an outage fails loudly before the deadline; waits never exceed 60s and att
   const result = run(["pull", HTTPD], outage);
   assert.equal(result.status, 1);
   assert.equal(result.stdout, "");
-  assert.match(result.stderr, /FAIL: \S+: gave up before attempt \d+; the next try would pass the deadline/);
+  assert.match(
+    result.stderr,
+    /FAIL: \S+: (?:gave up before attempt \d+; the next try would pass the deadline|deadline reached after \d+ attempts)/,
+  );
   assert.ok(result.elapsed <= 480, `${result.elapsed}s`);
   assert.ok(result.refs.length >= 9, `${result.refs.length} attempts`);
   assertBackoff(result.sleeps);
@@ -262,7 +301,8 @@ test("a shared deadline caps every call, and attempts get only the time that is 
   );
   assert.equal(result.status, 1);
   assert.ok(result.elapsed <= 40, `${result.elapsed}s`);
-  assert.equal(result.limits[0], 40);
+  // The kill grace (5s) and a second for rounding are reserved inside the deadline.
+  assert.equal(result.limits[0], 34);
   const late = run(["pull", HTTPD], [], { env: { PINNED_IMAGE_DEADLINE: String(START) } });
   assert.equal(late.status, 1);
   assert.deepEqual(late.calls, []);
@@ -284,21 +324,141 @@ test("the backoff doubles from 2s with jitter and stays capped at 60s", () => {
 });
 
 test("a failure that is not a registry error stops at once with its own status", () => {
-  const result = run(
-    ["run", BASE, "--", "docker", "buildx", "build", "--build-context", "upstream=docker-image://{image}", "."],
-    ['17|ERROR: failed to calculate checksum of ref: "/dist": not found'],
-  );
+  const result = run(["run", BASE, ...BUILD], ['17|ERROR: failed to calculate checksum of ref: "/dist": not found']);
   assert.equal(result.status, 17);
   assert.equal(result.refs.length, 1);
   assert.deepEqual(result.sleeps, []);
-  assert.match(result.stderr, /not a registry error; not retried/);
+  assert.match(result.stderr, /not a registry error for this source; not retried/);
+});
+
+test("there is no internal entry point: other modes, including a bare pull of any ref, are refused", () => {
+  for (const args of [
+    ["__pull_one", "evil.invalid/arbitrary:latest"],
+    ["__pull_one", `evil.invalid/arbitrary@${HTTPD_DIGEST}`],
+    ["__pull_one", ECR],
+    ["pull_one", "evil.invalid/arbitrary:latest"],
+    ["docker", "pull", "evil.invalid/arbitrary:latest"],
+    ["evil.invalid/arbitrary:latest"],
+    [],
+  ]) {
+    const result = run(args);
+    assert.equal(result.status, 2, args.join(" "));
+    assert.deepEqual(result.calls, [], `${args.join(" ")} must not reach docker`);
+  }
+  assert.doesNotMatch(read("scripts/ci/pull-pinned-image.sh"), /__pull_one|BASH_SOURCE\[0\]" /);
+});
+
+// Real BuildKit output: progress lines, recovered warnings, then one final ERROR line.
+const RESOLVE_429 = (source: string) =>
+  `ERROR: failed to build: failed to solve: ${source}: failed to resolve source metadata for ${source}: unexpected status from HEAD request to https://${source.replace(/\/.*$/, "")}/v2/${source.replace(/^[^/]+\/|@.*$/g, "")}/manifests/${BASE_DIGEST}: 429 Too Many Requests`;
+
+test("a recovered registry warning before a fatal build error does not cause a retry", () => {
+  const result = run(
+    ["run", BASE, ...BUILD],
+    [
+      [
+        `17|#3 [context upstream] load metadata for ${ECR_BASE}`,
+        `#3 WARN: ${ECR_BASE}: TLS handshake timeout, retrying`,
+        "#3 DONE 2.1s",
+        "#9 [linux/amd64 stage-1 4/4] COPY --chown=0:0 dist/ /srv/passgen/",
+        '#9 ERROR: failed to calculate checksum of ref 7b2: "/dist": not found',
+        'ERROR: failed to build: failed to solve: failed to compute cache key: failed to calculate checksum of ref 7b2: "/dist": not found',
+      ].join("\\n"),
+    ],
+  );
+  assert.equal(result.status, 17, result.stderr);
+  assert.deepEqual(result.refs, [ECR_BASE]);
+  assert.deepEqual(result.sleeps, []);
+  assert.match(
+    result.stderr,
+    /not a registry error for this source; not retried\): ERROR: failed to build: .*"\/dist": not found/,
+  );
+});
+
+test("a push or export failure is never retried, even a 429, so publishing never falls back", () => {
+  for (const failure of [
+    "ERROR: failed to build: failed to solve: failed to push ghcr.io/mcflycodes/passgen:1.5.1: unexpected status from PUT request to https://ghcr.io/v2/mcflycodes/passgen/blobs/uploads/: 429 Too Many Requests",
+    "ERROR: failed to build: failed to solve: failed to push ghcr.io/mcflycodes/passgen:1.5.1: 503 Service Unavailable",
+    "ERROR: failed to build: failed to solve: failed to push ghcr.io/mcflycodes/passgen:1.5.1: unauthorized: authentication required",
+    "ERROR: failed to build: failed to solve: error writing layer blob: i/o timeout",
+  ]) {
+    const result = run(["run", BASE, ...BUILD], [`1|#12 exporting to image\\n#12 pushing layers 0.4s\\n${failure}`]);
+    assert.equal(result.status, 1, failure);
+    assert.deepEqual(result.refs, [ECR_BASE], failure);
+    assert.deepEqual(result.sleeps, []);
+    assert.match(result.stderr, /not retried/);
+  }
+});
+
+test("a registry error that names a different image than the selected source is not retried", () => {
+  const other = `mirror.gcr.io/moby/buildkit@${"sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c"}`;
+  const result = run(["run", BASE, ...BUILD], [`1|${RESOLVE_429(other)}`]);
+  assert.equal(result.status, 1);
+  assert.deepEqual(result.refs, [ECR_BASE]);
+});
+
+test("a genuine 429, 5xx or missing manifest on the selected source rotates the build to the next source", () => {
+  const result = run(
+    ["run", BASE, ...BUILD],
+    [
+      `1|#3 [context upstream] load metadata for ${ECR_BASE}\\n${RESOLVE_429(ECR_BASE)}`,
+      `1|ERROR: failed to build: failed to solve: failed to copy: httpReadSeeker: failed open: unexpected status code https://registry-1.docker.io/v2/nginxinc/nginx-unprivileged/blobs/sha256:${"a".repeat(64)}: 429 Too Many Requests - Server message: toomanyrequests: You have reached your unauthenticated pull rate limit`,
+      `1|ERROR: failed to build: failed to solve: ${GCR_BASE}: failed to resolve source metadata for ${GCR_BASE}: unexpected status from HEAD request: 503 Service Unavailable`,
+      `1|ERROR: failed to build: failed to solve: ${ECR_BASE}: failed to resolve source metadata for ${ECR_BASE}: ${ECR_BASE}: not found`,
+    ],
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.refs, [ECR_BASE, HUB_BASE, GCR_BASE, ECR_BASE, HUB_BASE]);
+  assert.match(result.stderr, /attempt 1: public\.ecr\.aws\/\S+ failed \(retryable\): .*429 Too Many Requests\n/);
+  assert.match(result.stderr, /attempt 4: public\.ecr\.aws\/\S+ failed \(dropping this source\)/);
+  assertBackoff(result.sleeps);
+});
+
+test("a pull is judged by its final error, not by an earlier recovered one", () => {
+  const result = run(
+    ["pull", HTTPD],
+    ["1|toomanyrequests: Rate exceeded (retrying)\\nError response from daemon: manifest unknown"],
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.refs, [ECR, HUB]);
+  assert.match(
+    result.stderr,
+    /attempt 1: \S+ failed \(dropping this source\): Error response from daemon: manifest unknown/,
+  );
+});
+
+test("the deadline is a hard cap in real time, even when a grandchild ignores TERM and holds the output open", () => {
+  // pull runs docker under bash -c: bash dies on TERM, the stub docker ignores it.
+  // 8s budget: the attempt gets 8 - 5 (kill grace) - 1 (rounding) = 2s.
+  const result = run(["pull", HTTPD], [], { realClock: true, env: { STUB_HANG: "1", PINNED_IMAGE_BUDGET: "8" } });
+  assert.equal(result.status, 1, result.stderr);
+  assert.ok(result.wall < 8000, `${Math.round(result.wall)}ms exceeds the 8s budget`);
+  assert.match(result.stderr, /attempt 1: \S+ failed \(retryable\): attempt timed out/);
+  assert.match(result.stderr, /FAIL: .*(deadline|gave up)/);
+  assert.ok(gone(result.hung), "The TERM-ignoring docker was killed");
+  // A budget too small for an attempt plus its grace fails at once instead of overrunning.
+  const tiny = run(["pull", HTTPD], [], { realClock: true, env: { STUB_HANG: "1", PINNED_IMAGE_BUDGET: "1" } });
+  assert.equal(tiny.status, 1);
+  assert.ok(tiny.wall < 1000, `${Math.round(tiny.wall)}ms exceeds the 1s budget`);
+  assert.deepEqual(tiny.calls, []);
+});
+
+test("the kill grace runs inside the deadline for a command that ignores TERM, and a timed-out build is not retried", () => {
+  // run executes the stub docker directly: TERM after 9 - 5 - 1 = 3s is ignored, KILL follows 5s later.
+  const result = run(["run", BASE, ...BUILD], [], {
+    realClock: true,
+    env: { STUB_HANG: "1", PINNED_IMAGE_BUDGET: "9" },
+  });
+  assert.equal(result.status, 137, result.stderr);
+  assert.ok(result.wall < 9000, `${Math.round(result.wall)}ms exceeds the 9s budget`);
+  assert.ok(result.wall >= 7000, `${Math.round(result.wall)}ms: TERM was ignored, so KILL came after the grace`);
+  assert.deepEqual(result.refs, [ECR_BASE]);
+  assert.match(result.stderr, /not retried\): attempt timed out/);
+  assert.ok(gone(result.hung), "The TERM-ignoring command was killed");
 });
 
 test("run supplies each source by the pinned digest wherever {image} appears", () => {
-  const result = run(
-    ["run", BASE, "--", "docker", "buildx", "build", "--build-context", "upstream=docker-image://{image}", "."],
-    [RATE_LIMIT],
-  );
+  const result = run(["run", BASE, ...BUILD], [`1|${RESOLVE_429(ECR_BASE)}`]);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, "");
   const builds = result.calls.filter((call) => call.startsWith("docker buildx build"));
