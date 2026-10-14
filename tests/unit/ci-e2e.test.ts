@@ -469,7 +469,8 @@ function checkFast(configuration: string) {
   assert.deepEqual(JSON.parse(browser.match(/^ {8}include: (\[.*\])$/m)?.[1] ?? "[]"), [
     { project: "chromium", shard: 1, label: "chromium 1/2" },
     { project: "chromium", shard: 2, label: "chromium 2/2" },
-    { project: "firefox", shard: 0, label: "firefox" },
+    { project: "firefox", shard: 1, label: "firefox 1/2" },
+    { project: "firefox", shard: 2, label: "firefox 2/2" },
     { project: "webkit", shard: 1, label: "webkit 1/2" },
     { project: "webkit", shard: 2, label: "webkit 2/2" },
   ]);
@@ -479,7 +480,6 @@ function checkFast(configuration: string) {
   assert.match(browser, /^ {10}PASSGEN_E2E_MODE: pr$/m);
   assert.match(browser, /^ {10}PASSGEN_E2E_PROJECTS: \$\{\{ matrix.project \}\}$/m);
   assert.match(browser, /^ {10}PLAYWRIGHT_SHARD: \$\{\{ matrix.shard \}\}$/m);
-  assert.match(browser, /if \[ "\$PLAYWRIGHT_SHARD" = 0 \]; then\n {12}pnpm test:e2e\n {10}else/);
   const e2eSteps = browser.split(/^ {6}- /m).filter((step) => /\bpnpm test:e2e\b/.test(step));
   assert.equal(e2eSteps.length, 1);
   const commands = e2eSteps[0]?.match(/^ {8}run: \|\n((?: {10}.*\n)+)/m)?.[1];
@@ -488,13 +488,7 @@ function checkFast(configuration: string) {
       ?.split("\n")
       .filter(Boolean)
       .map((line) => line.trim()),
-    [
-      'if [ "$PLAYWRIGHT_SHARD" = 0 ]; then',
-      "pnpm test:e2e",
-      "else",
-      ...E2E_COMMANDS.map((command) => command.replace("/3", "/2")),
-      "fi",
-    ],
+    E2E_COMMANDS.map((command) => command.replace("/3", "/2")),
     "Fast CI must run each test class exactly once per shard",
   );
   assert.match(browser, /name: playwright-report-pr-\$\{\{ matrix.project \}\}-\$\{\{ matrix.shard \}\}/);
@@ -594,16 +588,27 @@ test("fast CI guards reject mobile projects, missing needs, skipped mandatory jo
   }
 });
 
-test("fast CI rejects a missing, duplicate or unsharded WebKit leg", () => {
-  const entry = '{"project":"webkit","shard":2,"label":"webkit 2/2"}';
-  for (const broken of [
-    workflow.replace(`,${entry}`, ""),
-    workflow.replace(entry, '{"project":"webkit","shard":1,"label":"webkit 1/2"}'),
-    workflow.replace(entry, '{"project":"webkit","shard":0,"label":"webkit"}'),
-  ]) {
-    assert.notEqual(broken, workflow);
-    assert.throws(() => checkFast(broken));
-  }
+for (const engine of ["firefox", "webkit"]) {
+  test(`fast CI rejects a missing, duplicate or unsharded ${engine} leg`, () => {
+    const entry = `{"project":"${engine}","shard":2,"label":"${engine} 2/2"}`;
+    for (const broken of [
+      workflow.replace(`,${entry}`, ""),
+      workflow.replace(entry, `{"project":"${engine}","shard":1,"label":"${engine} 1/2"}`),
+      workflow.replace(entry, `{"project":"${engine}","shard":0,"label":"${engine}"}`),
+    ]) {
+      assert.notEqual(broken, workflow);
+      assert.throws(() => checkFast(broken));
+    }
+  });
+}
+
+test("fast CI rejects running any leg unsharded", () => {
+  const broken = workflow.replace(
+    '          pnpm test:e2e --shard="$PLAYWRIGHT_SHARD/2" --grep-invert "@a11y-matrix"\n',
+    "          pnpm test:e2e\n",
+  );
+  assert.notEqual(broken, workflow);
+  assert.throws(() => checkFast(broken), /exactly once per shard/);
 });
 
 test("summary permits only planned skips and rejects every failed or cancelled job", () => {

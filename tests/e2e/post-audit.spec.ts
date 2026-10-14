@@ -130,7 +130,7 @@ test("generated value groups preserve names and associations and pass axe", asyn
     await page.locator(`#${prefix}-regen`).click();
   }
   // Audit from the top of the page, as the accessibility matrix does: the
-  // header is pinned on phones too (v1.5.1) and covers whatever is scrolled
+  // header is pinned on phones too (v1.5.2) and covers whatever is scrolled
   // beneath it, which target-size would report as obscured.
   await page.evaluate(() => window.scrollTo(0, 0));
   expect(

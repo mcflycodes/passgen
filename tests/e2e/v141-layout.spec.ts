@@ -125,7 +125,7 @@ for (const width of [1440, 1920, 1100, 1024, 901]) {
 for (const width of [1440, 768, 390]) {
   for (const style of STYLES) {
     for (const theme of ["light", "dark"] as const) {
-      // v1.5.1: the open Credits panel spans the footer's full width below the
+      // v1.5.2: the open Credits panel spans the footer's full width below the
       // footer's columns, its entries starting at the footer's left edge (in
       // 1.4.1 they were right-aligned under the toggle, which sat on the right).
       test(`Credits full-width panel alignment: ${style}/${theme}/${width}`, async ({ page }) => {

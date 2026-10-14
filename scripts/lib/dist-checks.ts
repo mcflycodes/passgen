@@ -462,6 +462,9 @@ export function checkSvg(file: string, svg: string): Finding[] {
  * configuration carries it) and nowhere else.
  */
 export function checkJs(file: string, source: string, allowed: readonly string[] = []): Finding[] {
+  // Word-list credit URLs are deliberately never allowed in the bundle: they
+  // belong only in the page's Credits. A deployer who points links.repoUrl or
+  // links.licenseUrl at one of them will see verify:dist fail here.
   const creditUrls = Object.values(WORDLIST_SOURCES).flatMap((source) => [source.url, source.licenseUrl]);
   allowed = allowed.filter((url) => !creditUrls.includes(url as (typeof creditUrls)[number]));
   const findings: Finding[] = [];

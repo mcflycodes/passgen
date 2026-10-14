@@ -96,7 +96,7 @@ function generate(r: ReturnType<typeof rng>): unknown {
       ? r.pick([...limits.separators, "random", "random-unique"])
       : r.pick(["", "--", "<", "a", 5, null]),
     capitalize: r.pick(["off", "random", "every"]),
-    numberDigits: r.pick([1, 2, 3]),
+    numberDigits: int(limits.digits[0], limits.digits[1]),
     symbolPosition: r.pick(["both", "before", "after"]),
   };
   const settings: Json = {
@@ -213,6 +213,7 @@ describe("the shared stored-settings validator", () => {
     const r = rng(0x5eed_1234);
     let accepted = 0;
     let refused = 0;
+    let badDigits = 0;
     for (let i = 0; i < 8000; i++) {
       const record = generate(r);
       const text = JSON.stringify(record) ?? "undefined";
@@ -225,6 +226,15 @@ describe("the shared stored-settings validator", () => {
       assert.equal(fromText !== null, shared !== null, `text and object paths differ: ${label}`);
       assert.deepEqual(sharedFromText, shared, `shared text and object paths differ: ${label}`);
       const painted = boot(text);
+      const digits = (record as { settings?: { passphrase?: { numberDigits?: unknown } } } | null)?.settings?.passphrase
+        ?.numberDigits;
+      if (
+        digits !== undefined &&
+        !(Number.isInteger(digits) && Number(digits) >= limits.digits[0] && Number(digits) <= limits.digits[1])
+      ) {
+        badDigits++;
+        assert.equal(shared, null, `accepted an out-of-range digit count: ${label}`);
+      }
       if (shared) {
         accepted++;
         assert.deepEqual(app, shared, `the app changed an accepted record: ${label}`);
@@ -246,6 +256,8 @@ describe("the shared stored-settings validator", () => {
     // Both sides of the decision are well exercised.
     assert.ok(accepted > 1000, `accepted ${accepted}`);
     assert.ok(refused > 1000, `refused ${refused}`);
+    // Separator digit counts outside the configured range are drawn too.
+    assert.ok(badDigits > 100, `out-of-range digit counts ${badDigits}`);
   });
 
   test("refuses the cheap feasibility failures the generators would also refuse", () => {

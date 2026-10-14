@@ -74,8 +74,9 @@ PASSGEN_E2E_PROJECTS=chromium,mobile-chrome pnpm check
 
 Pull requests and main pushes run functional tests in desktop Chromium, Firefox
 and WebKit, the full accessibility matrix in Chromium, and one accessibility
-matrix smoke case in each other engine. Chromium uses two shards because its
-full matrix exceeds five minutes unsharded; the other engines use one job each.
+matrix smoke case in each other engine. Each engine runs as two shards:
+Chromium because its full matrix exceeds five minutes unsharded, Firefox and
+WebKit because their slower engines need headroom under the 15-minute limit.
 Combined-gate regressions run once.
 Known documentation-only changes skip the `e2e`, `server-configs` and `container` jobs; static,
 build, supply-chain and attribution checks still run. Unknown paths count as code.
