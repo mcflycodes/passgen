@@ -127,6 +127,24 @@ docker buildx imagetools inspect mirror.gcr.io/moby/buildkit:vX.Y.Z
 docker buildx imagetools inspect public.ecr.aws/nginx/nginx-unprivileged:X.Y.Z-alpine-slim
 ```
 
+CI and the Release workflow pull every pinned image through
+`scripts/ci/pull-pinned-image.sh`. It tries the pinned registry first, then the
+fallbacks listed in its table (Docker Hub, then Google's mirror), round-robin
+with backoff for up to eight minutes, and always by the pinned digest. A new pin
+must have the same digest on every source in that table; check each one. For
+the base image, after updating the Dockerfile:
+
+```sh
+pinned=$(sed -n 's/^FROM \([^ ]*\) AS upstream$/\1/p' Dockerfile)
+for source in $(bash scripts/ci/pull-pinned-image.sh sources "$pinned"); do
+  docker buildx imagetools inspect "$source" --format '{{json .Manifest}}' | jq -r .digest
+done
+```
+
+Every line must print the pinned digest; a source that lacks it fails instead.
+Check the BuildKit, server and Compose pins the same way, with the full pinned
+reference in place of `"$pinned"`.
+
 The Compose recipes in `deploy/compose/` pin the official Caddy and httpd images
 from AWS ECR Public's copy of Docker's official images, by version and digest.
 Refresh them the same way: check that Docker Hub reports the same digest for the

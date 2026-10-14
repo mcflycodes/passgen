@@ -132,7 +132,8 @@ jobs:
       attestations: write
     env:
       IMAGE: ghcr.io/mcflycodes/passgen
-      # Google's Docker Hub mirror avoids Docker Hub's anonymous pull limit; the digest pins the bytes.
+      # Pulled through scripts/ci/pull-pinned-image.sh: Google's Docker Hub mirror first,
+      # then Docker Hub, by this digest.
       BUILDKIT_IMAGE: mirror.gcr.io/moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -190,8 +191,17 @@ jobs:
           minor="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
           printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           epoch=$(git log -1 --format=%ct)
-          docker buildx create --name passgen --driver docker-container --driver-opt "image=$BUILDKIT_IMAGE" >/dev/null
-          SOURCE_DATE_EPOCH=$epoch docker buildx build --builder passgen --provenance=false --sbom=false \
+          # The pull helper (bash and docker only) pulls the pinned BuildKit and base images
+          # with registry fallback and retries, always by their pinned digests; the base is
+          # supplied to the build as the Dockerfile's "upstream" stage.
+          PINNED_IMAGE_DEADLINE=$(($(date +%s) + 480))
+          export PINNED_IMAGE_DEADLINE
+          buildkit=$(bash scripts/ci/pull-pinned-image.sh pull "$BUILDKIT_IMAGE")
+          docker buildx create --name passgen --driver docker-container --driver-opt "image=$buildkit" >/dev/null
+          base=$(sed -n 's/^FROM \([^ ]*\) AS upstream$/\1/p' Dockerfile)
+          SOURCE_DATE_EPOCH=$epoch bash scripts/ci/pull-pinned-image.sh run "$base" -- \
+            docker buildx build --builder passgen --provenance=false --sbom=false \
+            --build-context "upstream=docker-image://{image}" \
             --build-arg "PASSGEN_VERSION=$RELEASE_VERSION" --build-arg "PASSGEN_REVISION=$RELEASE_COMMIT" \
             --build-arg "PASSGEN_CREATED=$(date -u -d "@$epoch" +%Y-%m-%dT%H:%M:%SZ)" \
             --annotation "index:org.opencontainers.image.source=https://github.com/mcflycodes/passgen" \
