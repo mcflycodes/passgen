@@ -346,6 +346,11 @@ test.describe("Appearance panel", () => {
     await toggle(page).click();
     await expect(panel(page)).toBeVisible();
     await page.setViewportSize({ width: 1200, height: 800 });
+    // The panel closes while the window is wide. Waiting for that here also
+    // makes sure the page saw the wide width: WebKit reports media query
+    // changes only when it renders, so a wide width that never renders is
+    // never reported.
+    await expect(toggle(page)).toHaveAttribute("aria-expanded", "false");
     await expect(toggle(page)).toBeHidden();
     await expect(page.locator("#style")).toBeVisible();
     const items = await headerItems(page);
