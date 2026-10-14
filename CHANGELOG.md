@@ -5,19 +5,26 @@ Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-10-14
+
 ### Changed
 
 - "Save as my default" and "Reset to defaults" are now in the header, at its right end, so saving no longer means scrolling to the bottom. A press confirms on the pressed button, which is highlighted and briefly reads Saved, Cleared or Failed, and screen readers hear the full message once. The explanation of what Save keeps is read with both buttons and shown as their tooltip. Below 1024px wide the buttons read Save and Reset, keeping their full names for assistive technology.
 - The header reads, after the PassGen name: the Style control, the System/Light/Dark switch, a thin separator line, then Save and Reset. The GitHub link moved from the header to the footer.
-- The header stays pinned at the top at every width, down to the 320px minimum the page supports with no horizontal scrolling. Below 900px it is one compact row: the name, an Appearance button that opens the Style and theme controls as a panel (Escape or a click outside closes it and puts focus back on the button), the separator, Save and Reset. Focused controls always scroll clear of it. A viewport under 400px tall, such as a phone on its side or 400% zoom, leaves the header in normal flow so it does not take a large share of the height.
+- The header stays pinned at the top at every width, down to the 320px minimum the page supports with no horizontal scrolling. Below 900px it is one compact row: the name, an Appearance button that opens the Style and theme controls as a panel (Escape closes it and puts focus back on the button; a click outside also closes it), the separator, Save and Reset. Controls reached with the keyboard always scroll clear of it. A viewport under 400px tall, such as a phone on its side or 400% zoom, leaves the header in normal flow so it does not take a large share of the height.
 - The footer is laid out in columns. From 1200px wide: the privacy line on the left, `vX.Y.Z · Apache-2.0 · Credits · GitHub` in the middle, both centred against the Settings code box on the right. From 901px: the privacy and meta lines stacked on the left, the Settings code box on the right. At 900px and below they stack, in the same order as they are read and reached with the keyboard: privacy, meta, Settings code. Credits still opens a full-width panel below, now starting at the footer's left edge.
 - The settings code is always shown, in its own box at the bottom of the page: the code for the current settings updates as they change, with a Copy button, and while a setting is marked with an error the box says "Fix the marked settings to get a code" and Copy is disabled. The space for the code is reserved, so the box does not change size as the code gets longer or shorter. "Apply settings code" now reads Apply on screen, keeping its full name for assistive technology.
-- Documentation: the Docker page, `docs/Install-Docker.md`, now follows a scannable image-page layout: supported architectures and tags, setup behind HTTPS, read-only and non-root operation, matching Compose and `docker run` examples, a parameters reference, support commands, and step-by-step updates for Compose and `docker run` with digest pinning, provenance checks and update notifications. `docs/docker.md` now covers only the release-file recipes and what CI tests.
+- Documentation: the Docker page, `docs/Install-Docker.md`, now follows a scannable image-page layout: supported architectures and tags, setup behind HTTPS, read-only and non-root operation, matching Compose and `docker run` examples, a parameters reference, support commands, and step-by-step updates for Compose and `docker run` with digest pinning, provenance checks and update notifications. `docs/docker.md` now covers the release-file recipes and what CI tests.
 
 ### Removed
 
 - The Save and Reset buttons at the bottom of the page; the header's are the only ones.
 - The "Get settings code" button, since the code is always shown.
+
+### Fixed
+
+- The Settings code box has the same rounded corners as the generator cards in every style; in Purple it was drawn as a pill.
+- In Safari and other WebKit browsers, a control reached with Tab or Shift+Tab is no longer left hidden under the pinned header, even briefly.
 
 ## [1.5.0] - 2026-10-12
 
