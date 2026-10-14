@@ -104,7 +104,7 @@ for (const width of [1440, 768, 390]) {
         }
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         // Audit from the top of the page, as the accessibility matrix does: the
-        // header is pinned at every width (v1.5.1) and covers whatever is
+        // header is pinned at every width (v1.5.2) and covers whatever is
         // scrolled beneath it, which target-size would report as obscured.
         const scrolled = await page.evaluate(() => scrollY);
         await page.evaluate(() => window.scrollTo(0, 0));

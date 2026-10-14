@@ -1,4 +1,4 @@
-// v1.5.1 header. From 900px one row: the name, then the Style control, the
+// v1.5.2 header. From 900px one row: the name, then the Style control, the
 // theme switch, a thin decorative separator, Save and Reset; no GitHub link
 // (it is in the footer). Below 900px a compact 53px row: the name, the
 // Appearance button, the separator, Save and Reset; the Style and theme
@@ -346,10 +346,9 @@ test.describe("Appearance panel", () => {
     await toggle(page).click();
     await expect(panel(page)).toBeVisible();
     await page.setViewportSize({ width: 1200, height: 800 });
-    // The panel closes while the window is wide. Waiting for that here also
-    // makes sure the page saw the wide width: WebKit reports media query
-    // changes only when it renders, so a wide width that never renders is
-    // never reported.
+    // The panel closes while the window is wide. Waiting for that here makes
+    // sure the page has handled the breakpoint change before the window
+    // narrows again; WebKit can deliver media query changes late.
     await expect(toggle(page)).toHaveAttribute("aria-expanded", "false");
     await expect(toggle(page)).toBeHidden();
     await expect(page.locator("#style")).toBeVisible();

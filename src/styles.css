@@ -276,7 +276,7 @@ summary,
   text-transform: var(--tagline-case, none);
 }
 /* The header row, after the name: the Style and theme controls, a thin
-   separator, then Save and Reset (v1.5.1). Save and Reset run the actions in
+   separator, then Save and Reset (v1.5.2). Save and Reset run the actions in
    src/ui/settings.ts. Each label is a stack of the idle text and the short
    outcomes in one grid cell, so confirming never changes the button's size;
    below 1024px the idle text is compact and the full name stays the
@@ -925,7 +925,7 @@ select {
   line-height: 1.4;
 }
 
-/* ---------- Bottom of the page (v1.5.1) ---------- */
+/* ---------- Bottom of the page (v1.5.2) ---------- */
 /* The privacy line, the meta line and the settings code (index.html). The
    DOM order is the reading order at every width: privacy, meta, settings
    code. The meta line is three items (before Credits, the Credits summary,

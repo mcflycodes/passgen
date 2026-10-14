@@ -113,7 +113,7 @@ describe("the shipped index.html", () => {
     );
     assert.doesNotMatch(html, /target=/);
     assert.equal(html.match(/<a\b/g)?.length, 12, "configured links and per-list credits");
-    // v1.5.1: both configured links are in the footer; the header has none.
+    // v1.5.2: both configured links are in the footer; the header has none.
     const header = html.slice(html.indexOf('<header class="top">'), html.indexOf("</header>"));
     assert.ok(header.length > 0);
     assert.doesNotMatch(header, /<a\b|GitHub/);

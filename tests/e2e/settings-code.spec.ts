@@ -1,5 +1,5 @@
 // The settings code: the code shown on one page (always the one for the
-// current settings, v1.5.1) and applied in a fresh browser
+// current settings, v1.5.2) and applied in a fresh browser
 // context reproduces every setting, the theme, the style and the strength
 // shown; applying writes nothing to any storage, touches neither the URL nor
 // history and makes no request; a bad code changes nothing and says why, to

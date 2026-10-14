@@ -1,7 +1,7 @@
 // The page's two outward links (decision 0005, point 5) and the version: the
 // footer's meta line shows the package version, links "Apache-2.0" to the
 // configured license and, after Credits, "GitHub" to the configured
-// repository (v1.5.1: the header no longer carries it). Both are plain
+// repository (v1.5.2: the header no longer carries it). Both are plain
 // anchors with rel="noopener noreferrer" and the configured URL exactly,
 // cause no request at load, and are focusable with a visible ring in every
 // style and theme. The build leaves a link out when its URL is empty
@@ -64,7 +64,7 @@ test.describe("repository and license links", () => {
 
   test("are reachable by keyboard with a visible focus ring in every style and theme", async ({ page }) => {
     // Fifteen style and theme combinations; on phones each choice also opens
-    // and closes the header's Appearance panel, as a user would (v1.5.1).
+    // and closes the header's Appearance panel, as a user would (v1.5.2).
     test.setTimeout(90_000);
     await openPage(page);
     for (const style of STYLES) {

@@ -1,4 +1,4 @@
-// v1.5.1: "Save as my default" and "Reset to defaults" are in the header
+// v1.5.2: "Save as my default" and "Reset to defaults" are in the header
 // only, at the right end after the Style and theme controls (or, below
 // 900px, the Appearance button) and a separator. Each press shows its outcome
 // on the pressed button and is announced once. The header order, the

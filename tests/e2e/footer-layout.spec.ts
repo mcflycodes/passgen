@@ -1,4 +1,4 @@
-// v1.5.1 bottom of the page. From 1200px three columns: the privacy line,
+// v1.5.2 bottom of the page. From 1200px three columns: the privacy line,
 // the meta line (version · Apache-2.0 · Credits · GitHub) and the settings
 // code box, the first two centred against the box. From 901 to 1199px two:
 // the privacy and meta lines stacked on the left, the box on the right. Up to

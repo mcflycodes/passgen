@@ -187,7 +187,7 @@ async function keyboard(page: Page) {
   await expect(page.locator("#pw-meter details")).toHaveAttribute("open", "");
 }
 
-// The header is pinned at every width (v1.5.1): one row of the style's
+// The header is pinned at every width (v1.5.2): one row of the style's
 // --header-h from 900px, a 53px compact row below. Only a viewport under
 // 400px tall (a phone on its side, 400% zoom) leaves it in normal flow.
 async function headerPosition(page: Page) {

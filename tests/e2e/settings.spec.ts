@@ -45,7 +45,7 @@ const storageKeys = (page: Page) => page.evaluate(() => Object.keys(localStorage
 const setStored = (page: Page, text: string) =>
   page.evaluate(([key, value]) => localStorage.setItem(key as string, value as string), [KEY, text]);
 
-// Save and Reset are in the header (v1.5.1); the hint describes both and is their tooltip.
+// Save and Reset are in the header (v1.5.2); the hint describes both and is their tooltip.
 const save = (page: Page) => page.locator(".top #header-save-settings");
 const reset = (page: Page) => page.locator(".top #header-reset-settings");
 const status = (page: Page) => page.locator(".top #header-save-status");
@@ -473,12 +473,16 @@ test.describe("saved settings", () => {
       await save(page).click();
       await expect(save(page)).toHaveClass(/is-done/);
       await expect(status(page)).toHaveText(SAVED_STATUS);
-      const doneDurations = await save(page).evaluate((button) =>
-        getComputedStyle(button)
+      // Read the durations in the same call that confirms the done state, so
+      // the check cannot race the class being removed.
+      const done = await save(page).evaluate((button) => ({
+        isDone: button.classList.contains("is-done"),
+        durations: getComputedStyle(button)
           .transitionDuration.split(",")
           .map((value) => value.trim()),
-      );
-      for (const duration of doneDurations) expect(duration).toBe("0s");
+      }));
+      expect(done.isDone).toBe(true);
+      for (const duration of done.durations) expect(duration).toBe("0s");
       expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
       expect(await save(page).evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
       await expect(save(page)).not.toHaveClass(/is-done/, { timeout: SAVE_FEEDBACK_MS * 3 });
