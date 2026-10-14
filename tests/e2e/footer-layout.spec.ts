@@ -158,3 +158,41 @@ test.describe("settings code box", () => {
     expect(border[1]).toBeGreaterThanOrEqual(1);
   });
 });
+
+// The settings code box is a panel like the generator cards, so it takes the
+// card corner radius in every style and theme, never the small-control radius
+// (a pill in Purple). The buttons and field inside keep the control radius.
+test.describe("settings code box corners", () => {
+  for (const style of STYLES) {
+    test(`match the generator cards: ${style}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await openPage(page);
+      await chooseStyle(page, style);
+      for (const theme of ["light", "dark"] as const) {
+        await chooseTheme(page, theme);
+        const r = await page.evaluate(() => {
+          const radius = (selector: string) => {
+            const el = document.querySelector(selector);
+            if (!el) throw new Error(`Missing ${selector}`);
+            const s = getComputedStyle(el);
+            return Math.max(...[s.borderTopLeftRadius, s.borderBottomRightRadius].map((v) => Number.parseFloat(v)));
+          };
+          const control = document.documentElement;
+          const token = (name: string) => getComputedStyle(control).getPropertyValue(name).trim();
+          return {
+            box: radius(".settings-code"),
+            card: radius(".gen"),
+            cardToken: token("--radius"),
+            controlToken: token("--radius-sm"),
+            copy: getComputedStyle(document.getElementById("copy-settings-code") as Element).borderTopLeftRadius,
+            input: getComputedStyle(document.getElementById("settings-code-input") as Element).borderTopLeftRadius,
+          };
+        });
+        expect(Math.abs(r.box - r.card), `${style}/${theme} box ${r.box}px vs card ${r.card}px`).toBeLessThanOrEqual(1);
+        expect(Math.abs(r.box - Number.parseFloat(r.cardToken))).toBeLessThanOrEqual(1);
+        // The controls inside keep the small-control radius (Purple's pills).
+        for (const v of [r.copy, r.input]) expect(v).toBe(r.controlToken);
+      }
+    });
+  }
+});
