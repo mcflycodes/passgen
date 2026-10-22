@@ -15,7 +15,7 @@
 # (same multi-platform index digest as Docker Hub), pinned by index digest.
 # CI and releases pull it through scripts/ci/pull-pinned-image.sh and pass it in
 # as this stage by the same digest, from Docker Hub or Google's mirror if AWS fails.
-FROM public.ecr.aws/nginx/nginx-unprivileged:1.30.5-alpine-slim@sha256:3af0c10d960cc2502427fe1219c52989d309e7d65596869c60a34fd2fa2406f0 AS upstream
+FROM public.ecr.aws/nginx/nginx-unprivileged:1.31.8-alpine-slim@sha256:a2ae214d0266826427b804b0513dce20c9c93b862f1593203f9e6b50be9c2689 AS upstream
 
 FROM upstream
 
